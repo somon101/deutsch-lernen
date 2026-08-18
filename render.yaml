@@ -1,20 +1,30 @@
 # Render Blueprint: provisions the API server and its PostgreSQL database.
 # Deploy via Render -> New -> Blueprint -> pick this repository.
 databases:
+  # Paid plan: no 30-day expiry and daily backups, so student progress is
+  # not sitting on a database that can disappear.
   - name: deutsch-lernen-db
     databaseName: deutsch_lernen
-    plan: free
+    plan: basic-256mb
 
 services:
   - type: web
     name: deutsch-lernen-api
     runtime: node
-    plan: free
+    # Paid plan: the service does not sleep, so students never hit a
+    # 30-50s cold start on their first request.
+    plan: starter
     rootDir: server
     buildCommand: npm install && npx prisma generate && npm run build
     # migrate deploy applies any pending migrations before the server starts
     startCommand: npx prisma migrate deploy && npm start
     healthCheckPath: /health
+    # Persistent storage for profile photos — without this they are wiped
+    # on every redeploy.
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/server/uploads
+      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
