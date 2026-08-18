@@ -1391,6 +1391,15 @@ button {
 @media (max-width: 640px) {
   .top-nav {
     padding: 14px 16px;
+    /* Several actions (К урокам / Admin / Выйти) have to stay reachable on
+       a phone without pushing the brand off-screen. */
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .top-nav .btn {
+    padding: 9px 14px;
+    font-size: 14px;
   }
 
   .lesson-header {

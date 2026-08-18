@@ -39,3 +39,14 @@ export const api = {
 };
 
 export { API_URL };
+
+/**
+ * Turns an API-relative asset path (e.g. "/uploads/avatars/x.png") into a
+ * full URL. Uploaded files live on the API server, not on the site's own
+ * origin, so they can't be requested as-is.
+ */
+export function assetUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_URL}${path}`;
+}

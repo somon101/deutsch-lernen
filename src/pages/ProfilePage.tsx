@@ -1,7 +1,7 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { api, ApiError } from "../auth/api";
+import { api, ApiError, assetUrl } from "../auth/api";
 import { StoredAuthUser } from "../auth/tokenStore";
 import { listLessonIds, loadLesson } from "../content/loader";
 
@@ -108,16 +108,26 @@ export default function ProfilePage() {
         <Link to="/" className="brand">
           <span className="brand-flag">🇩🇪</span> Deutsch Lernen
         </Link>
-        <button className="btn btn-ghost" onClick={logout}>
-          Выйти
-        </button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link to="/" className="btn btn-secondary">
+            ← К урокам
+          </Link>
+          {user.role === "ADMIN" && (
+            <Link to="/admin" className="btn btn-ghost">
+              Admin
+            </Link>
+          )}
+          <button className="btn btn-ghost" onClick={logout}>
+            Выйти
+          </button>
+        </div>
       </nav>
       <main className="home-main">
         <div className="profile-layout">
           <section className="profile-card">
             <div className="profile-avatar-row">
               {user.avatarUrl ? (
-                <img className="profile-avatar" src={user.avatarUrl} alt="" />
+                <img className="profile-avatar" src={assetUrl(user.avatarUrl)} alt="" />
               ) : (
                 <div className="profile-avatar profile-avatar--placeholder">
                   {user.firstName[0]}
