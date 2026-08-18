@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../../auth/api";
 import { StoredAuthUser } from "../../auth/tokenStore";
+import { useAuth } from "../../auth/AuthContext";
 import { listLessonIds, loadLesson } from "../../content/loader";
 
 interface LessonProgressSummary {
@@ -21,6 +22,8 @@ interface LessonRow {
 export default function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
+  const isSelf = currentUser?.id === id;
   const [user, setUser] = useState<StoredAuthUser | null>(null);
   const [rows, setRows] = useState<LessonRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,8 +88,13 @@ export default function AdminUserDetailPage() {
 
   const toggleStatus = async () => {
     const nextStatus = user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
-    const data = await api.patch<{ user: StoredAuthUser }>(`/api/admin/users/${id}`, { status: nextStatus });
-    setUser(data.user);
+    setError(null);
+    try {
+      const data = await api.patch<{ user: StoredAuthUser }>(`/api/admin/users/${id}`, { status: nextStatus });
+      setUser(data.user);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось изменить статус");
+    }
   };
 
   const handleResetPassword = async (e: FormEvent) => {
@@ -143,12 +151,22 @@ export default function AdminUserDetailPage() {
                 </label>
                 <label className="auth-field">
                   <span>Роль</span>
-                  <select value={user.role} onChange={(e) => setUser({ ...user, role: e.target.value as "ADMIN" | "USER" })}>
+                  <select
+                    value={user.role}
+                    disabled={isSelf}
+                    onChange={(e) => setUser({ ...user, role: e.target.value as "ADMIN" | "USER" })}
+                  >
                     <option value="USER">USER</option>
                     <option value="ADMIN">ADMIN</option>
                   </select>
                 </label>
               </div>
+
+              {isSelf && (
+                <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
+                  Это ваша учётная запись — снять с себя роль администратора или заблокировать себя нельзя.
+                </p>
+              )}
 
               <label className="admin-toggle-row">
                 <input
@@ -166,6 +184,7 @@ export default function AdminUserDetailPage() {
                   type="button"
                   className={`btn ${user.status === "ACTIVE" ? "btn-secondary" : "btn-primary"}`}
                   onClick={toggleStatus}
+                  disabled={isSelf}
                 >
                   {user.status === "ACTIVE" ? "Заблокировать" : "Активировать"}
                 </button>

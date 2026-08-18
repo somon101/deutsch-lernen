@@ -66,6 +66,28 @@ adminRouter.patch("/users/:id", async (req, res) => {
   const parsed = updateUserSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Некорректные данные пользователя" });
 
+  // Locking yourself out is unrecoverable through the UI — an admin who
+  // blocks or demotes their own account could only be restored directly in
+  // the database, so both are refused here.
+  const isSelf = req.params.id === req.user!.id;
+  if (isSelf && parsed.data.status === "BLOCKED") {
+    return res.status(400).json({ error: "Нельзя заблокировать собственную учётную запись" });
+  }
+  if (isSelf && parsed.data.role === "USER") {
+    return res.status(400).json({ error: "Нельзя снять с себя роль администратора" });
+  }
+
+  // Likewise, the course must never be left without a working admin.
+  if (!isSelf && (parsed.data.status === "BLOCKED" || parsed.data.role === "USER")) {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (target?.role === "ADMIN" && target.status === "ACTIVE") {
+      const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", status: "ACTIVE" } });
+      if (activeAdmins <= 1) {
+        return res.status(400).json({ error: "Это последний активный администратор — действие отменено" });
+      }
+    }
+  }
+
   try {
     const user = await prisma.user.update({
       where: { id: req.params.id },
