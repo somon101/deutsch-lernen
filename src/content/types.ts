@@ -6,6 +6,8 @@ export interface VocabularyEntry {
   german: string;
   translation: string;
   pronunciation?: string;
+  /** Recorded pronunciation uploaded by an admin, if there is one. */
+  audioUrl?: string;
 }
 
 /** A single line from the lesson text file, classified for display. Lines are

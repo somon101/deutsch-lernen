@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { LessonBlock, LessonContent } from "../../content/types";
+import { LessonBlock, LessonContent, VocabularyEntry } from "../../content/types";
+import WordAudioButton from "../../components/WordAudioButton";
 
 interface Group {
   title?: string;
@@ -72,7 +73,7 @@ export default function MaterialStage({
 
       <div className="material-card">
         {group.blocks.map((block, i) => (
-          <MaterialBlockView key={i} block={block} />
+          <MaterialBlockView key={i} block={block} vocabulary={content.vocabulary} />
         ))}
       </div>
 
@@ -88,7 +89,7 @@ export default function MaterialStage({
   );
 }
 
-function MaterialBlockView({ block }: { block: LessonBlock }) {
+function MaterialBlockView({ block, vocabulary }: { block: LessonBlock; vocabulary: VocabularyEntry[] }) {
   switch (block.type) {
     case "title":
       return <h2 className="material-block--title">{block.text}</h2>;
@@ -106,17 +107,23 @@ function MaterialBlockView({ block }: { block: LessonBlock }) {
           <span>{block.text}</span>
         </div>
       );
-    case "phrase":
+    case "phrase": {
+      // Reuse the word's recorded pronunciation when the vocabulary has one.
+      const recorded = vocabulary.find(
+        (v) => v.german.toLowerCase() === block.german.toLowerCase(),
+      )?.audioUrl;
       return (
         <div className="material-block--phrase">
           <span className="material-block--phrase-de">
             {block.icon ? `${block.icon} ` : ""}
             {block.german}
             {block.pronunciation && <span className="material-block--phrase-pron">[{block.pronunciation}]</span>}
+            <WordAudioButton word={block.german} audioUrl={recorded} size="sm" />
           </span>
           <span className="material-block--phrase-ru">{block.translation}</span>
         </div>
       );
+    }
     case "line":
       return <p className={`material-block--line ${block.tight ? "tight" : ""}`}>{block.text}</p>;
   }

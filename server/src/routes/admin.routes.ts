@@ -6,7 +6,16 @@ import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { hashPassword } from "../auth/hash.js";
 import { publicUser } from "../serialize.js";
 import { getProgressSummaryForUser } from "../progress.js";
-import { contentPayloadSchema, getLessonContent, saveLessonContent } from "../content.js";
+import {
+  contentPayloadSchema,
+  DuplicateWordError,
+  getLessonContent,
+  normalizeWord,
+  saveLessonContent,
+} from "../content.js";
+import { uploadWordAudio, WORD_AUDIO_DIR } from "../upload.js";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { normalizeUsername, usernameSchema } from "../username.js";
 
 /** Surfaces the specific validation problem (e.g. why a login was rejected)
@@ -200,6 +209,55 @@ adminRouter.put("/content/:lessonId", async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные урока") });
   }
-  const content = await saveLessonContent(req.params.lessonId, parsed.data, req.user!.id);
-  res.json({ content });
+  try {
+    const content = await saveLessonContent(req.params.lessonId, parsed.data, req.user!.id);
+    res.json({ content });
+  } catch (e) {
+    if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
+    throw e;
+  }
+});
+
+// ---- Recorded pronunciation for a single word -----------------------------
+
+/** Locates a word by its normalised form, so casing/punctuation don't matter. */
+async function findWord(lessonId: string, german: string) {
+  return prisma.vocabularyItem.findFirst({
+    where: { lessonId, germanKey: normalizeWord(german) },
+  });
+}
+
+adminRouter.post("/content/:lessonId/word-audio", uploadWordAudio.single("audio"), async (req, res) => {
+  const german = String(req.body?.german ?? "");
+  if (!german) return res.status(400).json({ error: "Не указано слово" });
+  if (!req.file) return res.status(400).json({ error: "Файл не получен" });
+
+  const word = await findWord(req.params.lessonId, german);
+  if (!word) {
+    await fs.unlink(path.join(WORD_AUDIO_DIR, req.file.filename)).catch(() => {});
+    return res.status(404).json({ error: "Слово не найдено — сначала сохраните словарь" });
+  }
+
+  if (word.audioUrl) {
+    fs.unlink(path.join(WORD_AUDIO_DIR, path.basename(word.audioUrl))).catch(() => {});
+  }
+  const updated = await prisma.vocabularyItem.update({
+    where: { id: word.id },
+    data: { audioUrl: `/uploads/words/${req.file.filename}` },
+  });
+  res.json({ german: updated.german, audioUrl: updated.audioUrl });
+});
+
+adminRouter.delete("/content/:lessonId/word-audio", async (req, res) => {
+  const german = String(req.query.german ?? "");
+  if (!german) return res.status(400).json({ error: "Не указано слово" });
+
+  const word = await findWord(req.params.lessonId, german);
+  if (!word) return res.status(404).json({ error: "Слово не найдено" });
+
+  if (word.audioUrl) {
+    fs.unlink(path.join(WORD_AUDIO_DIR, path.basename(word.audioUrl))).catch(() => {});
+  }
+  await prisma.vocabularyItem.update({ where: { id: word.id }, data: { audioUrl: null } });
+  res.json({ german: word.german, audioUrl: null });
 });

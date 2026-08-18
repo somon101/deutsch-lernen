@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LessonContent } from "../../content/types";
 import { useLessonProgress, useProgressStore } from "../../progress/ProgressContext";
+import WordAudioButton from "../../components/WordAudioButton";
+import { playWord, preloadWordAudio } from "../../lib/speech";
 
 export default function VocabularyStage({
   content,
@@ -13,6 +15,10 @@ export default function VocabularyStage({
 }) {
   const progress = useLessonProgress(lessonId);
   const { setVocabIndex } = useProgressStore();
+  useEffect(() => {
+    preloadWordAudio(content.vocabulary.map((v) => v.audioUrl));
+  }, [content]);
+
   const [index, setIndex] = useState(() =>
     Math.min(progress.vocabIndex, Math.max(content.vocabulary.length - 1, 0)),
   );
@@ -76,7 +82,17 @@ export default function VocabularyStage({
         <span className="vocab-card__counter">
           {index + 1} / {content.vocabulary.length}
         </span>
-        <div className="vocab-card__german">{word.german}</div>
+        <div className="vocab-card__german">
+          <button
+            type="button"
+            className="vocab-card__german-button"
+            onClick={() => playWord(word.german, word.audioUrl)}
+            title="Прослушать произношение"
+          >
+            {word.german}
+          </button>
+          <WordAudioButton word={word.german} audioUrl={word.audioUrl} />
+        </div>
         {word.pronunciation && <div className="vocab-card__pron">[{word.pronunciation}]</div>}
         <div className="vocab-card__divider" />
         <div className="vocab-card__translation">{word.translation}</div>

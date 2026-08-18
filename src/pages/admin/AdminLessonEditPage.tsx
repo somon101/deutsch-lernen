@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api, ApiError } from "../../auth/api";
+import { api, ApiError, API_URL } from "../../auth/api";
+import { getAuthToken } from "../../auth/tokenStore";
+import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
 import { invalidateLessonCache, loadLesson } from "../../content/loader";
 import { AuthoredQuestion, LessonContent } from "../../content/types";
 
@@ -16,6 +18,7 @@ interface VocabRow {
   german: string;
   translation: string;
   pronunciation: string;
+  audioUrl: string | null;
 }
 
 interface QuestionRow {
@@ -49,6 +52,7 @@ export default function AdminLessonEditPage() {
           german: v.german,
           translation: v.translation,
           pronunciation: v.pronunciation ?? "",
+          audioUrl: v.audioUrl ?? null,
         })),
       );
       setQuestions(
@@ -96,8 +100,48 @@ export default function AdminLessonEditPage() {
         german: v.german,
         translation: v.translation,
         pronunciation: v.pronunciation.trim() ? v.pronunciation : null,
+        audioUrl: v.audioUrl,
       })),
     });
+
+  // Audio is attached to a saved word, so the list must exist server-side first.
+  const uploadAudio = async (index: number, file: File) => {
+    const row = vocab[index];
+    setError(null);
+    setSaving(`audio-${index}`);
+    try {
+      const form = new FormData();
+      form.append("audio", file);
+      form.append("german", row.german);
+      const res = await fetch(`${API_URL}/api/admin/content/${encodeURIComponent(lessonId)}/word-audio`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? "Не удалось загрузить аудио");
+      setVocab((v) => v.map((r, idx) => (idx === index ? { ...r, audioUrl: data.audioUrl } : r)));
+      invalidateLessonCache(lessonId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось загрузить аудио");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const deleteAudio = async (index: number) => {
+    const row = vocab[index];
+    setError(null);
+    try {
+      await api.delete(
+        `/api/admin/content/${encodeURIComponent(lessonId)}/word-audio?german=${encodeURIComponent(row.german)}`,
+      );
+      setVocab((v) => v.map((r, idx) => (idx === index ? { ...r, audioUrl: null } : r)));
+      invalidateLessonCache(lessonId);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось удалить аудио");
+    }
+  };
 
   const saveQuestions = () =>
     save("questions", {
@@ -172,7 +216,11 @@ export default function AdminLessonEditPage() {
             <h2 className="stage-title" style={{ fontSize: 20 }}>
               Словарь ({vocab.length})
             </h2>
-            <p className="stage-subtitle">Немецкое слово, перевод и, по желанию, произношение.</p>
+            <p className="stage-subtitle">
+              Немецкое слово, перевод, транскрипция и произношение. 🔊 — прослушать, ⚙ — синтез речи браузера,
+              ⬆ — загрузить свой файл. Загруженная запись всегда важнее синтеза. Слово нельзя добавить, если оно уже
+              есть в другом уроке курса.
+            </p>
 
             <div className="admin-rows">
               {vocab.map((row, i) => (
@@ -201,13 +249,59 @@ export default function AdminLessonEditPage() {
                       setVocab((v) => v.map((r, idx) => (idx === i ? { ...r, pronunciation: e.target.value } : r)))
                     }
                   />
-                  <button
-                    type="button"
-                    className="btn btn-ghost admin-row__remove"
-                    onClick={() => setVocab((v) => v.filter((_, idx) => idx !== i))}
-                  >
-                    Удалить
-                  </button>
+                  <div className="admin-word-audio">
+                    <button
+                      type="button"
+                      className="btn btn-ghost admin-word-audio__btn"
+                      title={row.audioUrl ? "Прослушать загруженное аудио" : "Прослушать синтезом речи"}
+                      onClick={() => playWord(row.german, row.audioUrl ?? undefined)}
+                      disabled={!row.german.trim()}
+                    >
+                      🔊
+                    </button>
+                    {canSynthesize() && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost admin-word-audio__btn"
+                        title="Сгенерировать произношение (синтез речи браузера)"
+                        onClick={() => speakGerman(row.german)}
+                        disabled={!row.german.trim()}
+                      >
+                        ⚙
+                      </button>
+                    )}
+                    <label className="btn btn-ghost admin-word-audio__btn" title="Загрузить свой аудиофайл">
+                      ⬆
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        hidden
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (file) uploadAudio(i, file);
+                        }}
+                      />
+                    </label>
+                    {row.audioUrl && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost admin-word-audio__btn admin-word-audio__btn--danger"
+                        title="Удалить загруженное аудио"
+                        onClick={() => deleteAudio(i)}
+                      >
+                        ✕🔊
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-ghost admin-row__remove"
+                      title="Удалить слово"
+                      onClick={() => setVocab((v) => v.filter((_, idx) => idx !== i))}
+                    >
+                      Удалить
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -216,7 +310,7 @@ export default function AdminLessonEditPage() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setVocab((v) => [...v, { german: "", translation: "", pronunciation: "" }])}
+                onClick={() => setVocab((v) => [...v, { german: "", translation: "", pronunciation: "", audioUrl: null }])}
               >
                 + Добавить слово
               </button>

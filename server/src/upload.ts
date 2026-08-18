@@ -6,10 +6,12 @@ import multer from "multer";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const AVATARS_DIR = path.join(__dirname, "..", "uploads", "avatars");
+export const WORD_AUDIO_DIR = path.join(__dirname, "..", "uploads", "words");
 
 // A freshly mounted persistent disk starts out empty, so the directory has
 // to be (re)created at boot or the first upload fails with ENOENT.
 fs.mkdirSync(AVATARS_DIR, { recursive: true });
+fs.mkdirSync(WORD_AUDIO_DIR, { recursive: true });
 
 const ALLOWED_MIME: Record<string, string> = {
   "image/jpeg": ".jpg",
@@ -31,6 +33,34 @@ export const uploadAvatar = multer({
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED_MIME[file.mimetype]) {
       cb(new Error("Разрешены только изображения JPEG, PNG или WebP"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+const ALLOWED_AUDIO: Record<string, string> = {
+  "audio/mpeg": ".mp3",
+  "audio/mp3": ".mp3",
+  "audio/wav": ".wav",
+  "audio/x-wav": ".wav",
+  "audio/webm": ".webm",
+  "audio/ogg": ".ogg",
+  "audio/mp4": ".m4a",
+  "audio/x-m4a": ".m4a",
+};
+
+const wordAudioStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, WORD_AUDIO_DIR),
+  filename: (_req, file, cb) => cb(null, `${randomUUID()}${ALLOWED_AUDIO[file.mimetype] ?? ""}`),
+});
+
+export const uploadWordAudio = multer({
+  storage: wordAudioStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_AUDIO[file.mimetype]) {
+      cb(new Error("Разрешены только аудиофайлы MP3, WAV, OGG, M4A или WebM"));
       return;
     }
     cb(null, true);

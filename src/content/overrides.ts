@@ -4,7 +4,7 @@ import { AuthoredQuestion } from "./types";
 
 export interface ContentOverrides {
   materialText: string | null;
-  vocabulary: { german: string; translation: string; pronunciation: string | null }[];
+  vocabulary: { german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
   questions: AuthoredQuestion[];
   hasOverrides: boolean;
 }

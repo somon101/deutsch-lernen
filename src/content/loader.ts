@@ -172,6 +172,7 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
           german: item.german,
           translation: item.translation,
           pronunciation: item.pronunciation ?? undefined,
+          audioUrl: item.audioUrl ?? undefined,
         }))
       : vocabularyRaw
         ? parseVocabulary(vocabularyRaw, lessonId)

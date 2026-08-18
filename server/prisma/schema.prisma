@@ -119,7 +119,14 @@ model VocabularyItem {
   german        String
   translation   String
   pronunciation String?
+  // Recorded pronunciation uploaded by an admin. Null means the app falls
+  // back to the browser's speech synthesis for this word.
+  audioUrl      String?
   position      Int
+  // Case- and punctuation-insensitive form of `german`. The unique constraint
+  // lives here so the same word cannot be entered into two different lessons
+  // of the course — enforced by the database, not only by validation.
+  germanKey     String  @unique
 
   @@index([lessonId, position])
 }

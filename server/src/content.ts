@@ -1,6 +1,28 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
 
+/**
+ * Case- and punctuation-insensitive form of a word, used as the course-wide
+ * uniqueness key. "Hallo", "hallo" and "Hallo!" all normalise to the same
+ * value, so none of them can be added twice under a different spelling.
+ */
+export function normalizeWord(german: string): string {
+  return german
+    .toLowerCase()
+    .replace(/[.,!?;:…"'«»„""()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Human-readable lesson name for duplicate messages ("lesson2" -> "Урок 2"). */
+export function lessonLabel(lessonId: string): string {
+  const n = lessonId.match(/(\d+)$/);
+  return n ? `Урок ${n[1]}` : lessonId;
+}
+
+/** Raised when a word would end up in two lessons of the same course. */
+export class DuplicateWordError extends Error {}
+
 export const QUESTION_SETS = ["minitest", "practice", "review"] as const;
 export type QuestionSet = (typeof QUESTION_SETS)[number];
 
@@ -8,6 +30,7 @@ export const vocabularyItemSchema = z.object({
   german: z.string().trim().min(1, "Немецкое слово не может быть пустым"),
   translation: z.string().trim().min(1, "Перевод не может быть пустым"),
   pronunciation: z.string().trim().optional().nullable(),
+  audioUrl: z.string().trim().optional().nullable(),
 });
 
 export const questionSchema = z
@@ -38,7 +61,7 @@ export interface LessonContentDTO {
   lessonId: string;
   /** null means "no admin edits yet" — the client keeps using the file. */
   materialText: string | null;
-  vocabulary: { german: string; translation: string; pronunciation: string | null }[];
+  vocabulary: { german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
   questions: { setName: string; prompt: string; options: string[]; correctAnswer: string }[];
   /** False when nothing has ever been saved for this lesson. */
   hasOverrides: boolean;
@@ -59,6 +82,7 @@ export async function getLessonContent(lessonId: string): Promise<LessonContentD
       german: v.german,
       translation: v.translation,
       pronunciation: v.pronunciation,
+      audioUrl: v.audioUrl,
     })),
     questions: questions.map((q) => ({
       setName: q.setName,
@@ -91,16 +115,50 @@ export async function saveLessonContent(
     }
 
     if (payload.vocabulary !== undefined) {
+      // A word may only belong to one lesson of the course. Reject the whole
+      // save (rather than silently dropping a word) and name the lesson the
+      // word already lives in, so the admin knows where to look.
+      const keys = payload.vocabulary.map((item) => normalizeWord(item.german));
+      const duplicateInPayload = keys.find((key, i) => keys.indexOf(key) !== i);
+      if (duplicateInPayload) {
+        const word = payload.vocabulary[keys.indexOf(duplicateInPayload)].german;
+        throw new DuplicateWordError(`Слово «${word}» указано в этом уроке дважды`);
+      }
+
+      const clashes = await tx.vocabularyItem.findMany({
+        where: { germanKey: { in: keys }, lessonId: { not: lessonId } },
+        select: { german: true, lessonId: true },
+      });
+      if (clashes.length > 0) {
+        const list = clashes
+          .map((c) => `«${c.german}» — уже в уроке «${lessonLabel(c.lessonId)}»`)
+          .join("; ");
+        throw new DuplicateWordError(`Это слово уже используется в другом уроке: ${list}`);
+      }
+
+      // Recorded pronunciations are attached to the word, so they survive a
+      // full rewrite of the lesson's list.
+      const existing = await tx.vocabularyItem.findMany({
+        where: { lessonId },
+        select: { germanKey: true, audioUrl: true },
+      });
+      const audioByKey = new Map(existing.map((e) => [e.germanKey, e.audioUrl]));
+
       await tx.vocabularyItem.deleteMany({ where: { lessonId } });
       if (payload.vocabulary.length > 0) {
         await tx.vocabularyItem.createMany({
-          data: payload.vocabulary.map((item, index) => ({
-            lessonId,
-            german: item.german,
-            translation: item.translation,
-            pronunciation: item.pronunciation?.trim() ? item.pronunciation.trim() : null,
-            position: index,
-          })),
+          data: payload.vocabulary.map((item, index) => {
+            const germanKey = normalizeWord(item.german);
+            return {
+              lessonId,
+              german: item.german,
+              translation: item.translation,
+              pronunciation: item.pronunciation?.trim() ? item.pronunciation.trim() : null,
+              audioUrl: item.audioUrl?.trim() ? item.audioUrl.trim() : (audioByKey.get(germanKey) ?? null),
+              position: index,
+              germanKey,
+            };
+          }),
         });
       }
     }
