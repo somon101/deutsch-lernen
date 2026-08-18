@@ -6,6 +6,36 @@ import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { hashPassword } from "../auth/hash.js";
 import { publicUser } from "../serialize.js";
 import { getProgressSummaryForUser } from "../progress.js";
+import { normalizeUsername, usernameSchema } from "../username.js";
+
+/** Surfaces the specific validation problem (e.g. why a login was rejected)
+ * instead of a generic message the admin can't act on. */
+function firstIssue(error: z.ZodError, fallback: string): string {
+  return error.issues[0]?.message ?? fallback;
+}
+
+/**
+ * Prisma reports P2002 without naming the constraint here, so work out
+ * which field actually collided rather than guessing — telling an admin
+ * "email is taken" when it was really the login is worse than useless.
+ */
+async function conflictMessage(
+  email: string | undefined,
+  usernameLower: string | undefined,
+  excludeUserId?: string,
+): Promise<string> {
+  const [emailOwner, usernameOwner] = await Promise.all([
+    email ? prisma.user.findUnique({ where: { email } }) : Promise.resolve(null),
+    usernameLower ? prisma.user.findUnique({ where: { usernameLower } }) : Promise.resolve(null),
+  ]);
+  const emailTaken = Boolean(emailOwner && emailOwner.id !== excludeUserId);
+  const usernameTaken = Boolean(usernameOwner && usernameOwner.id !== excludeUserId);
+
+  if (emailTaken && usernameTaken) return "Email и логин уже заняты";
+  if (usernameTaken) return "Такой логин уже занят (регистр букв не учитывается)";
+  if (emailTaken) return "Email уже занят";
+  return "Email или логин уже заняты";
+}
 
 export const adminRouter = Router();
 
@@ -21,7 +51,7 @@ const createUserSchema = z.object({
   lastName: z.string().min(1),
   email: z.string().email(),
   phone: z.string().optional(),
-  username: z.string().min(3),
+  username: usernameSchema,
   password: z.string().min(6),
   role: z.enum(["ADMIN", "USER"]).default("USER"),
   canEditProfile: z.boolean().default(true),
@@ -29,17 +59,25 @@ const createUserSchema = z.object({
 
 adminRouter.post("/users", async (req, res) => {
   const parsed = createUserSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Некорректные данные пользователя" });
+  if (!parsed.success) {
+    return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные пользователя") });
+  }
   const { password, ...rest } = parsed.data;
 
   try {
     const user = await prisma.user.create({
-      data: { ...rest, passwordHash: await hashPassword(password) },
+      data: {
+        ...rest,
+        usernameLower: normalizeUsername(rest.username),
+        passwordHash: await hashPassword(password),
+      },
     });
     res.status(201).json({ user: publicUser(user) });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return res.status(409).json({ error: "Email или логин уже заняты" });
+      return res.status(409).json({
+        error: await conflictMessage(rest.email, normalizeUsername(rest.username)),
+      });
     }
     throw e;
   }
@@ -56,7 +94,7 @@ const updateUserSchema = z.object({
   lastName: z.string().min(1).optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  username: z.string().min(3).optional(),
+  username: usernameSchema.optional(),
   role: z.enum(["ADMIN", "USER"]).optional(),
   status: z.enum(["ACTIVE", "BLOCKED"]).optional(),
   canEditProfile: z.boolean().optional(),
@@ -64,7 +102,9 @@ const updateUserSchema = z.object({
 
 adminRouter.patch("/users/:id", async (req, res) => {
   const parsed = updateUserSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Некорректные данные пользователя" });
+  if (!parsed.success) {
+    return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные пользователя") });
+  }
 
   // Locking yourself out is unrecoverable through the UI — an admin who
   // blocks or demotes their own account could only be restored directly in
@@ -91,7 +131,11 @@ adminRouter.patch("/users/:id", async (req, res) => {
   try {
     const user = await prisma.user.update({
       where: { id: req.params.id },
-      data: parsed.data,
+      data: {
+        ...parsed.data,
+        // Keep the case-insensitive key in sync whenever the login changes.
+        ...(parsed.data.username ? { usernameLower: normalizeUsername(parsed.data.username) } : {}),
+      },
     });
     res.json({ user: publicUser(user) });
   } catch (e) {
@@ -99,7 +143,13 @@ adminRouter.patch("/users/:id", async (req, res) => {
       return res.status(404).json({ error: "Пользователь не найден" });
     }
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return res.status(409).json({ error: "Email или логин уже заняты" });
+      return res.status(409).json({
+        error: await conflictMessage(
+          parsed.data.email,
+          parsed.data.username ? normalizeUsername(parsed.data.username) : undefined,
+          req.params.id,
+        ),
+      });
     }
     throw e;
   }

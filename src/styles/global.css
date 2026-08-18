@@ -1258,6 +1258,13 @@ button {
   background: var(--color-bg);
 }
 
+.auth-field__hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-faint);
+  line-height: 1.4;
+}
+
 .admin-toggle-row {
   display: flex;
   align-items: center;
@@ -1312,6 +1319,42 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.user-id-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 14px 0 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+/* Label sits on its own line so the id itself always has the full row
+   width to wrap into — otherwise a narrow screen squeezes it down to one
+   character per line. */
+.user-id-row__label {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.user-id-row__value {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13.5px;
+  color: var(--color-text);
+}
+
+.user-id-row .btn {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  font-size: 14px;
 }
 
 .progress-lesson-list {

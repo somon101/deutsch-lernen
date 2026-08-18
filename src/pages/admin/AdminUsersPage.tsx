@@ -131,7 +131,18 @@ export default function AdminUsersPage() {
                 </label>
                 <label className="auth-field">
                   <span>Логин</span>
-                  <input required value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} />
+                  <input
+                    required
+                    minLength={3}
+                    maxLength={32}
+                    pattern="[A-Za-z]+"
+                    title="Только латинские буквы (A-Z, a-z), без цифр, пробелов и знаков"
+                    value={form.username}
+                    onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                  />
+                  <small className="auth-field__hint">
+                    Только латинские буквы. Регистр не важен: Ivan и ivan — один и тот же логин.
+                  </small>
                 </label>
                 <label className="auth-field">
                   <span>Первоначальный пароль</span>

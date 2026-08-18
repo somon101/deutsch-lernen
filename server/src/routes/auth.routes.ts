@@ -5,6 +5,7 @@ import { verifyPassword } from "../auth/hash.js";
 import { signToken } from "../auth/jwt.js";
 import { publicUser } from "../serialize.js";
 import { requireAuth } from "../auth/middleware.js";
+import { normalizeUsername } from "../username.js";
 
 export const authRouter = Router();
 
@@ -18,8 +19,10 @@ authRouter.post("/login", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Укажите логин и пароль" });
   const { login, password } = parsed.data;
 
+  // Login is accepted in any casing: "Ivan", "ivan" and "IVAN" all resolve
+  // to the same account via the normalized column.
   const user = await prisma.user.findFirst({
-    where: { OR: [{ username: login }, { email: login }] },
+    where: { OR: [{ usernameLower: normalizeUsername(login) }, { email: login }] },
   });
   if (!user) return res.status(401).json({ error: "Неверный логин или пароль" });
   if (user.status !== "ACTIVE") return res.status(403).json({ error: "Учётная запись заблокирована" });

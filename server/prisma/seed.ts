@@ -24,6 +24,7 @@ async function main() {
       lastName: process.env.ADMIN_LAST_NAME || "Admin",
       email,
       username,
+      usernameLower: username.toLowerCase(),
       passwordHash,
       role: "ADMIN",
       status: "ACTIVE",

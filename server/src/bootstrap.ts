@@ -1,5 +1,6 @@
 import { prisma } from "./db.js";
 import { hashPassword } from "./auth/hash.js";
+import { normalizeUsername } from "./username.js";
 
 /**
  * Makes sure the first admin account exists on startup, so a fresh
@@ -14,7 +15,7 @@ export async function ensureAdminExists(): Promise<void> {
   if (!email || !username || !password) return;
 
   const existing = await prisma.user.findFirst({
-    where: { OR: [{ email }, { username }] },
+    where: { OR: [{ email }, { usernameLower: normalizeUsername(username) }] },
   });
   if (existing) return;
 
@@ -24,6 +25,7 @@ export async function ensureAdminExists(): Promise<void> {
       lastName: process.env.ADMIN_LAST_NAME || "Admin",
       email,
       username,
+      usernameLower: normalizeUsername(username),
       passwordHash: await hashPassword(password),
       role: "ADMIN",
       status: "ACTIVE",

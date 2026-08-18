@@ -27,6 +27,11 @@ model User {
   email          String   @unique
   phone          String?
   username       String   @unique
+  // Lower-cased copy of `username`, kept in sync on every write. The unique
+  // constraint lives here so "Ivan" and "ivan" cannot both exist — enforced
+  // by the database, not just by validation. `username` keeps the original
+  // casing for display.
+  usernameLower  String   @unique
   passwordHash   String
   role           Role     @default(USER)
   status         UserStatus @default(ACTIVE)

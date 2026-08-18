@@ -31,6 +31,7 @@ export default function ProfilePage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [idCopied, setIdCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [rows, setRows] = useState<LessonRow[] | null>(null);
@@ -58,6 +59,26 @@ export default function ProfilePage() {
   }, []);
 
   if (!user) return null;
+
+  const copyUserId = async () => {
+    if (!user) return;
+    try {
+      await navigator.clipboard.writeText(user.id);
+    } catch {
+      // Clipboard API is unavailable outside a secure context (e.g. plain
+      // http on a phone) — fall back to a temporary selection copy.
+      const field = document.createElement("textarea");
+      field.value = user.id;
+      field.style.position = "fixed";
+      field.style.opacity = "0";
+      document.body.appendChild(field);
+      field.select();
+      document.execCommand("copy");
+      document.body.removeChild(field);
+    }
+    setIdCopied(true);
+    setTimeout(() => setIdCopied(false), 2000);
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -151,6 +172,14 @@ export default function ProfilePage() {
               {user.firstName} {user.lastName}
             </h1>
             <p className="stage-subtitle">@{user.username}</p>
+
+            <div className="user-id-row">
+              <span className="user-id-row__label">ID пользователя</span>
+              <code className="user-id-row__value">{user.id}</code>
+              <button type="button" className="btn btn-secondary" onClick={copyUserId}>
+                {idCopied ? "Скопировано" : "Скопировать"}
+              </button>
+            </div>
 
             {!user.canEditProfile && (
               <div className="empty-state">
