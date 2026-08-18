@@ -67,3 +67,22 @@ export function shuffle<T>(items: T[], rand: () => number): T[] {
 export function pickN<T>(items: T[], n: number, rand: () => number): T[] {
   return shuffle(items, rand).slice(0, Math.min(n, items.length));
 }
+
+/**
+ * Normalizes an answer for comparison: case, surrounding whitespace and
+ * incidental punctuation are ignored, so "Hallo", "hallo" and "Hallo!" all
+ * count as the same answer. Letters — umlauts included — are left untouched,
+ * so a genuinely different word still compares as different.
+ */
+export function normalizeAnswer(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[.,!?;:…"'«»„“”()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** True when two answers match under {@link normalizeAnswer}. */
+export function answersMatch(a: string, b: string): boolean {
+  return normalizeAnswer(a) === normalizeAnswer(b);
+}

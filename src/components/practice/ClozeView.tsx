@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ClozeExercise } from "../../content/exercises";
-import { shuffle } from "../../content/textUtils";
+import { answersMatch, shuffle } from "../../content/textUtils";
 
 export default function ClozeView({
   exercise,
@@ -17,7 +17,7 @@ export default function ClozeView({
   const select = (option: string) => {
     if (selected !== null) return;
     setSelected(option);
-    onAnswered(option === exercise.answer);
+    onAnswered(answersMatch(option, exercise.answer));
   };
 
   return (
@@ -30,7 +30,7 @@ export default function ClozeView({
         {options.map((option, i) => {
           let cls = "quiz-option";
           if (selected !== null) {
-            if (option === exercise.answer) cls += " correct";
+            if (answersMatch(option, exercise.answer)) cls += " correct";
             else if (option === selected) cls += " incorrect";
           }
           return (
@@ -41,8 +41,8 @@ export default function ClozeView({
         })}
       </div>
       {selected !== null && (
-        <div className={`exercise-feedback ${selected === exercise.answer ? "correct" : "incorrect"}`}>
-          {selected === exercise.answer ? "Верно!" : `Неверно. Правильное слово: «${exercise.answer}».`}
+        <div className={`exercise-feedback ${answersMatch(selected, exercise.answer) ? "correct" : "incorrect"}`}>
+          {answersMatch(selected, exercise.answer) ? "Верно!" : `Неверно. Правильное слово: «${exercise.answer}».`}
         </div>
       )}
     </>

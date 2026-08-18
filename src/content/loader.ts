@@ -52,9 +52,11 @@ interface DiscoveredLesson {
 function discoverLessons(): DiscoveredLesson[] {
   const byLesson = new Map<string, string[]>();
   for (const path of Object.keys(urlLoaders)) {
-    const match = path.match(/^\/(lesson-?\d+)\//i);
+    // Both layouts are accepted: a lesson folder at the project root
+    // ("/lesson1/...") or grouped inside a container ("/lessons/lesson2/...").
+    const match = path.match(/^\/(?:lessons\/)?(lesson[\s_-]?\d+)\//i);
     if (!match) continue;
-    const id = match[1].toLowerCase();
+    const id = match[1].toLowerCase().replace(/[\s_-]/g, "");
     if (!byLesson.has(id)) byLesson.set(id, []);
     const list = byLesson.get(id)!;
     if (!list.includes(path)) list.push(path);
@@ -175,7 +177,22 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
         ? parseVocabulary(vocabularyRaw, lessonId)
         : [];
 
-  const { blocks, phrases } = materialText ? parseLessonText(materialText) : { blocks: [], phrases: [] };
+  const parsed = materialText ? parseLessonText(materialText) : { blocks: [], phrases: [] };
+
+  // Requirement: German words shown in the material carry their transcription.
+  // It is taken from this lesson's own vocabulary rather than invented, and
+  // rendered by the existing phrase styling.
+  const pronunciationByWord = new Map<string, string>();
+  for (const entry of vocabulary) {
+    if (entry.pronunciation) pronunciationByWord.set(entry.german.toLowerCase(), entry.pronunciation);
+  }
+  const withPronunciation = <T extends { german: string; pronunciation?: string }>(item: T): T =>
+    item.pronunciation ? item : { ...item, pronunciation: pronunciationByWord.get(item.german.toLowerCase()) };
+
+  const blocks = parsed.blocks.map((block) =>
+    block.type === "phrase" ? withPronunciation(block) : block,
+  );
+  const phrases = parsed.phrases.map(withPronunciation);
 
   const titleBlock = blocks.find((b) => b.type === "title");
   const title = titleBlock && titleBlock.type === "title" ? titleBlock.text : prettyFallbackTitle(lessonId);

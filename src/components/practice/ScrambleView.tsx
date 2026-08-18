@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ScrambleExercise } from "../../content/exercises";
+import { answersMatch } from "../../content/textUtils";
 
 interface Token {
   key: string;
@@ -31,7 +32,7 @@ export default function ScrambleView({
   };
 
   const check = () => {
-    const isCorrect = placed.map((t) => t.word).join(" ") === exercise.answer.join(" ");
+    const isCorrect = answersMatch(placed.map((t) => t.word).join(" "), exercise.answer.join(" "));
     setChecked(true);
     setCorrect(isCorrect);
     onAnswered(isCorrect);

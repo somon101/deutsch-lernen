@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChoiceQuestion } from "../../content/exercises";
-import { shuffle } from "../../content/textUtils";
+import { answersMatch, shuffle } from "../../content/textUtils";
 
 export default function ChoiceView({
   exercise,
@@ -18,7 +18,7 @@ export default function ChoiceView({
   const select = (option: string) => {
     if (selected !== null) return;
     setSelected(option);
-    onAnswered(option === exercise.correctAnswer);
+    onAnswered(answersMatch(option, exercise.correctAnswer));
   };
 
   return (
@@ -28,7 +28,7 @@ export default function ChoiceView({
         {options.map((option, i) => {
           let cls = "quiz-option";
           if (selected !== null) {
-            if (option === exercise.correctAnswer) cls += " correct";
+            if (answersMatch(option, exercise.correctAnswer)) cls += " correct";
             else if (option === selected) cls += " incorrect";
           }
           return (
@@ -39,8 +39,8 @@ export default function ChoiceView({
         })}
       </div>
       {selected !== null && (
-        <div className={`exercise-feedback ${selected === exercise.correctAnswer ? "correct" : "incorrect"}`}>
-          {selected === exercise.correctAnswer ? "Верно!" : `Неверно. Правильный ответ: «${exercise.correctAnswer}».`}
+        <div className={`exercise-feedback ${answersMatch(selected, exercise.correctAnswer) ? "correct" : "incorrect"}`}>
+          {answersMatch(selected, exercise.correctAnswer) ? "Верно!" : `Неверно. Правильный ответ: «${exercise.correctAnswer}».`}
         </div>
       )}
     </>
