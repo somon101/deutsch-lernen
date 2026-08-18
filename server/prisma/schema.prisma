@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+// Structured account + progress data only. Lesson content itself (video,
+// audio, vocabulary, text) stays file-based under /lessonN — this table only
+// ever references a lessonId string, never the material itself.
+model User {
+  id             String   @id @default(uuid())
+  firstName      String
+  lastName       String
+  email          String   @unique
+  phone          String?
+  username       String   @unique
+  passwordHash   String
+  role           Role     @default(USER)
+  status         UserStatus @default(ACTIVE)
+  avatarUrl      String?
+  canEditProfile Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  attempts LessonAttempt[]
+  lessonStates LessonState[]
+}
+
+// Live "where the user is inside a lesson" state — the stage-by-stage
+// progress that used to live in the browser's localStorage. Server-side and
+// user-scoped, so it follows the account across devices/browsers.
+model LessonState {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId String
+
+  completedStages String[] @default([])
+  vocabIndex      Int      @default(0)
+
+  miniTestCorrect Int?
+  miniTestTotal   Int?
+  miniTestAt      DateTime?
+  practiceCorrect Int?
+  practiceTotal   Int?
+  practiceAt      DateTime?
+  reviewCorrect   Int?
+  reviewTotal     Int?
+  reviewAt        DateTime?
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, lessonId])
+}
+
+// One row per completed pass through a lesson (recorded when the user
+// finishes the "review" stage). Best/last/attempt-count are derived by
+// querying this table, not stored redundantly, so the server is always the
+// single source of truth for scoring.
+model LessonAttempt {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId        String
+
+  miniTestCorrect Int
+  miniTestTotal   Int
+  practiceCorrect Int
+  practiceTotal   Int
+  reviewCorrect   Int
+  reviewTotal     Int
+  score           Int
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, lessonId])
+}

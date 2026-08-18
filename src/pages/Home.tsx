@@ -4,10 +4,12 @@ import { listLessonIds, loadLesson } from "../content/loader";
 import { LessonContent } from "../content/types";
 import { useProgressStore } from "../progress/ProgressContext";
 import { courseProgressRatio, nextIncompleteStage } from "../progress/types";
+import { useAuth } from "../auth/AuthContext";
 
 export default function Home() {
   const [lessons, setLessons] = useState<LessonContent[] | null>(null);
-  const { store } = useProgressStore();
+  const { store, isLoaded: progressLoaded } = useProgressStore();
+  const { user } = useAuth();
 
   useEffect(() => {
     const ids = listLessonIds();
@@ -20,6 +22,22 @@ export default function Home() {
         <Link to="/" className="brand">
           <span className="brand-flag">🇩🇪</span> Deutsch Lernen
         </Link>
+        {user ? (
+          <div style={{ display: "flex", gap: 10 }}>
+            {user.role === "ADMIN" && (
+              <Link to="/admin" className="btn btn-ghost">
+                Admin
+              </Link>
+            )}
+            <Link to="/profile" className="btn btn-ghost">
+              {user.firstName}
+            </Link>
+          </div>
+        ) : (
+          <Link to="/login" className="btn btn-ghost">
+            Войти
+          </Link>
+        )}
       </nav>
       <main className="home-main">
         <div className="home-hero">
@@ -27,7 +45,7 @@ export default function Home() {
           <p>Слова → Материал → Видео → Мини-тест → Аудио → Практика → Закрепление</p>
         </div>
 
-        {lessons === null && (
+        {(lessons === null || !progressLoaded) && (
           <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>Загрузка уроков…</p>
         )}
 
@@ -38,7 +56,7 @@ export default function Home() {
           </div>
         )}
 
-        {lessons !== null && lessons.length > 0 && (
+        {lessons !== null && progressLoaded && lessons.length > 0 && (
           <div className="lesson-grid">
             {lessons.map((lesson, i) => {
               const progress = store[lesson.id];

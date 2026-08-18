@@ -22,7 +22,7 @@ export default function LessonPage() {
   const { lessonId = "", stage = "" } = useParams();
   const navigate = useNavigate();
   const progress = useLessonProgress(lessonId);
-  const { markStageComplete } = useProgressStore();
+  const { markStageComplete, isLoaded: progressLoaded } = useProgressStore();
 
   const [content, setContent] = useState<LessonContent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,11 +46,24 @@ export default function LessonPage() {
     [content],
   );
 
+  const stageId = VALID_STAGES.has(stage) ? (stage as StageId) : ("vocabulary" as StageId);
+
+  // Stage gating depends on progress that now comes from the server — wait
+  // for it, otherwise a direct link/refresh would bounce back to the first
+  // stage before the real progress has arrived.
+  if (!progressLoaded) {
+    return (
+      <LessonLayout lessonId={lessonId} lessonTitle="Загрузка…" currentStage={stageId}>
+        <div className="stage-panel">
+          <p className="stage-subtitle">Загружаем ваш прогресс…</p>
+        </div>
+      </LessonLayout>
+    );
+  }
+
   if (!VALID_STAGES.has(stage)) {
     return <Navigate to={`/lesson/${lessonId}/${nextIncompleteStage(progress)}`} replace />;
   }
-
-  const stageId = stage as StageId;
 
   if (!isStageUnlocked(progress, stageId)) {
     return <Navigate to={`/lesson/${lessonId}/${nextIncompleteStage(progress)}`} replace />;
