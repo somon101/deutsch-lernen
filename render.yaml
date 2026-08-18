@@ -1,30 +1,33 @@
 # Render Blueprint: provisions the API server and its PostgreSQL database.
 # Deploy via Render -> New -> Blueprint -> pick this repository.
+#
+# Currently on Render's free tier, which has three limits to be aware of:
+#   - the database is removed after 30 days
+#   - the service sleeps after ~15 min idle (first request then takes ~30-50s)
+#   - no persistent disk, so uploaded profile photos are lost on redeploy
+# Before real students start using this, switch `plan: free` to
+# `plan: starter` (service) / `plan: basic-256mb` (database) and add a disk:
+#   disk:
+#     name: uploads
+#     mountPath: /opt/render/project/src/server/uploads
+#     sizeGB: 1
+# Note that a free database cannot be upgraded in place — move to a paid one
+# while it is still empty to avoid migrating live student progress.
 databases:
-  # Paid plan: no 30-day expiry and daily backups, so student progress is
-  # not sitting on a database that can disappear.
   - name: deutsch-lernen-db
     databaseName: deutsch_lernen
-    plan: basic-256mb
+    plan: free
 
 services:
   - type: web
     name: deutsch-lernen-api
     runtime: node
-    # Paid plan: the service does not sleep, so students never hit a
-    # 30-50s cold start on their first request.
-    plan: starter
+    plan: free
     rootDir: server
     buildCommand: npm install && npx prisma generate && npm run build
     # migrate deploy applies any pending migrations before the server starts
     startCommand: npx prisma migrate deploy && npm start
     healthCheckPath: /health
-    # Persistent storage for profile photos — without this they are wiped
-    # on every redeploy.
-    disk:
-      name: uploads
-      mountPath: /opt/render/project/src/server/uploads
-      sizeGB: 1
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -35,7 +38,7 @@ services:
       - key: CORS_ORIGINS
         value: https://somon101.github.io
       # First admin account, created on first boot if it doesn't exist yet.
-      # Change ADMIN_PASSWORD in the Render dashboard before deploying.
+      # Set ADMIN_PASSWORD in the Render dashboard when deploying.
       - key: ADMIN_FIRST_NAME
         value: Somon
       - key: ADMIN_LAST_NAME
