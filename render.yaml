@@ -1,0 +1,38 @@
+# Render Blueprint: provisions the API server and its PostgreSQL database.
+# Deploy via Render -> New -> Blueprint -> pick this repository.
+databases:
+  - name: deutsch-lernen-db
+    databaseName: deutsch_lernen
+    plan: free
+
+services:
+  - type: web
+    name: deutsch-lernen-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install && npx prisma generate && npm run build
+    # migrate deploy applies any pending migrations before the server starts
+    startCommand: npx prisma migrate deploy && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deutsch-lernen-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://somon101.github.io
+      # First admin account, created on first boot if it doesn't exist yet.
+      # Change ADMIN_PASSWORD in the Render dashboard before deploying.
+      - key: ADMIN_FIRST_NAME
+        value: Somon
+      - key: ADMIN_LAST_NAME
+        value: Admin
+      - key: ADMIN_EMAIL
+        value: somon.nosirzoda27@gmail.com
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false

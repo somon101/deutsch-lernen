@@ -6,6 +6,7 @@ import { env } from "./env.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { meRouter } from "./routes/me.routes.js";
 import { adminRouter } from "./routes/admin.routes.js";
+import { ensureAdminExists } from "./bootstrap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -41,4 +42,5 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 app.listen(env.port, () => {
   console.log(`API listening on http://localhost:${env.port}`);
+  ensureAdminExists().catch((e) => console.error("Admin bootstrap failed:", e));
 });
