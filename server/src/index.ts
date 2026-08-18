@@ -6,6 +6,7 @@ import { env } from "./env.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { meRouter } from "./routes/me.routes.js";
 import { adminRouter } from "./routes/admin.routes.js";
+import { contentRouter } from "./routes/content.routes.js";
 import { ensureAdminExists } from "./bootstrap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,6 +34,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRouter);
 app.use("/api/me", meRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/content", contentRouter);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

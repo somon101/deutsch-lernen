@@ -6,6 +6,7 @@ import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { hashPassword } from "../auth/hash.js";
 import { publicUser } from "../serialize.js";
 import { getProgressSummaryForUser } from "../progress.js";
+import { contentPayloadSchema, getLessonContent, saveLessonContent } from "../content.js";
 import { normalizeUsername, usernameSchema } from "../username.js";
 
 /** Surfaces the specific validation problem (e.g. why a login was rejected)
@@ -182,4 +183,23 @@ adminRouter.get("/users/:id/progress", async (req, res) => {
   if (!user) return res.status(404).json({ error: "Пользователь не найден" });
   const summary = await getProgressSummaryForUser(user.id);
   res.json({ progress: summary });
+});
+
+// ---------------------------------------------------------------------------
+// Course content editing. Mounted on the admin router, so requireAuth +
+// requireAdmin above already guard every route here — a USER token cannot
+// reach these no matter what the frontend shows.
+// ---------------------------------------------------------------------------
+
+adminRouter.get("/content/:lessonId", async (req, res) => {
+  res.json({ content: await getLessonContent(req.params.lessonId) });
+});
+
+adminRouter.put("/content/:lessonId", async (req, res) => {
+  const parsed = contentPayloadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные урока") });
+  }
+  const content = await saveLessonContent(req.params.lessonId, parsed.data, req.user!.id);
+  res.json({ content });
 });

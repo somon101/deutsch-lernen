@@ -35,6 +35,15 @@ export interface LessonAsset {
   name: string;
 }
 
+/** A question written by an admin, stored in the database. */
+export interface AuthoredQuestion {
+  setName: "minitest" | "practice" | "review";
+  prompt: string;
+  options: string[];
+  /** Identified by value, not position, so reordering options is safe. */
+  correctAnswer: string;
+}
+
 export interface LessonAssets {
   video?: LessonAsset;
   audio?: LessonAsset;
@@ -56,4 +65,12 @@ export interface LessonContent {
   /** Human-readable notes about resources the lesson structure expects but
    * that were not found (e.g. no video file present). */
   missing: string[];
+  /** The raw lesson text `material` was parsed from — the file's contents, or
+   * the admin's edited version when one has been saved. */
+  materialText: string;
+  /** Questions authored in the admin panel. Empty means the exercise
+   * generator keeps producing them exactly as it did before. */
+  authoredQuestions: AuthoredQuestion[];
+  /** True when an admin has saved edits for this lesson. */
+  hasContentOverrides: boolean;
 }

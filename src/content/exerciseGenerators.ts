@@ -1,4 +1,4 @@
-import { LessonContent, PhraseEntry, VocabularyEntry } from "./types";
+import { AuthoredQuestion, LessonContent, PhraseEntry, VocabularyEntry } from "./types";
 import { hashString, pickN, seededRandom, shuffle } from "./textUtils";
 import {
   ChoiceQuestion,
@@ -167,18 +167,38 @@ function buildClozeExercises(phrases: PhraseEntry[], vocabWords: string[], count
   });
 }
 
+/** Converts admin-authored questions into the exercise shape the runner
+ * already understands — same `choice` type, same value-based correctness. */
+function authoredFor(content: LessonContent, setName: AuthoredQuestion["setName"]): ChoiceQuestion[] {
+  return content.authoredQuestions
+    .filter((q) => q.setName === setName)
+    .map((q, i) => ({
+      kind: "choice" as const,
+      id: `${setName}-authored-${i}`,
+      prompt: q.prompt,
+      options: q.options,
+      correctAnswer: q.correctAnswer,
+    }));
+}
+
 export function buildLessonExercises(content: LessonContent): LessonExerciseSets {
   const items = pool(content);
   const vocabWords = content.vocabulary.map((v) => v.german);
 
+  // A stage that has admin-authored questions uses exactly those; otherwise
+  // it is generated as it always was.
+  const authoredMiniTest = authoredFor(content, "minitest");
+  const authoredPractice = authoredFor(content, "practice");
+  const authoredReview = authoredFor(content, "review");
+
   const miniTestSeed = hashString(`${content.id}:minitest`);
-  const miniTest: Exercise[] = [
+  const generatedMiniTest: Exercise[] = [
     ...buildChoiceQuestions(items, 4, miniTestSeed, "minitest"),
     ...buildTrueFalseQuestions(items, 2, miniTestSeed + 1, "minitest"),
   ];
 
   const practiceSeed = hashString(`${content.id}:practice`);
-  const practice: Exercise[] = [
+  const generatedPractice: Exercise[] = [
     ...buildChoiceQuestions(items, 6, practiceSeed, "practice"),
     ...buildClozeExercises(content.phrases, vocabWords, 4, practiceSeed + 1, "practice"),
     ...buildScrambleExercises(content.phrases, 4, practiceSeed + 2, "practice"),
@@ -187,7 +207,11 @@ export function buildLessonExercises(content: LessonContent): LessonExerciseSets
   ];
 
   const reviewSeed = hashString(`${content.id}:review`);
-  const review: Exercise[] = buildChoiceQuestions(items, items.length, reviewSeed, "review");
+  const generatedReview: Exercise[] = buildChoiceQuestions(items, items.length, reviewSeed, "review");
 
-  return { miniTest, practice, review };
+  return {
+    miniTest: authoredMiniTest.length > 0 ? authoredMiniTest : generatedMiniTest,
+    practice: authoredPractice.length > 0 ? authoredPractice : generatedPractice,
+    review: authoredReview.length > 0 ? authoredReview : generatedReview,
+  };
 }

@@ -52,6 +52,9 @@ export default function AdminUsersPage() {
           <span className="brand-flag">🇩🇪</span> Deutsch Lernen
         </Link>
         <div style={{ display: "flex", gap: 10 }}>
+          <Link to="/admin/courses" className="btn btn-ghost">
+            Курсы
+          </Link>
           <Link to="/profile" className="btn btn-ghost">
             Профиль
           </Link>

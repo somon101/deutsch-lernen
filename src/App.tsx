@@ -6,6 +6,8 @@ import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
+import AdminCoursesPage from "./pages/admin/AdminCoursesPage";
+import AdminLessonEditPage from "./pages/admin/AdminLessonEditPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -50,6 +52,22 @@ export default function App() {
         element={
           <ProtectedRoute adminOnly>
             <AdminUsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/courses"
+        element={
+          <ProtectedRoute adminOnly>
+            <AdminCoursesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/lessons/:lessonId"
+        element={
+          <ProtectedRoute adminOnly>
+            <AdminLessonEditPage />
           </ProtectedRoute>
         }
       />

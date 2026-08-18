@@ -95,3 +95,46 @@ model LessonAttempt {
 
   @@index([userId, lessonId])
 }
+
+// ---------------------------------------------------------------------------
+// Admin-editable course content.
+//
+// Lesson material still ships as files under /lessonN and stays the default
+// source. These tables are an override layer: a lesson only appears here once
+// an admin has edited it, and until then the app behaves exactly as before.
+// ---------------------------------------------------------------------------
+
+model LessonContent {
+  lessonId     String   @id
+  // The lesson text in the same plain format as the source file. It is parsed
+  // by the very same client-side parser, so nothing downstream changes.
+  materialText String
+  updatedAt    DateTime @updatedAt
+  updatedById  String?
+}
+
+model VocabularyItem {
+  id            String  @id @default(uuid())
+  lessonId      String
+  german        String
+  translation   String
+  pronunciation String?
+  position      Int
+
+  @@index([lessonId, position])
+}
+
+model LessonQuestion {
+  id            String   @id @default(uuid())
+  lessonId      String
+  // Which stage's set this belongs to: "minitest" | "practice" | "review".
+  setName       String
+  prompt        String
+  options       String[]
+  // Stored by value rather than index, so reordering options in the editor
+  // can never silently change which answer is correct.
+  correctAnswer String
+  position      Int
+
+  @@index([lessonId, setName, position])
+}

@@ -1,6 +1,7 @@
 import { LessonAsset, LessonContent } from "./types";
 import { parseVocabulary } from "./parseVocabulary";
 import { parseLessonText } from "./parseLessonText";
+import { fetchContentOverrides } from "./overrides";
 
 // Content is discovered purely from files on disk under /lessonN (or
 // /lesson-N) folders at the project root — adding lesson2/, lesson3/, ...
@@ -70,6 +71,12 @@ function prettyFallbackTitle(lessonId: string): string {
 
 const lessonCache = new Map<string, Promise<LessonContent>>();
 
+/** Drops cached lesson content so the next load picks up admin edits. */
+export function invalidateLessonCache(lessonId?: string): void {
+  if (lessonId) lessonCache.delete(lessonId);
+  else lessonCache.clear();
+}
+
 export function listLessonIds(): string[] {
   return discoverLessons().map((l) => l.id);
 }
@@ -95,6 +102,9 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
       assets: { images: [] },
       extraTextFiles: [],
       missing: [`Папка ${lessonId} не найдена в проекте.`],
+      materialText: "",
+      authoredQuestions: [],
+      hasContentOverrides: false,
     };
   }
 
@@ -147,10 +157,25 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
   if (!video) missing.push("Видеофайл урока (.mp4/.webm) не найден в папке урока.");
   if (!audio) missing.push("Аудиофайл для аудиопересказа (.mp3/.m4a) не найден в папке урока.");
 
-  const vocabulary = vocabularyRaw ? parseVocabulary(vocabularyRaw, lessonId) : [];
-  const { blocks, phrases } = materialRaw
-    ? parseLessonText(materialRaw)
-    : { blocks: [], phrases: [] };
+  // Admin edits, when they exist, stand in for the corresponding file. The
+  // text still goes through the same parser, so everything downstream —
+  // stages, exercises, the final report — behaves identically.
+  const overrides = await fetchContentOverrides(lessonId);
+
+  const materialText = overrides.materialText ?? materialRaw ?? "";
+  const vocabulary =
+    overrides.vocabulary.length > 0
+      ? overrides.vocabulary.map((item, index) => ({
+          id: `${lessonId}-vocab-${index}`,
+          german: item.german,
+          translation: item.translation,
+          pronunciation: item.pronunciation ?? undefined,
+        }))
+      : vocabularyRaw
+        ? parseVocabulary(vocabularyRaw, lessonId)
+        : [];
+
+  const { blocks, phrases } = materialText ? parseLessonText(materialText) : { blocks: [], phrases: [] };
 
   const titleBlock = blocks.find((b) => b.type === "title");
   const title = titleBlock && titleBlock.type === "title" ? titleBlock.text : prettyFallbackTitle(lessonId);
@@ -164,5 +189,8 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
     assets: { video, audio, images },
     extraTextFiles,
     missing,
+    materialText,
+    authoredQuestions: overrides.questions,
+    hasContentOverrides: overrides.hasOverrides,
   };
 }
