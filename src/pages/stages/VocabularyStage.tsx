@@ -15,13 +15,12 @@ export default function VocabularyStage({
 }) {
   const progress = useLessonProgress(lessonId);
   const { setVocabIndex } = useProgressStore();
+  const words = content.newVocabulary;
   useEffect(() => {
-    preloadWordAudio(content.vocabulary.map((v) => v.audioUrl));
-  }, [content]);
+    preloadWordAudio(words.map((v) => v.audioUrl));
+  }, [words]);
 
-  const [index, setIndex] = useState(() =>
-    Math.min(progress.vocabIndex, Math.max(content.vocabulary.length - 1, 0)),
-  );
+  const [index, setIndex] = useState(() => Math.min(progress.vocabIndex, Math.max(words.length - 1, 0)));
 
   if (content.vocabulary.length === 0) {
     return (
@@ -44,8 +43,26 @@ export default function VocabularyStage({
     );
   }
 
-  const word = content.vocabulary[index];
-  const isLast = index === content.vocabulary.length - 1;
+  if (words.length === 0) {
+    return (
+      <div className="stage-panel">
+        <div className="stage-eyebrow">Слова урока</div>
+        <h1 className="stage-title">Новых слов здесь нет</h1>
+        <div className="empty-state">
+          <h3>Все слова этого урока вы уже изучали раньше</h3>
+          <p>Они снова встретятся в материале и заданиях, но заново учить их не нужно — переходите дальше.</p>
+        </div>
+        <div className="stage-footer">
+          <button className="btn btn-primary" onClick={onComplete}>
+            Перейти к материалу
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const word = words[index];
+  const isLast = index === words.length - 1;
 
   const goNext = () => {
     if (isLast) {
@@ -69,18 +86,18 @@ export default function VocabularyStage({
       <div className="stage-eyebrow">Слова урока</div>
       <h1 className="stage-title">Изучите слова перед началом урока</h1>
       <p className="stage-subtitle">
-        Слово {index + 1} из {content.vocabulary.length}. Просмотрите каждое слово и нажмите «Далее».
+        Слово {index + 1} из {words.length}. Просмотрите каждое слово и нажмите «Далее».
       </p>
 
       <div className="vocab-progress-track">
-        {content.vocabulary.map((_, i) => (
+        {words.map((_, i) => (
           <span key={i} className={`vocab-progress-dot ${i <= index ? "seen" : ""}`} />
         ))}
       </div>
 
       <div className="vocab-card">
         <span className="vocab-card__counter">
-          {index + 1} / {content.vocabulary.length}
+          {index + 1} / {words.length}
         </span>
         <div className="vocab-card__german">
           <button

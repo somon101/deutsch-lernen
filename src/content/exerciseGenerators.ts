@@ -1,5 +1,6 @@
 import { AuthoredQuestion, LessonContent, PhraseEntry, VocabularyEntry } from "./types";
-import { hashString, pickN, seededRandom, shuffle } from "./textUtils";
+import { answersMatch, hashString, normalizeAnswer, pickN, seededRandom, shuffle } from "./textUtils";
+import { exercisesForStage } from "./questionMapping";
 import {
   ChoiceQuestion,
   ClozeExercise,
@@ -18,8 +19,13 @@ interface Pair {
 function pool(content: LessonContent): Pair[] {
   const seen = new Set<string>();
   const items: Pair[] = [];
+  // Vocabulary entries come first so the curated spelling ("Hallo") wins over
+  // a material phrase that writes the same word with different punctuation
+  // ("Hallo!") — the dedup key below is normalized (case/punctuation-
+  // insensitive) so those two are recognised as the same word and only the
+  // first is kept, instead of both ending up as separate quiz options.
   for (const entry of [...content.vocabulary, ...content.phrases] as (VocabularyEntry | PhraseEntry)[]) {
-    const key = `${entry.german}::${entry.translation}`;
+    const key = `${normalizeAnswer(entry.german)}::${normalizeAnswer(entry.translation)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     items.push({ german: entry.german, translation: entry.translation });
@@ -41,10 +47,21 @@ function buildChoiceQuestions(items: Pair[], count: number, seed: number, idPref
       : `Как будет по-немецки «${item.translation}»?`;
     const correct = germanToRussian ? item.translation : item.german;
 
+    // Distractors are excluded both against the correct answer and against
+    // each other by normalized value, so two options that would grade as the
+    // same answer (differing only by case/punctuation) never appear
+    // together — the raw, as-written text is still what's displayed.
+    const correctKey = normalizeAnswer(correct);
+    const seenDistractorKeys = new Set<string>();
     const distractorValues = items
       .filter((other) => other !== item)
       .map((other) => (germanToRussian ? other.translation : other.german))
-      .filter((value, idx, arr) => value !== correct && arr.indexOf(value) === idx);
+      .filter((value) => {
+        const valueKey = normalizeAnswer(value);
+        if (valueKey === correctKey || seenDistractorKeys.has(valueKey)) return false;
+        seenDistractorKeys.add(valueKey);
+        return true;
+      });
 
     const distractors = pickN(distractorValues, Math.min(3, distractorValues.length), rand);
     // Order here doesn't matter — the view component re-shuffles on every
@@ -75,7 +92,10 @@ function buildTrueFalseQuestions(items: Pair[], count: number, seed: number, idP
     let shownTranslation = item.translation;
 
     if (!isTrue) {
-      const others = items.filter((other) => other.translation !== item.translation);
+      // Compared by normalized value so a translation that only differs by
+      // case/punctuation from the correct one is never offered as the
+      // "wrong" statement — that would make the statement arguably true.
+      const others = items.filter((other) => !answersMatch(other.translation, item.translation));
       if (others.length === 0) continue;
       shownTranslation = pickN(others, 1, rand)[0].translation;
     }
@@ -150,8 +170,17 @@ function buildClozeExercises(phrases: PhraseEntry[], vocabWords: string[], count
     const otherWords = [
       ...tokens.filter((_, idx) => idx !== blankIndex),
       ...vocabWords,
-    ].filter((w) => w.toLowerCase() !== answer.toLowerCase());
-    const uniqueOthers = Array.from(new Set(otherWords));
+    ].filter((w) => !answersMatch(w, answer));
+    // Deduped by normalized value (not raw text) so e.g. "Hallo" from the
+    // sentence and "hallo" from the vocabulary list don't both end up as
+    // separate options for the same blank.
+    const seenOtherKeys = new Set<string>();
+    const uniqueOthers = otherWords.filter((w) => {
+      const wKey = normalizeAnswer(w);
+      if (seenOtherKeys.has(wKey)) return false;
+      seenOtherKeys.add(wKey);
+      return true;
+    });
     const distractors = pickN(uniqueOthers, Math.min(3, uniqueOthers.length), rand);
     const options = shuffle([answer, ...distractors], rand);
 
@@ -167,9 +196,14 @@ function buildClozeExercises(phrases: PhraseEntry[], vocabWords: string[], count
   });
 }
 
-/** Converts admin-authored questions into the exercise shape the runner
- * already understands — same `choice` type, same value-based correctness. */
-function authoredFor(content: LessonContent, setName: AuthoredQuestion["setName"]): ChoiceQuestion[] {
+/** Converts admin-authored questions into the exercise shapes the runner
+ * already understands. A stage's named blocks (any of the 5 kinds — same
+ * mechanism the course builder uses) win when present; the old flat,
+ * choice-only list is only a fallback for anything that predates blocks. */
+function authoredFor(content: LessonContent, setName: AuthoredQuestion["setName"]): Exercise[] {
+  const blockExercises = exercisesForStage(content.blocks, setName);
+  if (blockExercises.length > 0) return blockExercises;
+
   return content.authoredQuestions
     .filter((q) => q.setName === setName)
     .map((q, i) => ({

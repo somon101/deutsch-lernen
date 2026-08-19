@@ -1,8 +1,11 @@
-import { ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { assetUrl } from "../../auth/api";
-import { BuilderCourse, BuilderLesson, QuestionSet, builderApi, uploadLessonMedia } from "../../admin/builderApi";
+import { BuilderLesson, QuestionSet, builderApi, builderMedia, uploadLessonMedia } from "../../admin/builderApi";
 import BuilderBlockEditor from "./BuilderBlockEditor";
 import BuilderVocabularyEditor from "./BuilderVocabularyEditor";
+import LessonMediaEditor from "./LessonMediaEditor";
+import ChainItem from "./ChainItem";
+import MaterialFormatGuide from "./MaterialFormatGuide";
 
 /**
  * The chain a learner actually walks, in the order the app runs it. Only the
@@ -26,42 +29,6 @@ const STAGE_TITLES: Record<QuestionSet, string> = {
   review: "Закрепление",
 };
 
-/** One expandable element of the lesson chain. */
-function ChainItem({
-  index,
-  label,
-  note,
-  summary,
-  editable,
-  open,
-  onToggle,
-  children,
-}: {
-  index: number;
-  label: string;
-  note?: string;
-  summary: string;
-  editable: boolean;
-  open: boolean;
-  onToggle: () => void;
-  children?: ReactNode;
-}) {
-  return (
-    <div className={`chain-item ${open ? "is-open" : ""} ${editable ? "" : "is-readonly"}`}>
-      <button type="button" className="chain-item__head" onClick={onToggle} disabled={!editable}>
-        <span className="chain-item__index">{index}</span>
-        <span className="chain-item__label">
-          {label}
-          {note && <span className="chain-item__note">{note}</span>}
-        </span>
-        <span className="chain-item__summary">{summary}</span>
-        {editable && <span className="chain-item__caret">{open ? "▾" : "▸"}</span>}
-      </button>
-      {open && editable && <div className="chain-item__body">{children}</div>}
-    </div>
-  );
-}
-
 export default function BuilderLessonEditor({
   courseId,
   lesson,
@@ -73,7 +40,7 @@ export default function BuilderLessonEditor({
   lesson: BuilderLesson;
   busy: string | null;
   saved: string | null;
-  onRun: (key: string, action: () => Promise<BuilderCourse>) => Promise<void>;
+  onRun: (key: string, action: () => Promise<unknown>) => Promise<void>;
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [title, setTitle] = useState(lesson.title);
@@ -211,6 +178,7 @@ export default function BuilderLessonEditor({
                 open={open}
                 onToggle={toggle}
               >
+                <MaterialFormatGuide />
                 <textarea
                   className="admin-textarea"
                   rows={12}
@@ -247,39 +215,13 @@ export default function BuilderLessonEditor({
                 open={open}
                 onToggle={toggle}
               >
-                {url ? (
-                  kind === "video" ? (
-                    <video className="builder-media-preview" src={assetUrl(url)} controls preload="metadata" />
-                  ) : (
-                    <audio src={assetUrl(url)} controls preload="none" />
-                  )
-                ) : (
-                  <p className="stage-subtitle">Файл ещё не загружен.</p>
-                )}
-                <div className="profile-avatar-actions">
-                  <label className="btn btn-secondary">
-                    {url ? "Заменить файл" : "Загрузить файл"}
-                    <input
-                      type="file"
-                      accept={kind === "video" ? "video/mp4,video/webm,video/quicktime" : "audio/*"}
-                      hidden
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        e.target.value = "";
-                        if (file) onRun(key(`media-${kind}`), () => uploadLessonMedia(courseId, lesson.id, kind, file));
-                      }}
-                    />
-                  </label>
-                  {url && (
-                    <button
-                      type="button"
-                      className="btn btn-ghost admin-row__remove"
-                      onClick={() => onRun(key(`media-${kind}`), () => builderApi.removeMedia(courseId, lesson.id, kind))}
-                    >
-                      Удалить файл
-                    </button>
-                  )}
-                </div>
+                <LessonMediaEditor
+                  kind={kind}
+                  url={assetUrl(url) ?? null}
+                  busy={busy === key(`media-${kind}`)}
+                  onUpload={(file) => onRun(key(`media-${kind}`), () => uploadLessonMedia(courseId, lesson.id, kind, file))}
+                  onRemove={() => onRun(key(`media-${kind}`), () => builderMedia.removeMedia(courseId, lesson.id, kind))}
+                />
               </ChainItem>
             );
           }

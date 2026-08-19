@@ -1,6 +1,8 @@
 // Content model. Everything here is derived from files inside lessonN/ folders —
 // nothing in this file describes actual lesson content, only its shape.
 
+import { BuilderBlock } from "../admin/builderApi";
+
 export interface VocabularyEntry {
   id: string;
   german: string;
@@ -56,6 +58,13 @@ export interface LessonContent {
   id: string;
   title: string;
   vocabulary: VocabularyEntry[];
+  /** Same list as `vocabulary`, minus any word already taught as a new word
+   * in an earlier lesson of the same course (compared case/punctuation-
+   * insensitively). Drives the "learn new words" stage only — everything
+   * else (material, phrase pool for exercises, audio lookups) keeps using
+   * the full `vocabulary` above, since a word already learned can still
+   * legitimately appear in later material or tests. */
+  newVocabulary: VocabularyEntry[];
   material: LessonBlock[];
   /** Full sentences/phrases mined from the lesson text, used to build practice
    * exercises (sentence scramble, cloze) in addition to the vocabulary list. */
@@ -70,9 +79,15 @@ export interface LessonContent {
   /** The raw lesson text `material` was parsed from — the file's contents, or
    * the admin's edited version when one has been saved. */
   materialText: string;
-  /** Questions authored in the admin panel. Empty means the exercise
-   * generator keeps producing them exactly as it did before. */
+  /** Questions authored in the admin panel via the old flat (non-block)
+   * editor. Empty for every lesson today — kept only so nothing already
+   * relying on it breaks; new authoring goes through `blocks` below. */
   authoredQuestions: AuthoredQuestion[];
+  /** Named question blocks (possibly several per stage), same shape the
+   * course builder uses. Empty means the exercise generator keeps producing
+   * questions exactly as it did before — nothing changes until an admin
+   * actually authors a block. */
+  blocks: BuilderBlock[];
   /** True when an admin has saved edits for this lesson. */
   hasContentOverrides: boolean;
 }

@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
-import { QUESTION_SETS, QuestionSet, DuplicateWordError, normalizeWord, questionSchema } from "./content.js";
+import {
+  LEGACY_COURSE_ID,
+  QUESTION_SETS,
+  QuestionSet,
+  DuplicateWordError,
+  lessonLabel,
+  normalizeWord,
+  questionSchema,
+  toQuestionDTO,
+  type QuestionDTO,
+  type LessonBlockDTO,
+} from "./content.js";
 
 /**
  * Courses built from scratch in the admin panel. They live entirely in the
@@ -23,6 +34,22 @@ export const lessonInputSchema = z.object({
 export const reorderSchema = z.object({
   ids: z.array(z.string().min(1)).min(1, "Нужен хотя бы один элемент"),
 });
+
+/**
+ * "Does this lesson exist and belong to this course?" — for a real course
+ * that's a `CourseLesson` row lookup. The legacy, file-based course has no
+ * such row (its lessons live in files the server can't see), so for
+ * `courseId === "legacy"` this trusts the given lessonId, exactly like
+ * content.ts's own legacy functions already do for material/vocabulary/
+ * questions. Used only by operations that create a *new* child row under a
+ * lesson (add word, add block) — operations that edit an *existing* row
+ * (update/delete a word or block) check that row's own courseId/lessonId
+ * columns directly and don't need this at all.
+ */
+async function ownedLesson(courseId: string, lessonId: string): Promise<{ id: string } | null> {
+  if (courseId === LEGACY_COURSE_ID) return { id: lessonId };
+  return prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
+}
 
 // ---------------------------------------------------------------------------
 // Vocabulary — one new-word-to-learn record per course. Uniqueness (by
@@ -78,48 +105,13 @@ export interface CourseSummaryDTO {
   updatedAt: string;
 }
 
-/**
- * A question authored in the builder. `kind` matches `Exercise["kind"]` in
- * src/content/exercises.ts exactly, so the client can map one straight onto
- * the other with a plain switch — no renaming layer between DB, API and the
- * learner-facing exercise runner.
- */
-export type BuilderQuestionDTO =
-  | { kind: "choice"; prompt: string; options: string[]; correctAnswer: string }
-  | { kind: "truefalse"; prompt: string; correct: boolean }
-  | { kind: "cloze"; prompt: string; options: string[]; correctAnswer: string }
-  | { kind: "scramble"; prompt: string; options: string[]; correctAnswer: string }
-  | { kind: "match"; prompt: string; pairs: { left: string; right: string }[] };
-
-function toQuestionDTO(q: {
-  kind: string;
-  prompt: string;
-  options: string[];
-  correctAnswer: string;
-  data: unknown;
-}): BuilderQuestionDTO {
-  switch (q.kind) {
-    case "truefalse":
-      return { kind: "truefalse", prompt: q.prompt, correct: q.correctAnswer === "true" };
-    case "cloze":
-      return { kind: "cloze", prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer };
-    case "scramble":
-      return { kind: "scramble", prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer };
-    case "match":
-      return { kind: "match", prompt: q.prompt, pairs: (q.data as { left: string; right: string }[] | null) ?? [] };
-    case "choice":
-    default:
-      return { kind: "choice", prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer };
-  }
-}
-
-export interface LessonBlockDTO {
-  id: string;
-  stage: QuestionSet;
-  title: string;
-  position: number;
-  questions: BuilderQuestionDTO[];
-}
+// BuilderQuestionDTO/toQuestionDTO/LessonBlockDTO used to live here, but are
+// needed by both this file and content.ts (for the legacy course's own
+// blocks/questions) — moved to content.ts as QuestionDTO to avoid a circular
+// import. Re-exported here under the original name so nothing else needs to
+// change its imports.
+export type BuilderQuestionDTO = QuestionDTO;
+export type { LessonBlockDTO };
 
 export interface CourseLessonDTO {
   id: string;
@@ -395,15 +387,23 @@ async function findWordClashes(courseId: string, keys: string[], excludeWordId?:
   });
   if (rows.length === 0) return [];
 
-  const lessons = await prisma.courseLesson.findMany({
-    where: { courseId },
-    orderBy: { position: "asc" },
-    select: { id: true, title: true },
-  });
-  const indexById = new Map(lessons.map((l, i) => [l.id, i]));
-  const titleById = new Map(lessons.map((l) => [l.id, l.title]));
-  const labelFor = (lessonId: string) =>
-    indexById.has(lessonId) ? `Урок ${indexById.get(lessonId)! + 1} «${titleById.get(lessonId)}»` : "другом уроке";
+  // The legacy course's lessons aren't CourseLesson rows (they're file-based
+  // — see ownedLesson above), so they're labelled by lessonLabel ("lesson2"
+  // -> "Урок 2") instead of a title lookup.
+  let labelFor: (lessonId: string) => string;
+  if (courseId === LEGACY_COURSE_ID) {
+    labelFor = (lessonId) => lessonLabel(lessonId);
+  } else {
+    const lessons = await prisma.courseLesson.findMany({
+      where: { courseId },
+      orderBy: { position: "asc" },
+      select: { id: true, title: true },
+    });
+    const indexById = new Map(lessons.map((l, i) => [l.id, i]));
+    const titleById = new Map(lessons.map((l) => [l.id, l.title]));
+    labelFor = (lessonId) =>
+      indexById.has(lessonId) ? `Урок ${indexById.get(lessonId)! + 1} «${titleById.get(lessonId)}»` : "другом уроке";
+  }
 
   return rows.map((r) => ({ germanKey: r.germanKey, german: r.german, lessonId: r.lessonId, lessonLabel: labelFor(r.lessonId) }));
 }
@@ -420,9 +420,8 @@ export async function addVocabularyWord(
   courseId: string,
   lessonId: string,
   input: z.infer<typeof vocabularyWordInputSchema>,
-): Promise<CourseDTO | null> {
-  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
-  if (!lesson) return null;
+): Promise<{ ok: true } | null> {
+  if (!(await ownedLesson(courseId, lessonId))) return null;
 
   const germanKey = normalizeWord(input.german);
   const clashes = await findWordClashes(courseId, [germanKey]);
@@ -455,7 +454,7 @@ export async function addVocabularyWord(
     throw new DuplicateWordError(clashMessage(clashesNow));
   }
 
-  return getCourse(courseId);
+  return { ok: true };
 }
 
 export async function updateVocabularyWord(
@@ -463,7 +462,7 @@ export async function updateVocabularyWord(
   lessonId: string,
   wordId: string,
   input: Partial<z.infer<typeof vocabularyWordInputSchema>>,
-): Promise<CourseDTO | null> {
+): Promise<{ ok: true } | null> {
   const word = await prisma.vocabularyItem.findFirst({ where: { id: wordId, lessonId, courseId } });
   if (!word) return null;
 
@@ -492,14 +491,31 @@ export async function updateVocabularyWord(
     throw new DuplicateWordError(clashMessage(clashesNow));
   }
 
-  return getCourse(courseId);
+  return { ok: true };
 }
 
-export async function deleteVocabularyWord(courseId: string, lessonId: string, wordId: string): Promise<CourseDTO | null> {
+export async function deleteVocabularyWord(courseId: string, lessonId: string, wordId: string): Promise<{ ok: true } | null> {
   const word = await prisma.vocabularyItem.findFirst({ where: { id: wordId, lessonId, courseId }, select: { id: true } });
   if (!word) return null;
   await prisma.vocabularyItem.delete({ where: { id: wordId } });
-  return getCourse(courseId);
+  return { ok: true };
+}
+
+/**
+ * Replaces (or clears, with audioUrl = null) a word's recorded pronunciation.
+ * Returns the word's previous audioUrl so the caller can delete the old file
+ * from disk — this function only touches the database.
+ */
+export async function setVocabularyWordAudio(
+  courseId: string,
+  lessonId: string,
+  wordId: string,
+  audioUrl: string | null,
+): Promise<{ ok: true; previousAudioUrl: string | null } | null> {
+  const word = await prisma.vocabularyItem.findFirst({ where: { id: wordId, lessonId, courseId } });
+  if (!word) return null;
+  await prisma.vocabularyItem.update({ where: { id: wordId }, data: { audioUrl } });
+  return { ok: true, previousAudioUrl: word.audioUrl };
 }
 
 // ---------------------------------------------------------------------------
@@ -579,13 +595,11 @@ export async function previewVocabularyImport(
   lessonId: string,
   words: z.infer<typeof vocabularyImportWordSchema>[],
 ): Promise<VocabularyImportPreview | null> {
-  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
-  if (!lesson) return null;
+  if (!(await ownedLesson(courseId, lessonId))) return null;
   return evaluateVocabularyImport(courseId, words);
 }
 
 export interface VocabularyImportResult {
-  course: CourseDTO;
   addedCount: number;
   skipped: VocabularyImportItemResult[];
 }
@@ -602,8 +616,7 @@ export async function importVocabularyWords(
   lessonId: string,
   words: z.infer<typeof vocabularyImportWordSchema>[],
 ): Promise<VocabularyImportResult | null> {
-  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
-  if (!lesson) return null;
+  if (!(await ownedLesson(courseId, lessonId))) return null;
 
   const preview = await evaluateVocabularyImport(courseId, words);
   const toInsert = preview.items.filter((i) => i.status === "new");
@@ -644,7 +657,7 @@ export async function importVocabularyWords(
     }
   }
 
-  return { course: (await getCourse(courseId))!, addedCount: toInsert.length, skipped };
+  return { addedCount: toInsert.length, skipped };
 }
 
 export async function saveLessonQuestions(
@@ -781,15 +794,11 @@ export const blockQuestionsPayloadSchema = z.object({
   questions: z.array(blockQuestionSchema),
 });
 
-async function ownedLesson(courseId: string, lessonId: string) {
-  return prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
-}
-
 export async function createBlock(
   courseId: string,
   lessonId: string,
   input: z.infer<typeof blockInputSchema>,
-): Promise<CourseDTO | null> {
+): Promise<{ ok: true } | null> {
   if (!(await ownedLesson(courseId, lessonId))) return null;
 
   const last = await prisma.lessonBlock.findFirst({
@@ -800,7 +809,7 @@ export async function createBlock(
   await prisma.lessonBlock.create({
     data: { courseId, lessonId, stage: input.stage, title: input.title, position: (last?.position ?? -1) + 1 },
   });
-  return getCourse(courseId);
+  return { ok: true };
 }
 
 export async function updateBlock(
@@ -808,21 +817,21 @@ export async function updateBlock(
   lessonId: string,
   blockId: string,
   title: string,
-): Promise<CourseDTO | null> {
+): Promise<{ ok: true } | null> {
   const block = await prisma.lessonBlock.findFirst({ where: { id: blockId, lessonId, courseId } });
   if (!block) return null;
   await prisma.lessonBlock.update({ where: { id: blockId }, data: { title } });
-  return getCourse(courseId);
+  return { ok: true };
 }
 
-export async function deleteBlock(courseId: string, lessonId: string, blockId: string): Promise<CourseDTO | null> {
+export async function deleteBlock(courseId: string, lessonId: string, blockId: string): Promise<{ ok: true } | null> {
   const block = await prisma.lessonBlock.findFirst({ where: { id: blockId, lessonId, courseId } });
   if (!block) return null;
   await prisma.$transaction([
     prisma.lessonQuestion.deleteMany({ where: { blockId } }),
     prisma.lessonBlock.delete({ where: { id: blockId } }),
   ]);
-  return getCourse(courseId);
+  return { ok: true };
 }
 
 /** Reorders the blocks of one stage; ids from another stage are refused. */
@@ -831,7 +840,7 @@ export async function reorderBlocks(
   lessonId: string,
   stage: QuestionSet,
   ids: string[],
-): Promise<CourseDTO | null> {
+): Promise<{ ok: true } | null> {
   const blocks = await prisma.lessonBlock.findMany({ where: { lessonId, courseId, stage }, select: { id: true } });
   const owned = new Set(blocks.map((b) => b.id));
   if (ids.length !== owned.size || !ids.every((id) => owned.has(id))) return null;
@@ -839,7 +848,7 @@ export async function reorderBlocks(
   await prisma.$transaction(
     ids.map((id, index) => prisma.lessonBlock.update({ where: { id }, data: { position: index } })),
   );
-  return getCourse(courseId);
+  return { ok: true };
 }
 
 export async function saveBlockQuestions(
@@ -847,7 +856,7 @@ export async function saveBlockQuestions(
   lessonId: string,
   blockId: string,
   questions: z.infer<typeof blockQuestionSchema>[],
-): Promise<CourseDTO | null> {
+): Promise<{ ok: true } | null> {
   const block = await prisma.lessonBlock.findFirst({ where: { id: blockId, lessonId, courseId } });
   if (!block) return null;
 
@@ -871,5 +880,5 @@ export async function saveBlockQuestions(
     }
   });
 
-  return getCourse(courseId);
+  return { ok: true };
 }

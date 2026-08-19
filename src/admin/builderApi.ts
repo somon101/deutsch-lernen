@@ -118,23 +118,21 @@ export const builderApi = {
   reorderLessons: (courseId: string, ids: string[]) =>
     api.post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/reorder`, { ids }).then((d) => d.course),
 
+  // These mutate one word/block/question and no longer return the whole
+  // course — callers that need an updated view (BuilderCourseEditPage,
+  // AdminLessonEditPage) re-fetch it themselves after the action resolves.
+  // Real courses and courseId="legacy" (the two file-based lessons) go
+  // through the exact same calls.
   addWord: (courseId: string, lessonId: string, input: { german: string; translation: string; pronunciation: string }) =>
-    api
-      .post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary`, input)
-      .then((d) => d.course),
+    api.post(`${base}/${courseId}/lessons/${lessonId}/vocabulary`, input),
   updateWord: (
     courseId: string,
     lessonId: string,
     wordId: string,
     input: Partial<{ german: string; translation: string; pronunciation: string }>,
-  ) =>
-    api
-      .patch<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`, input)
-      .then((d) => d.course),
+  ) => api.patch(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`, input),
   removeWord: (courseId: string, lessonId: string, wordId: string) =>
-    api
-      .delete<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`)
-      .then((d) => d.course),
+    api.delete(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`),
   previewVocabularyImport: (courseId: string, lessonId: string, words: VocabularyImportWord[]) =>
     api
       .post<{ preview: VocabularyImportPreview }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/import/preview`, { words })
@@ -142,55 +140,48 @@ export const builderApi = {
   // Duplicates are skipped automatically rather than blocking the whole
   // import — addedCount/skipped report exactly what happened.
   importVocabulary: (courseId: string, lessonId: string, words: VocabularyImportWord[]) =>
-    api.post<{ course: BuilderCourse; addedCount: number; skipped: VocabularyImportItemResult[] }>(
+    api.post<{ addedCount: number; skipped: VocabularyImportItemResult[] }>(
       `${base}/${courseId}/lessons/${lessonId}/vocabulary/import`,
       { words },
     ),
-  // Direct (non-block) lesson questions — unused by the current builder UI
-  // (everything goes through blocks below), still choice-only server-side.
-  saveQuestions: (
-    courseId: string,
-    lessonId: string,
-    questions: { setName: QuestionSet; prompt: string; options: string[]; correctAnswer: string }[],
-  ) =>
-    api
-      .put<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/questions`, { questions })
-      .then((d) => d.course),
 
   addBlock: (courseId: string, lessonId: string, stage: QuestionSet, title: string) =>
-    api
-      .post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks`, { stage, title })
-      .then((d) => d.course),
+    api.post(`${base}/${courseId}/lessons/${lessonId}/blocks`, { stage, title }),
   renameBlock: (courseId: string, lessonId: string, blockId: string, title: string) =>
-    api
-      .patch<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}`, { title })
-      .then((d) => d.course),
+    api.patch(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}`, { title }),
   removeBlock: (courseId: string, lessonId: string, blockId: string) =>
-    api
-      .delete<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}`)
-      .then((d) => d.course),
+    api.delete(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}`),
   reorderBlocks: (courseId: string, lessonId: string, stage: QuestionSet, ids: string[]) =>
-    api
-      .post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks/reorder`, { stage, ids })
-      .then((d) => d.course),
+    api.post(`${base}/${courseId}/lessons/${lessonId}/blocks/reorder`, { stage, ids }),
   saveBlockQuestions: (courseId: string, lessonId: string, blockId: string, questions: BuilderQuestion[]) =>
-    api
-      .put<{ course: BuilderCourse }>(
-        `${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}/questions`,
-        { questions },
-      )
-      .then((d) => d.course),
+    api.put(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}/questions`, { questions }),
 
-  removeMedia: (courseId: string, lessonId: string, kind: "video" | "audio") =>
-    api
-      .delete<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/media?kind=${kind}`)
-      .then((d) => d.course),
   removeCover: (courseId: string) =>
     api.delete<{ course: BuilderCourse }>(`${base}/${courseId}/cover`).then((d) => d.course),
 };
 
+/** Course-lesson video/audio (real courses only) — still returns the whole
+ * course, since BuilderLessonEditor's onRun re-fetches regardless. */
+export const builderMedia = {
+  removeMedia: (courseId: string, lessonId: string, kind: "video" | "audio") =>
+    api.delete(`${base}/${courseId}/lessons/${lessonId}/media?kind=${kind}`),
+};
+
+/** Multipart word-audio upload/remove — used for both real-course and
+ * legacy-lesson vocabulary, since word ownership is checked by the word's
+ * own courseId/lessonId, not by a Course row. */
+export const wordAudioApi = {
+  upload: async (courseId: string, lessonId: string, wordId: string, file: File): Promise<{ audioUrl: string }> => {
+    const form = new FormData();
+    form.append("audio", file);
+    return uploadForm(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}/audio`, form);
+  },
+  remove: (courseId: string, lessonId: string, wordId: string) =>
+    api.delete(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}/audio`),
+};
+
 /** Multipart uploads go through fetch directly — the shared helper is JSON-only. */
-async function upload(path: string, form: FormData): Promise<BuilderCourse> {
+async function uploadForm<T>(path: string, form: FormData): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` },
@@ -198,23 +189,18 @@ async function upload(path: string, form: FormData): Promise<BuilderCourse> {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.error ?? "Не удалось загрузить файл");
-  return data.course as BuilderCourse;
+  return data as T;
 }
 
-export function uploadLessonMedia(
-  courseId: string,
-  lessonId: string,
-  kind: "video" | "audio",
-  file: File,
-): Promise<BuilderCourse> {
+export function uploadLessonMedia(courseId: string, lessonId: string, kind: "video" | "audio", file: File): Promise<void> {
   const form = new FormData();
   form.append("kind", kind);
   form.append("file", file);
-  return upload(`${base}/${courseId}/lessons/${lessonId}/media`, form);
+  return uploadForm(`${base}/${courseId}/lessons/${lessonId}/media`, form);
 }
 
 export function uploadCourseCover(courseId: string, file: File): Promise<BuilderCourse> {
   const form = new FormData();
   form.append("file", file);
-  return upload(`${base}/${courseId}/cover`, form);
+  return uploadForm<{ course: BuilderCourse }>(`${base}/${courseId}/cover`, form).then((d) => d.course);
 }

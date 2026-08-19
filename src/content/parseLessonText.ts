@@ -3,6 +3,7 @@ import {
   extractBracketPronunciation,
   leadingEmoji,
   looksLikeContinuation,
+  normalizeAnswer,
   stripLeadingEmoji,
 } from "./textUtils";
 
@@ -58,7 +59,12 @@ export function parseLessonText(raw: string): {
     const { text: german, pronunciation } = extractBracketPronunciation(left);
     blocks.push({ type: "phrase", icon, german, pronunciation, translation });
 
-    const key = `${german}::${translation}`;
+    // Keyed by normalized text (case/punctuation-insensitive) rather than the
+    // raw string, so "Hallo! — Привет!" and a later "Hallo — привет" collapse
+    // into one practice-pool entry instead of feeding the exercise generator
+    // two options that only differ formally. The displayed card above still
+    // shows the raw text exactly as written.
+    const key = `${normalizeAnswer(german)}::${normalizeAnswer(translation)}`;
     if (german && translation && !seenPhrases.has(key)) {
       seenPhrases.add(key);
       phrases.push({ id: `phrase-${phraseIndex++}`, german, pronunciation, translation });

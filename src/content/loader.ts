@@ -1,7 +1,9 @@
+import { assetUrl } from "../auth/api";
 import { LessonAsset, LessonContent } from "./types";
 import { parseVocabulary } from "./parseVocabulary";
 import { parseLessonText } from "./parseLessonText";
 import { fetchContentOverrides } from "./overrides";
+import { normalizeAnswer } from "./textUtils";
 
 // Content is discovered purely from files on disk under /lessonN (or
 // /lesson-N) folders at the project root — adding lesson2/, lesson3/, ...
@@ -73,10 +75,19 @@ function prettyFallbackTitle(lessonId: string): string {
 
 const lessonCache = new Map<string, Promise<LessonContent>>();
 
-/** Drops cached lesson content so the next load picks up admin edits. */
+/** Drops cached lesson content so the next load picks up admin edits. Also
+ * drops every later lesson's cache entry — its `newVocabulary` may have been
+ * computed against this lesson's old word list (see wordsTaughtBeforeLesson
+ * below), so it needs to be recomputed too, not just this lesson itself. */
 export function invalidateLessonCache(lessonId?: string): void {
-  if (lessonId) lessonCache.delete(lessonId);
-  else lessonCache.clear();
+  if (!lessonId) {
+    lessonCache.clear();
+    return;
+  }
+  const ids = discoverLessons().map((l) => l.id);
+  const myIndex = ids.indexOf(lessonId);
+  const toDrop = myIndex === -1 ? [lessonId] : ids.slice(myIndex);
+  for (const id of toDrop) lessonCache.delete(id);
 }
 
 export function listLessonIds(): string[] {
@@ -91,6 +102,24 @@ export function loadLesson(lessonId: string): Promise<LessonContent> {
   return promise;
 }
 
+/** Normalized german keys of every word already presented as a new word in a
+ * lesson that comes before `lessonId` (by the same numeric order lessons are
+ * listed in). Lessons are cheap to revisit here — `loadLesson` caches each
+ * one, so an earlier lesson is only actually parsed once no matter how many
+ * later lessons check against it. */
+async function wordsTaughtBeforeLesson(lessonId: string): Promise<Set<string>> {
+  const ids = discoverLessons().map((l) => l.id);
+  const myIndex = ids.indexOf(lessonId);
+  const keys = new Set<string>();
+  if (myIndex <= 0) return keys;
+
+  for (const earlierId of ids.slice(0, myIndex)) {
+    const earlier = await loadLesson(earlierId);
+    for (const word of earlier.vocabulary) keys.add(normalizeAnswer(word.german));
+  }
+  return keys;
+}
+
 async function buildLesson(lessonId: string): Promise<LessonContent> {
   const lesson = discoverLessons().find((l) => l.id === lessonId);
 
@@ -99,6 +128,7 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
       id: lessonId,
       title: prettyFallbackTitle(lessonId),
       vocabulary: [],
+      newVocabulary: [],
       material: [],
       phrases: [],
       assets: { images: [] },
@@ -106,6 +136,7 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
       missing: [`Папка ${lessonId} не найдена в проекте.`],
       materialText: "",
       authoredQuestions: [],
+      blocks: [],
       hasContentOverrides: false,
     };
   }
@@ -167,8 +198,8 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
   const materialText = overrides.materialText ?? materialRaw ?? "";
   const vocabulary =
     overrides.vocabulary.length > 0
-      ? overrides.vocabulary.map((item, index) => ({
-          id: `${lessonId}-vocab-${index}`,
+      ? overrides.vocabulary.map((item) => ({
+          id: item.id,
           german: item.german,
           translation: item.translation,
           pronunciation: item.pronunciation ?? undefined,
@@ -177,6 +208,11 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
       : vocabularyRaw
         ? parseVocabulary(vocabularyRaw, lessonId)
         : [];
+
+  // An uploaded video/audio override stands in for the bundled file, same
+  // override-if-present pattern as materialText/vocabulary above.
+  if (overrides.videoUrl) video = { url: assetUrl(overrides.videoUrl)!, name: "Видео" };
+  if (overrides.audioUrl) audio = { url: assetUrl(overrides.audioUrl)!, name: "Аудио" };
 
   const parsed = materialText ? parseLessonText(materialText) : { blocks: [], phrases: [] };
 
@@ -198,10 +234,18 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
   const titleBlock = blocks.find((b) => b.type === "title");
   const title = titleBlock && titleBlock.type === "title" ? titleBlock.text : prettyFallbackTitle(lessonId);
 
+  // A word already taught as a new word in an earlier lesson of this course
+  // shouldn't be presented as new again — but it can still legitimately show
+  // up in this lesson's material or tests, so only the "learn new words"
+  // list is filtered; `vocabulary` above stays complete for everything else.
+  const taughtEarlier = await wordsTaughtBeforeLesson(lessonId);
+  const newVocabulary = vocabulary.filter((v) => !taughtEarlier.has(normalizeAnswer(v.german)));
+
   return {
     id: lessonId,
     title,
     vocabulary,
+    newVocabulary,
     material: blocks,
     phrases,
     assets: { video, audio, images },
@@ -209,6 +253,7 @@ async function buildLesson(lessonId: string): Promise<LessonContent> {
     missing,
     materialText,
     authoredQuestions: overrides.questions,
+    blocks: overrides.blocks,
     hasContentOverrides: overrides.hasOverrides,
   };
 }

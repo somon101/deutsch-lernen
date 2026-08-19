@@ -1,159 +1,114 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, ApiError, API_URL } from "../../auth/api";
-import { getAuthToken } from "../../auth/tokenStore";
-import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
+import { ApiError, api } from "../../auth/api";
 import { invalidateLessonCache, loadLesson } from "../../content/loader";
-import { AuthoredQuestion, LessonContent } from "../../content/types";
+import { fetchContentOverrides } from "../../content/overrides";
+import { LessonContent } from "../../content/types";
+import { QuestionSet, builderApi } from "../../admin/builderApi";
+import { legacyMediaApi } from "../../admin/legacyContentApi";
 import AdminTopNav from "../../components/admin/AdminTopNav";
 import Breadcrumbs from "../../components/admin/Breadcrumbs";
+import ChainItem from "./ChainItem";
+import LessonMediaEditor from "./LessonMediaEditor";
+import MaterialFormatGuide from "./MaterialFormatGuide";
+import BuilderVocabularyEditor from "./BuilderVocabularyEditor";
+import BuilderBlockEditor from "./BuilderBlockEditor";
+import { LESSON_CHAIN } from "./BuilderLessonEditor";
 
-type SetName = AuthoredQuestion["setName"];
+/** courseId all of lesson1/lesson2's vocabulary/questions/blocks live under
+ * — see content.ts's LEGACY_COURSE_ID on the server. */
+const LEGACY_COURSE_ID = "legacy";
 
-const SET_LABELS: Record<SetName, string> = {
+const STAGE_TITLES: Record<QuestionSet, string> = {
   minitest: "Мини-тест",
   practice: "Практика",
   review: "Закрепление",
 };
 
-interface VocabRow {
-  german: string;
-  translation: string;
-  pronunciation: string;
-  audioUrl: string | null;
-}
-
-interface QuestionRow {
-  setName: SetName;
-  prompt: string;
-  options: string[];
-  correctIndex: number;
-}
-
+/**
+ * Full admin editor for one of the two lessons that predate the course
+ * builder (lesson1/lesson2 — file-based material/video/audio, with an
+ * optional DB override layer). Deliberately reuses the exact same editing
+ * components the builder uses for brand-new courses
+ * (BuilderVocabularyEditor, BuilderBlockEditor, LessonMediaEditor) — see
+ * courses.ts's ownedLesson() helper, which is what lets those components'
+ * mutations target courseId="legacy" without a Course/CourseLesson row to
+ * back them. Nothing is copied into the builder's tables; the file +
+ * override layer stays the single source of truth, exactly as before.
+ */
 export default function AdminLessonEditPage() {
   const { lessonId = "" } = useParams();
 
   const [lesson, setLesson] = useState<LessonContent | null>(null);
   const [materialText, setMaterialText] = useState("");
-  const [vocab, setVocab] = useState<VocabRow[]>([]);
-  const [questions, setQuestions] = useState<QuestionRow[]>([]);
-
-  const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    invalidateLessonCache(lessonId);
+
+    // The vocabulary override replaces the file's word list wholesale, not
+    // by merging (same as materialText) — see content/loader.ts. That's fine
+    // for a bulk save, but the per-word add/edit/delete this page uses only
+    // ever inserts/touches one row, so the very first such edit would
+    // otherwise make every other file-based word invisible. Seed the DB with
+    // the file's current words once, before that can happen, using the same
+    // JSON-import path the "Импортировать JSON" button uses — nothing new.
+    const overrides = await fetchContentOverrides(lessonId);
+    if (overrides.vocabulary.length === 0) {
+      const fileOnly = await loadLesson(lessonId);
+      if (fileOnly.vocabulary.length > 0) {
+        try {
+          await builderApi.importVocabulary(
+            LEGACY_COURSE_ID,
+            lessonId,
+            fileOnly.vocabulary.map((v) => ({
+              original: v.german,
+              transcription: v.pronunciation?.trim() || v.german,
+              translation: v.translation,
+            })),
+          );
+          invalidateLessonCache(lessonId);
+        } catch {
+          // If this fails the page still works — it just falls back to
+          // showing the file's words read-only until it succeeds on a
+          // later load (e.g. after the admin fixes a network issue).
+        }
+      }
+    }
+
+    const content = await loadLesson(lessonId);
+    setLesson(content);
+    setMaterialText(content.materialText);
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    invalidateLessonCache(lessonId);
-    loadLesson(lessonId).then((content) => {
-      if (cancelled) return;
-      setLesson(content);
-      setMaterialText(content.materialText);
-      setVocab(
-        content.vocabulary.map((v) => ({
-          german: v.german,
-          translation: v.translation,
-          pronunciation: v.pronunciation ?? "",
-          audioUrl: v.audioUrl ?? null,
-        })),
-      );
-      setQuestions(
-        content.authoredQuestions.map((q) => ({
-          setName: q.setName,
-          prompt: q.prompt,
-          options: q.options,
-          correctIndex: Math.max(0, q.options.indexOf(q.correctAnswer)),
-        })),
-      );
-    });
-    return () => {
-      cancelled = true;
-    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lessonId]);
 
-  const flash = (section: string) => {
-    setSaved(section);
-    setTimeout(() => setSaved((s) => (s === section ? null : s)), 2500);
+  const flash = (key: string) => {
+    setSaved(key);
+    setTimeout(() => setSaved((s) => (s === key ? null : s)), 2500);
   };
 
-  const save = async (section: string, body: unknown) => {
+  /** Same contract as the builder's onRun: perform the mutation, then reload
+   * this page's own view of the lesson. */
+  const run = async (key: string, action: () => Promise<unknown>) => {
     setError(null);
-    setSaving(section);
+    setBusy(key);
     try {
-      await api.put(`/api/admin/content/${encodeURIComponent(lessonId)}`, body);
-      // Learners read through the same cache, so drop it to publish the change.
-      invalidateLessonCache(lessonId);
-      flash(section);
+      await action();
+      await load();
+      flash(key);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось сохранить изменения");
+      setError(err instanceof ApiError || err instanceof Error ? err.message : "Не удалось сохранить");
     } finally {
-      setSaving(null);
+      setBusy(null);
     }
   };
-
-  const saveMaterial = (e: FormEvent) => {
-    e.preventDefault();
-    save("material", { materialText });
-  };
-
-  const saveVocabulary = () =>
-    save("vocabulary", {
-      vocabulary: vocab.map((v) => ({
-        german: v.german,
-        translation: v.translation,
-        pronunciation: v.pronunciation.trim() ? v.pronunciation : null,
-        audioUrl: v.audioUrl,
-      })),
-    });
-
-  // Audio is attached to a saved word, so the list must exist server-side first.
-  const uploadAudio = async (index: number, file: File) => {
-    const row = vocab[index];
-    setError(null);
-    setSaving(`audio-${index}`);
-    try {
-      const form = new FormData();
-      form.append("audio", file);
-      form.append("german", row.german);
-      const res = await fetch(`${API_URL}/api/admin/content/${encodeURIComponent(lessonId)}/word-audio`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${getAuthToken() ?? ""}` },
-        body: form,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? "Не удалось загрузить аудио");
-      setVocab((v) => v.map((r, idx) => (idx === index ? { ...r, audioUrl: data.audioUrl } : r)));
-      invalidateLessonCache(lessonId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Не удалось загрузить аудио");
-    } finally {
-      setSaving(null);
-    }
-  };
-
-  const deleteAudio = async (index: number) => {
-    const row = vocab[index];
-    setError(null);
-    try {
-      await api.delete(
-        `/api/admin/content/${encodeURIComponent(lessonId)}/word-audio?german=${encodeURIComponent(row.german)}`,
-      );
-      setVocab((v) => v.map((r, idx) => (idx === index ? { ...r, audioUrl: null } : r)));
-      invalidateLessonCache(lessonId);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось удалить аудио");
-    }
-  };
-
-  const saveQuestions = () =>
-    save("questions", {
-      questions: questions.map((q) => ({
-        setName: q.setName,
-        prompt: q.prompt,
-        options: q.options,
-        correctAnswer: q.options[q.correctIndex] ?? "",
-      })),
-    });
 
   if (!lesson) {
     return (
@@ -168,6 +123,28 @@ export default function AdminLessonEditPage() {
   }
 
   const displayTitle = lesson.title.replace(/^\p{Extended_Pictographic}\s*/u, "");
+  const blocksOf = (stage: QuestionSet) =>
+    lesson.blocks.filter((b) => b.stage === stage).sort((a, b) => a.position - b.position);
+
+  const addBlock = (stage: QuestionSet) => {
+    const n = blocksOf(stage).length + 1;
+    run(`add-${stage}`, () => builderApi.addBlock(LEGACY_COURSE_ID, lessonId, stage, `${STAGE_TITLES[stage]} ${n}`));
+  };
+
+  const moveBlock = (stage: QuestionSet, index: number, delta: number) => {
+    const ids = blocksOf(stage).map((b) => b.id);
+    const target = index + delta;
+    if (target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    run(`reorder-${stage}`, () => builderApi.reorderBlocks(LEGACY_COURSE_ID, lessonId, stage, ids));
+  };
+
+  const stageSummary = (stage: QuestionSet) => {
+    const blocks = blocksOf(stage);
+    const questions = blocks.reduce((n, b) => n + b.questions.length, 0);
+    if (blocks.length === 0) return "нет блоков — вопросы генерируются автоматически";
+    return `${blocks.length} блок(ов) · ${questions} вопросов`;
+  };
 
   return (
     <div className="app-shell">
@@ -185,271 +162,171 @@ export default function AdminLessonEditPage() {
 
           {error && <div className="exercise-feedback incorrect">{error}</div>}
 
-          {/* ---------------- Material ---------------- */}
           <section className="profile-card">
-            <h2 className="stage-title" style={{ fontSize: 20 }}>
-              Материал урока
-            </h2>
+            <h1 className="stage-title" style={{ fontSize: 22 }}>
+              {displayTitle}
+            </h1>
             <p className="stage-subtitle">
-              Текст урока в том же формате, что и раньше: заголовок, строки «Шаг 1. …» и пары «Hallo! [ха́лло] — Привет!».
-              Он разбирается тем же способом, что и файл урока.
-            </p>
-            <form className="auth-form" onSubmit={saveMaterial}>
-              <textarea
-                className="admin-textarea"
-                rows={18}
-                value={materialText}
-                onChange={(e) => setMaterialText(e.target.value)}
-              />
-              <div className="stage-footer">
-                {saved === "material" && <span className="admin-saved">Сохранено</span>}
-                <button className="btn btn-primary" type="submit" disabled={saving === "material"}>
-                  {saving === "material" ? "Сохраняем…" : "Сохранить материал"}
-                </button>
-              </div>
-            </form>
-          </section>
-
-          {/* ---------------- Vocabulary ---------------- */}
-          <section className="profile-card">
-            <h2 className="stage-title" style={{ fontSize: 20 }}>
-              Словарь ({vocab.length})
-            </h2>
-            <p className="stage-subtitle">
-              Немецкое слово, перевод, транскрипция и произношение. 🔊 — прослушать, ⚙ — синтез речи браузера,
-              ⬆ — загрузить свой файл. Загруженная запись всегда важнее синтеза. Слово нельзя добавить, если оно уже
-              есть в другом уроке курса.
+              Полный доступ к редактированию этого урока — тот же редактор, что и в конструкторе курсов. Материал,
+              словарь, видео, аудио и все вопросы редактируются здесь напрямую; ничего не копируется в конструктор.
             </p>
 
-            <div className="admin-rows">
-              {vocab.map((row, i) => (
-                <div className="admin-row" key={i}>
-                  <input
-                    aria-label="Немецкое слово"
-                    placeholder="Hallo"
-                    value={row.german}
-                    onChange={(e) =>
-                      setVocab((v) => v.map((r, idx) => (idx === i ? { ...r, german: e.target.value } : r)))
-                    }
-                  />
-                  <input
-                    aria-label="Перевод"
-                    placeholder="привет"
-                    value={row.translation}
-                    onChange={(e) =>
-                      setVocab((v) => v.map((r, idx) => (idx === i ? { ...r, translation: e.target.value } : r)))
-                    }
-                  />
-                  <input
-                    aria-label="Произношение"
-                    placeholder="ха́лло"
-                    value={row.pronunciation}
-                    onChange={(e) =>
-                      setVocab((v) => v.map((r, idx) => (idx === i ? { ...r, pronunciation: e.target.value } : r)))
-                    }
-                  />
-                  <div className="admin-word-audio">
-                    <button
-                      type="button"
-                      className="btn btn-ghost admin-word-audio__btn"
-                      title={row.audioUrl ? "Прослушать загруженное аудио" : "Прослушать синтезом речи"}
-                      onClick={() => playWord(row.german, row.audioUrl ?? undefined)}
-                      disabled={!row.german.trim()}
+            <div className="lesson-chain">
+              {LESSON_CHAIN.map((step, i) => {
+                const open = openKey === step.key;
+                const toggle = () => setOpenKey(open ? null : step.key);
+
+                if (step.key === "vocabulary") {
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={`${lesson.vocabulary.length} слов`}
+                      editable
+                      open={open}
+                      onToggle={toggle}
                     >
-                      🔊
-                    </button>
-                    {canSynthesize() && (
-                      <button
-                        type="button"
-                        className="btn btn-ghost admin-word-audio__btn"
-                        title="Сгенерировать произношение (синтез речи браузера)"
-                        onClick={() => speakGerman(row.german)}
-                        disabled={!row.german.trim()}
-                      >
-                        ⚙
-                      </button>
-                    )}
-                    <label className="btn btn-ghost admin-word-audio__btn" title="Загрузить свой аудиофайл">
-                      ⬆
-                      <input
-                        type="file"
-                        accept="audio/*"
-                        hidden
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          e.target.value = "";
-                          if (file) uploadAudio(i, file);
-                        }}
+                      <BuilderVocabularyEditor
+                        courseId={LEGACY_COURSE_ID}
+                        lessonId={lessonId}
+                        words={lesson.vocabulary.map((v) => ({
+                          id: v.id,
+                          german: v.german,
+                          translation: v.translation,
+                          pronunciation: v.pronunciation ?? null,
+                          audioUrl: v.audioUrl ?? null,
+                        }))}
+                        busy={busy}
+                        saved={saved}
+                        onRun={run}
                       />
-                    </label>
-                    {row.audioUrl && (
-                      <button
-                        type="button"
-                        className="btn btn-ghost admin-word-audio__btn admin-word-audio__btn--danger"
-                        title="Удалить загруженное аудио"
-                        onClick={() => deleteAudio(i)}
-                      >
-                        ✕🔊
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-ghost admin-row__remove"
-                      title="Удалить слово"
-                      onClick={() => setVocab((v) => v.filter((_, idx) => idx !== i))}
-                    >
-                      Удалить
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="stage-footer split">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setVocab((v) => [...v, { german: "", translation: "", pronunciation: "", audioUrl: null }])}
-              >
-                + Добавить слово
-              </button>
-              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {saved === "vocabulary" && <span className="admin-saved">Сохранено</span>}
-                <button className="btn btn-primary" onClick={saveVocabulary} disabled={saving === "vocabulary"}>
-                  {saving === "vocabulary" ? "Сохраняем…" : "Сохранить словарь"}
-                </button>
-              </span>
-            </div>
-          </section>
-
-          {/* ---------------- Questions ---------------- */}
-          <section className="profile-card">
-            <h2 className="stage-title" style={{ fontSize: 20 }}>
-              Вопросы ({questions.length})
-            </h2>
-            <p className="stage-subtitle">
-              Пока для этапа не добавлено ни одного вопроса, он формируется автоматически из словаря — как и раньше. Как
-              только вы добавите сюда вопрос, этап будет показывать именно ваши вопросы.
-            </p>
-
-            {questions.map((q, qi) => (
-              <div className="admin-question" key={qi}>
-                <div className="admin-question__head">
-                  <select
-                    value={q.setName}
-                    onChange={(e) =>
-                      setQuestions((qs) =>
-                        qs.map((row, idx) => (idx === qi ? { ...row, setName: e.target.value as SetName } : row)),
-                      )
-                    }
-                  >
-                    {(Object.keys(SET_LABELS) as SetName[]).map((s) => (
-                      <option key={s} value={s}>
-                        {SET_LABELS[s]}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={() => setQuestions((qs) => qs.filter((_, idx) => idx !== qi))}
-                  >
-                    Удалить вопрос
-                  </button>
-                </div>
-
-                <label className="auth-field">
-                  <span>Текст вопроса</span>
-                  <input
-                    placeholder="Как переводится «Hallo»?"
-                    value={q.prompt}
-                    onChange={(e) =>
-                      setQuestions((qs) => qs.map((row, idx) => (idx === qi ? { ...row, prompt: e.target.value } : row)))
-                    }
-                  />
-                </label>
-
-                <span className="admin-question__hint">Отметьте правильный вариант:</span>
-                {q.options.map((option, oi) => (
-                  <div className="admin-option" key={oi}>
-                    <input
-                      type="radio"
-                      name={`correct-${qi}`}
-                      checked={q.correctIndex === oi}
-                      onChange={() =>
-                        setQuestions((qs) => qs.map((row, idx) => (idx === qi ? { ...row, correctIndex: oi } : row)))
-                      }
-                    />
-                    <input
-                      className="admin-option__text"
-                      placeholder={`Вариант ${oi + 1}`}
-                      value={option}
-                      onChange={(e) =>
-                        setQuestions((qs) =>
-                          qs.map((row, idx) =>
-                            idx === qi
-                              ? { ...row, options: row.options.map((o, x) => (x === oi ? e.target.value : o)) }
-                              : row,
-                          ),
-                        )
-                      }
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-ghost admin-row__remove"
-                      disabled={q.options.length <= 2}
-                      onClick={() =>
-                        setQuestions((qs) =>
-                          qs.map((row, idx) => {
-                            if (idx !== qi) return row;
-                            const options = row.options.filter((_, x) => x !== oi);
-                            // Keep the same option marked correct after a removal.
-                            let correctIndex = row.correctIndex;
-                            if (oi === row.correctIndex) correctIndex = 0;
-                            else if (oi < row.correctIndex) correctIndex -= 1;
-                            return { ...row, options, correctIndex };
-                          }),
-                        )
-                      }
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() =>
-                    setQuestions((qs) =>
-                      qs.map((row, idx) => (idx === qi ? { ...row, options: [...row.options, ""] } : row)),
-                    )
-                  }
-                >
-                  + Вариант ответа
-                </button>
-              </div>
-            ))}
-
-            <div className="stage-footer split">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() =>
-                  setQuestions((qs) => [
-                    ...qs,
-                    { setName: "minitest", prompt: "", options: ["", ""], correctIndex: 0 },
-                  ])
+                    </ChainItem>
+                  );
                 }
-              >
-                + Добавить вопрос
-              </button>
-              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {saved === "questions" && <span className="admin-saved">Сохранено</span>}
-                <button className="btn btn-primary" onClick={saveQuestions} disabled={saving === "questions"}>
-                  {saving === "questions" ? "Сохраняем…" : "Сохранить вопросы"}
-                </button>
-              </span>
+
+                if (step.key === "material") {
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={materialText ? `${materialText.length} символов` : "не заполнен"}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
+                        Текст урока в том же формате, что и раньше — заголовок, строки «Шаг 1. …» и пары «Hallo!
+                        [ха́лло] — Привет!». Он разбирается тем же способом, что и файл урока: добавить/удалить/
+                        переставить блок значит добавить/удалить/переставить строку.
+                      </p>
+                      <MaterialFormatGuide />
+                      <textarea
+                        className="admin-textarea"
+                        rows={16}
+                        value={materialText}
+                        onChange={(e) => setMaterialText(e.target.value)}
+                      />
+                      <div className="stage-footer">
+                        {saved === "material" && <span className="admin-saved">Сохранено</span>}
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy === "material"}
+                          onClick={() => run("material", () => api.put(`/api/admin/content/${encodeURIComponent(lessonId)}`, { materialText }))}
+                        >
+                          {busy === "material" ? "Сохраняем…" : "Сохранить материал"}
+                        </button>
+                      </div>
+                    </ChainItem>
+                  );
+                }
+
+                if (step.key === "video" || step.key === "audio") {
+                  const kind = step.key as "video" | "audio";
+                  const url = kind === "video" ? (lesson.assets.video?.url ?? null) : (lesson.assets.audio?.url ?? null);
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={url ? "файл загружен" : "файла нет"}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <LessonMediaEditor
+                        kind={kind}
+                        url={url}
+                        busy={busy === `media-${kind}`}
+                        onUpload={(file) => run(`media-${kind}`, () => legacyMediaApi.upload(lessonId, kind, file))}
+                        onRemove={() => run(`media-${kind}`, () => legacyMediaApi.remove(lessonId, kind))}
+                      />
+                    </ChainItem>
+                  );
+                }
+
+                if (step.key === "minitest" || step.key === "practice" || step.key === "review") {
+                  const stage = step.key as QuestionSet;
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={stageSummary(stage)}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
+                        Этап может содержать несколько блоков — например «{STAGE_TITLES[stage]} 1» и «
+                        {STAGE_TITLES[stage]} 2». Пока блоков нет, ученик видит вопросы, сгенерированные автоматически
+                        из словаря — как и раньше.
+                      </p>
+
+                      {blocksOf(stage).map((block, bi) => (
+                        <BuilderBlockEditor
+                          key={block.id}
+                          courseId={LEGACY_COURSE_ID}
+                          lessonId={lessonId}
+                          block={block}
+                          index={bi}
+                          total={blocksOf(stage).length}
+                          busy={busy}
+                          saved={saved}
+                          onRun={run}
+                          onMove={(delta) => moveBlock(stage, bi, delta)}
+                        />
+                      ))}
+
+                      <div className="stage-footer">
+                        <button type="button" className="btn btn-secondary" onClick={() => addBlock(stage)}>
+                          + Добавить {STAGE_TITLES[stage].toLowerCase()}
+                        </button>
+                      </div>
+                    </ChainItem>
+                  );
+                }
+
+                // "Итог" is generated from the learner's results — nothing to edit.
+                return (
+                  <ChainItem
+                    key={step.key}
+                    index={i + 1}
+                    label={step.label}
+                    note={step.note}
+                    summary="считается автоматически"
+                    editable={false}
+                    open={false}
+                    onToggle={() => {}}
+                  />
+                );
+              })}
             </div>
           </section>
         </div>

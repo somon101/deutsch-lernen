@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { ApiError } from "../../auth/api";
 import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
 import {
-  BuilderCourse,
   BuilderWord,
   VocabularyImportItemResult,
   VocabularyImportPreview,
   VocabularyImportWord,
   builderApi,
+  wordAudioApi,
 } from "../../admin/builderApi";
 
 interface WordRow {
@@ -51,7 +51,7 @@ export default function BuilderVocabularyEditor({
   words: BuilderWord[];
   busy: string | null;
   saved: string | null;
-  onRun: (key: string, action: () => Promise<BuilderCourse>) => Promise<void>;
+  onRun: (key: string, action: () => Promise<unknown>) => Promise<void>;
 }) {
   const [rows, setRows] = useState<WordRow[]>([]);
   const [mode, setMode] = useState<"manual" | "import">("manual");
@@ -101,6 +101,14 @@ export default function BuilderVocabularyEditor({
     onRun(key(`word-remove-${row.id}`), () => builderApi.removeWord(courseId, lessonId, row.id));
   };
 
+  const uploadRowAudio = (row: WordRow, file: File) => {
+    onRun(key(`word-audio-${row.id}`), () => wordAudioApi.upload(courseId, lessonId, row.id, file));
+  };
+
+  const removeRowAudio = (row: WordRow) => {
+    onRun(key(`word-audio-${row.id}`), () => wordAudioApi.remove(courseId, lessonId, row.id));
+  };
+
   const resetImport = () => {
     setPreview(null);
     setPreviewError(null);
@@ -147,9 +155,9 @@ export default function BuilderVocabularyEditor({
     setPreviewError(null);
     try {
       const result = await builderApi.importVocabulary(courseId, lessonId, parsed);
-      // Reuses onRun purely to sync the shared course state + busy/saved
-      // flash — the word list was already fetched above, no second request.
-      await onRun(key("import"), async () => result.course);
+      // Reuses onRun purely to trigger the caller's "reload my view" step and
+      // the busy/saved flash — the import already happened above.
+      await onRun(key("import"), async () => {});
       setImportResult({ addedCount: result.addedCount, skipped: result.skipped });
       setJsonText("");
       setPreview(null);
@@ -189,6 +197,29 @@ export default function BuilderVocabularyEditor({
             >
               🔊
             </button>
+            <label className="btn btn-ghost" title="Загрузить своё произношение">
+              ⬆
+              <input
+                type="file"
+                accept="audio/*"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) uploadRowAudio(row, file);
+                }}
+              />
+            </label>
+            {row.audioUrl && (
+              <button
+                type="button"
+                className="btn btn-ghost admin-row__remove"
+                title="Удалить загруженное произношение"
+                onClick={() => removeRowAudio(row)}
+              >
+                ✕🔊
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-secondary"

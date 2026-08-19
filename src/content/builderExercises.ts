@@ -1,8 +1,8 @@
 import { BuilderCourseLesson } from "./learnerCourses";
 import { parseLessonText } from "./parseLessonText";
-import { shuffle } from "./textUtils";
+import { exercisesForStage } from "./questionMapping";
 import { LessonContent, VocabularyEntry } from "./types";
-import { ChoiceQuestion, ClozeExercise, Exercise, LessonExerciseSets, MatchExercise, ScrambleExercise, TrueFalseQuestion } from "./exercises";
+import { LessonExerciseSets } from "./exercises";
 
 /**
  * Adapts a builder-authored lesson into the exact LessonContent shape the
@@ -13,8 +13,8 @@ import { ChoiceQuestion, ClozeExercise, Exercise, LessonExerciseSets, MatchExerc
 export function toLessonContent(lesson: BuilderCourseLesson): LessonContent {
   const parsed = lesson.materialText ? parseLessonText(lesson.materialText) : { blocks: [], phrases: [] };
 
-  const vocabulary: VocabularyEntry[] = lesson.vocabulary.map((w, index) => ({
-    id: `${lesson.id}-vocab-${index}`,
+  const vocabulary: VocabularyEntry[] = lesson.vocabulary.map((w) => ({
+    id: w.id,
     german: w.german,
     translation: w.translation,
     pronunciation: w.pronunciation ?? undefined,
@@ -25,6 +25,11 @@ export function toLessonContent(lesson: BuilderCourseLesson): LessonContent {
     id: lesson.id,
     title: lesson.title,
     vocabulary,
+    // No filtering needed here: the builder already refuses to let the same
+    // word be added twice within a course (course-wide uniqueness check on
+    // save), so a builder lesson's word list can never contain a word
+    // already taught earlier in the same course.
+    newVocabulary: vocabulary,
     material: parsed.blocks,
     phrases: parsed.phrases,
     assets: {
@@ -39,67 +44,15 @@ export function toLessonContent(lesson: BuilderCourseLesson): LessonContent {
     missing: [],
     materialText: lesson.materialText,
     authoredQuestions: [],
+    blocks: lesson.blocks,
     hasContentOverrides: true,
   };
 }
 
-function explanationFor(prompt: string, correct: boolean): string {
-  return correct ? `Утверждение верно: «${prompt}»` : `Утверждение неверно: «${prompt}»`;
-}
-
-/** Splits a cloze prompt like "Ich ___ aus Deutschland." into its two
- * halves. Validated server-side to contain exactly one blank marker. */
-function splitBlank(prompt: string): { before: string; after: string } {
-  const [before = "", after = ""] = prompt.split("___");
-  return { before: before.trim(), after: after.trim() };
-}
-
-function toExercise(q: BuilderCourseLesson["blocks"][number]["questions"][number], id: string): Exercise {
-  switch (q.kind) {
-    case "choice":
-      return { kind: "choice", id, prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer } satisfies ChoiceQuestion;
-    case "truefalse":
-      return {
-        kind: "truefalse",
-        id,
-        statement: q.prompt,
-        correct: q.correct,
-        explanation: explanationFor(q.prompt, q.correct),
-      } satisfies TrueFalseQuestion;
-    case "cloze": {
-      const { before, after } = splitBlank(q.prompt);
-      return { kind: "cloze", id, translation: "", before, after, options: q.options, answer: q.correctAnswer } satisfies ClozeExercise;
-    }
-    case "scramble":
-      return {
-        kind: "scramble",
-        id,
-        translation: q.prompt,
-        tokens: shuffle(q.options, Math.random),
-        answer: q.correctAnswer.split(" ").filter(Boolean),
-      } satisfies ScrambleExercise;
-    case "match":
-      return {
-        kind: "match",
-        id,
-        pairs: q.pairs.map((p, i) => ({ id: `${id}-${i}`, left: p.left, right: p.right })),
-      } satisfies MatchExercise;
-  }
-}
-
-/** Flattens a stage's named blocks (already ordered by block position, then
- * question position) into the flat exercise list ExerciseRunner expects. */
-function exercisesFor(lesson: BuilderCourseLesson, stage: "minitest" | "practice" | "review"): Exercise[] {
-  return lesson.blocks
-    .filter((b) => b.stage === stage)
-    .sort((a, b) => a.position - b.position)
-    .flatMap((block) => block.questions.map((q, i) => toExercise(q, `${block.id}-${i}`)));
-}
-
 export function buildBuilderLessonExercises(lesson: BuilderCourseLesson): LessonExerciseSets {
   return {
-    miniTest: exercisesFor(lesson, "minitest"),
-    practice: exercisesFor(lesson, "practice"),
-    review: exercisesFor(lesson, "review"),
+    miniTest: exercisesForStage(lesson.blocks, "minitest"),
+    practice: exercisesForStage(lesson.blocks, "practice"),
+    review: exercisesForStage(lesson.blocks, "review"),
   };
 }

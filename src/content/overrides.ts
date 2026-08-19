@@ -1,18 +1,25 @@
+import { BuilderBlock } from "../admin/builderApi";
 import { api } from "../auth/api";
 import { getAuthToken } from "../auth/tokenStore";
 import { AuthoredQuestion } from "./types";
 
 export interface ContentOverrides {
   materialText: string | null;
-  vocabulary: { german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
+  videoUrl: string | null;
+  audioUrl: string | null;
+  vocabulary: { id: string; german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
   questions: AuthoredQuestion[];
+  blocks: BuilderBlock[];
   hasOverrides: boolean;
 }
 
 const EMPTY: ContentOverrides = {
   materialText: null,
+  videoUrl: null,
+  audioUrl: null,
   vocabulary: [],
   questions: [],
+  blocks: [],
   hasOverrides: false,
 };
 

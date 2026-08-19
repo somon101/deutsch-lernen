@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BuilderBlock, BuilderCourse, BuilderQuestion, builderApi } from "../../admin/builderApi";
+import { BuilderBlock, BuilderQuestion, builderApi } from "../../admin/builderApi";
 
 type QuestionKind = BuilderQuestion["kind"];
 
@@ -110,7 +110,7 @@ export default function BuilderBlockEditor({
   total: number;
   busy: string | null;
   saved: string | null;
-  onRun: (key: string, action: () => Promise<BuilderCourse>) => Promise<void>;
+  onRun: (key: string, action: () => Promise<unknown>) => Promise<void>;
   onMove: (delta: number) => void;
 }) {
   const [title, setTitle] = useState(block.title);

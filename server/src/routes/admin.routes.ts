@@ -12,8 +12,9 @@ import {
   getLessonContent,
   normalizeWord,
   saveLessonContent,
+  setLegacyLessonMedia,
 } from "../content.js";
-import { uploadWordAudio, WORD_AUDIO_DIR } from "../upload.js";
+import { uploadWordAudio, WORD_AUDIO_DIR, uploadCourseMedia, COURSE_MEDIA_DIR } from "../upload.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { normalizeUsername, usernameSchema } from "../username.js";
@@ -241,6 +242,45 @@ adminRouter.put("/content/:lessonId", async (req, res) => {
     if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
     throw e;
   }
+});
+
+// ---- Video/audio override for a legacy lesson ------------------------------
+// Null means "use the bundled file" — same override-if-present pattern as
+// materialText/vocabulary above, just for the lesson's video/audio.
+
+const legacyMediaKindSchema = z.enum(["video", "audio"]);
+
+adminRouter.post(
+  "/content/:lessonId/media",
+  uploadCourseMedia.single("file"),
+  async (req, res) => {
+    const kind = legacyMediaKindSchema.safeParse(req.body?.kind);
+    if (!kind.success) return res.status(400).json({ error: "Укажите тип файла: video или audio" });
+    if (!req.file) return res.status(400).json({ error: "Файл не получен" });
+
+    const existing = await getLessonContent(req.params.lessonId);
+    const previousUrl = kind.data === "video" ? existing.videoUrl : existing.audioUrl;
+
+    const content = await setLegacyLessonMedia(
+      req.params.lessonId,
+      kind.data,
+      `/uploads/courses/${req.file.filename}`,
+    );
+    if (previousUrl) fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(previousUrl))).catch(() => {});
+    res.json({ content });
+  },
+);
+
+adminRouter.delete("/content/:lessonId/media", async (req, res) => {
+  const kind = legacyMediaKindSchema.safeParse(req.query.kind);
+  if (!kind.success) return res.status(400).json({ error: "Укажите тип файла: video или audio" });
+
+  const existing = await getLessonContent(req.params.lessonId);
+  const previousUrl = kind.data === "video" ? existing.videoUrl : existing.audioUrl;
+  if (previousUrl) fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(previousUrl))).catch(() => {});
+
+  const content = await setLegacyLessonMedia(req.params.lessonId, kind.data, null);
+  res.json({ content });
 });
 
 // ---- Recorded pronunciation for a single word -----------------------------

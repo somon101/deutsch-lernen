@@ -4,7 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { DuplicateWordError } from "../content.js";
-import { COURSE_MEDIA_DIR, uploadCourseMedia } from "../upload.js";
+import { COURSE_MEDIA_DIR, uploadCourseMedia, WORD_AUDIO_DIR, uploadWordAudio } from "../upload.js";
 import {
   addVocabularyWord,
   blockInputSchema,
@@ -29,6 +29,7 @@ import {
   reorderBlocks,
   saveBlockQuestions,
   saveLessonQuestions,
+  setVocabularyWordAudio,
   updateBlock,
   updateVocabularyWord,
   setCourseCover,
@@ -192,9 +193,9 @@ builderRouter.post("/courses/:courseId/lessons/:lessonId/vocabulary", async (req
   if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректное слово") });
 
   try {
-    const course = await addVocabularyWord(req.params.courseId, req.params.lessonId, parsed.data);
-    if (!course) return res.status(404).json({ error: "Урок не найден" });
-    res.status(201).json({ course });
+    const result = await addVocabularyWord(req.params.courseId, req.params.lessonId, parsed.data);
+    if (!result) return res.status(404).json({ error: "Урок не найден" });
+    res.status(201).json(result);
   } catch (e) {
     if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
     throw e;
@@ -206,9 +207,9 @@ builderRouter.patch("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", a
   if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректное слово") });
 
   try {
-    const course = await updateVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId, parsed.data);
-    if (!course) return res.status(404).json({ error: "Слово не найдено" });
-    res.json({ course });
+    const result = await updateVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId, parsed.data);
+    if (!result) return res.status(404).json({ error: "Слово не найдено" });
+    res.json(result);
   } catch (e) {
     if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
     throw e;
@@ -216,9 +217,36 @@ builderRouter.patch("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", a
 });
 
 builderRouter.delete("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", async (req, res) => {
-  const course = await deleteVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId);
-  if (!course) return res.status(404).json({ error: "Слово не найдено" });
-  res.json({ course });
+  const result = await deleteVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId);
+  if (!result) return res.status(404).json({ error: "Слово не найдено" });
+  res.json(result);
+});
+
+builderRouter.post(
+  "/courses/:courseId/lessons/:lessonId/vocabulary/:wordId/audio",
+  uploadWordAudio.single("audio"),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Файл не получен" });
+    const audioUrl = `/uploads/words/${req.file.filename}`;
+    const result = await setVocabularyWordAudio(req.params.courseId, req.params.lessonId, req.params.wordId, audioUrl);
+    if (!result) {
+      await fs.unlink(path.join(WORD_AUDIO_DIR, req.file.filename)).catch(() => {});
+      return res.status(404).json({ error: "Слово не найдено" });
+    }
+    if (result.previousAudioUrl) {
+      fs.unlink(path.join(WORD_AUDIO_DIR, path.basename(result.previousAudioUrl))).catch(() => {});
+    }
+    res.json({ ok: true, audioUrl });
+  },
+);
+
+builderRouter.delete("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId/audio", async (req, res) => {
+  const result = await setVocabularyWordAudio(req.params.courseId, req.params.lessonId, req.params.wordId, null);
+  if (!result) return res.status(404).json({ error: "Слово не найдено" });
+  if (result.previousAudioUrl) {
+    fs.unlink(path.join(WORD_AUDIO_DIR, path.basename(result.previousAudioUrl))).catch(() => {});
+  }
+  res.json({ ok: true });
 });
 
 // Dry run: validates a JSON word list against the whole course without
@@ -262,9 +290,9 @@ builderRouter.put("/courses/:courseId/lessons/:lessonId/questions", async (req, 
 builderRouter.post("/courses/:courseId/lessons/:lessonId/blocks", async (req, res) => {
   const parsed = blockInputSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные блока") });
-  const course = await createBlock(req.params.courseId, req.params.lessonId, parsed.data);
-  if (!course) return res.status(404).json({ error: "Урок не найден" });
-  res.status(201).json({ course });
+  const result = await createBlock(req.params.courseId, req.params.lessonId, parsed.data);
+  if (!result) return res.status(404).json({ error: "Урок не найден" });
+  res.status(201).json(result);
 });
 
 builderRouter.post("/courses/:courseId/lessons/:lessonId/blocks/reorder", async (req, res) => {
@@ -273,36 +301,36 @@ builderRouter.post("/courses/:courseId/lessons/:lessonId/blocks/reorder", async 
   if (!stage.success) return res.status(400).json({ error: "Укажите этап" });
   if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректный порядок") });
 
-  const course = await reorderBlocks(req.params.courseId, req.params.lessonId, stage.data, parsed.data.ids);
-  if (!course) return res.status(400).json({ error: "Список блоков не совпадает с этапом" });
-  res.json({ course });
+  const result = await reorderBlocks(req.params.courseId, req.params.lessonId, stage.data, parsed.data.ids);
+  if (!result) return res.status(400).json({ error: "Список блоков не совпадает с этапом" });
+  res.json(result);
 });
 
 builderRouter.patch("/courses/:courseId/lessons/:lessonId/blocks/:blockId", async (req, res) => {
   const title = z.string().trim().min(1, "Название блока не может быть пустым").max(200).safeParse(req.body?.title);
   if (!title.success) return res.status(400).json({ error: firstIssue(title.error, "Некорректное название") });
 
-  const course = await updateBlock(req.params.courseId, req.params.lessonId, req.params.blockId, title.data);
-  if (!course) return res.status(404).json({ error: "Блок не найден" });
-  res.json({ course });
+  const result = await updateBlock(req.params.courseId, req.params.lessonId, req.params.blockId, title.data);
+  if (!result) return res.status(404).json({ error: "Блок не найден" });
+  res.json(result);
 });
 
 builderRouter.delete("/courses/:courseId/lessons/:lessonId/blocks/:blockId", async (req, res) => {
-  const course = await deleteBlock(req.params.courseId, req.params.lessonId, req.params.blockId);
-  if (!course) return res.status(404).json({ error: "Блок не найден" });
-  res.json({ course });
+  const result = await deleteBlock(req.params.courseId, req.params.lessonId, req.params.blockId);
+  if (!result) return res.status(404).json({ error: "Блок не найден" });
+  res.json(result);
 });
 
 builderRouter.put("/courses/:courseId/lessons/:lessonId/blocks/:blockId/questions", async (req, res) => {
   const parsed = blockQuestionsPayloadSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные вопросы") });
 
-  const course = await saveBlockQuestions(
+  const result = await saveBlockQuestions(
     req.params.courseId,
     req.params.lessonId,
     req.params.blockId,
     parsed.data.questions,
   );
-  if (!course) return res.status(404).json({ error: "Блок не найден" });
-  res.json({ course });
+  if (!result) return res.status(404).json({ error: "Блок не найден" });
+  res.json(result);
 });

@@ -55,12 +55,15 @@ export default function BuilderCourseEditPage() {
     setTimeout(() => setSaved((s) => (s === key ? null : s)), 2500);
   };
 
-  /** Every builder call answers with the whole course, so state stays in sync. */
-  const run = async (key: string, action: () => Promise<BuilderCourse>) => {
+  /** Runs the mutation, then re-fetches the course so state stays in sync —
+   * shared with the legacy-lesson editor, whose mutations don't have a
+   * BuilderCourse to hand back directly (see AdminLessonEditPage.tsx). */
+  const run = async (key: string, action: () => Promise<unknown>) => {
     setError(null);
     setBusy(key);
     try {
-      setCourse(await action());
+      await action();
+      setCourse(await builderApi.get(courseId));
       flash(key);
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : "Не удалось сохранить");

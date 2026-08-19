@@ -61,28 +61,81 @@ export const contentPayloadSchema = z.object({
 
 export type ContentPayload = z.infer<typeof contentPayloadSchema>;
 
+/**
+ * A question authored in the admin panel (either course), tagged with its
+ * kind. `kind` matches `Exercise["kind"]` in src/content/exercises.ts
+ * exactly, so the client can map one straight onto the other with a plain
+ * switch. Lives here (not in courses.ts) so both the legacy course and the
+ * builder can import it without a circular dependency between the two.
+ */
+export type QuestionDTO =
+  | { kind: "choice"; prompt: string; options: string[]; correctAnswer: string }
+  | { kind: "truefalse"; prompt: string; correct: boolean }
+  | { kind: "cloze"; prompt: string; options: string[]; correctAnswer: string }
+  | { kind: "scramble"; prompt: string; options: string[]; correctAnswer: string }
+  | { kind: "match"; prompt: string; pairs: { left: string; right: string }[] };
+
+export function toQuestionDTO(q: {
+  kind: string;
+  prompt: string;
+  options: string[];
+  correctAnswer: string;
+  data: unknown;
+}): QuestionDTO {
+  switch (q.kind) {
+    case "truefalse":
+      return { kind: "truefalse", prompt: q.prompt, correct: q.correctAnswer === "true" };
+    case "cloze":
+      return { kind: "cloze", prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer };
+    case "scramble":
+      return { kind: "scramble", prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer };
+    case "match":
+      return { kind: "match", prompt: q.prompt, pairs: (q.data as { left: string; right: string }[] | null) ?? [] };
+    case "choice":
+    default:
+      return { kind: "choice", prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer };
+  }
+}
+
+export interface LessonBlockDTO {
+  id: string;
+  stage: QuestionSet;
+  title: string;
+  position: number;
+  questions: QuestionDTO[];
+}
+
 export interface LessonContentDTO {
   lessonId: string;
   /** null means "no admin edits yet" — the client keeps using the file. */
   materialText: string | null;
-  vocabulary: { german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
+  /** null means "use the bundled file" — same override-if-present meaning as materialText. */
+  videoUrl: string | null;
+  audioUrl: string | null;
+  vocabulary: { id: string; german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
   questions: { setName: string; prompt: string; options: string[]; correctAnswer: string }[];
+  /** Named question blocks (multiple mini-tests/practice/review sets), same shape the builder uses. */
+  blocks: LessonBlockDTO[];
   /** False when nothing has ever been saved for this lesson. */
   hasOverrides: boolean;
   updatedAt: string | null;
 }
 
 export async function getLessonContent(lessonId: string): Promise<LessonContentDTO> {
-  const [content, vocabulary, questions] = await Promise.all([
+  const [content, vocabulary, questions, blocks] = await Promise.all([
     prisma.lessonContent.findUnique({ where: { lessonId } }),
     prisma.vocabularyItem.findMany({ where: { lessonId }, orderBy: { position: "asc" } }),
     prisma.lessonQuestion.findMany({ where: { lessonId }, orderBy: [{ setName: "asc" }, { position: "asc" }] }),
+    prisma.lessonBlock.findMany({ where: { lessonId }, orderBy: [{ stage: "asc" }, { position: "asc" }] }),
   ]);
 
   return {
     lessonId,
     materialText: content?.materialText ?? null,
+    videoUrl: content?.videoUrl ?? null,
+    audioUrl: content?.audioUrl ?? null,
     vocabulary: vocabulary.map((v) => ({
+      id: v.id,
       german: v.german,
       translation: v.translation,
       pronunciation: v.pronunciation,
@@ -93,6 +146,13 @@ export async function getLessonContent(lessonId: string): Promise<LessonContentD
       prompt: q.prompt,
       options: q.options,
       correctAnswer: q.correctAnswer,
+    })),
+    blocks: blocks.map((b) => ({
+      id: b.id,
+      stage: b.stage as QuestionSet,
+      title: b.title,
+      position: b.position,
+      questions: questions.filter((q) => q.blockId === b.id).map(toQuestionDTO),
     })),
     hasOverrides: Boolean(content) || vocabulary.length > 0 || questions.length > 0,
     updatedAt: content?.updatedAt.toISOString() ?? null,
@@ -190,5 +250,25 @@ export async function saveLessonContent(
     }
   });
 
+  return getLessonContent(lessonId);
+}
+
+/**
+ * Overrides (or clears, with url = null) the bundled video/audio file for a
+ * legacy lesson. Upserts because a lesson may not have a LessonContent row
+ * yet (e.g. its material has never been edited) — same pattern as
+ * materialText/vocabulary above.
+ */
+export async function setLegacyLessonMedia(
+  lessonId: string,
+  kind: "video" | "audio",
+  url: string | null,
+): Promise<LessonContentDTO> {
+  const field = kind === "video" ? "videoUrl" : "audioUrl";
+  await prisma.lessonContent.upsert({
+    where: { lessonId },
+    update: { [field]: url },
+    create: { lessonId, [field]: url },
+  });
   return getLessonContent(lessonId);
 }

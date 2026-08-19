@@ -126,10 +126,16 @@ model LessonAttempt {
 // ---------------------------------------------------------------------------
 
 model LessonContent {
-  lessonId     String   @id
-  // The lesson text in the same plain format as the source file. It is parsed
-  // by the very same client-side parser, so nothing downstream changes.
-  materialText String
+  lessonId String @id
+  // The lesson text in the same plain format as the source file, parsed by
+  // the very same client-side parser. Null means "no override" — same
+  // meaning as videoUrl/audioUrl below, so a row can exist to carry just a
+  // media override without forcing an (empty-string) material override too.
+  materialText String?
+  // Overrides for the bundled lesson video/audio file. Null means "use the
+  // file that ships in the lesson folder".
+  videoUrl     String?
+  audioUrl     String?
   updatedAt    DateTime @updatedAt
   updatedById  String?
 }
