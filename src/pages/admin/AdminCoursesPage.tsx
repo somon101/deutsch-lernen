@@ -20,6 +20,9 @@ export default function AdminCoursesPage() {
           <Link to="/admin" className="btn btn-ghost">
             Пользователи
           </Link>
+          <Link to="/admin/builder" className="btn btn-ghost">
+            Конструктор
+          </Link>
           <Link to="/profile" className="btn btn-ghost">
             Профиль
           </Link>

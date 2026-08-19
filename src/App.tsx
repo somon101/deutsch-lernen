@@ -8,6 +8,8 @@ import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
 import AdminCoursesPage from "./pages/admin/AdminCoursesPage";
 import AdminLessonEditPage from "./pages/admin/AdminLessonEditPage";
+import BuilderCoursesPage from "./pages/admin/BuilderCoursesPage";
+import BuilderCourseEditPage from "./pages/admin/BuilderCourseEditPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -68,6 +70,22 @@ export default function App() {
         element={
           <ProtectedRoute adminOnly>
             <AdminLessonEditPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/builder"
+        element={
+          <ProtectedRoute adminOnly>
+            <BuilderCoursesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/builder/:courseId"
+        element={
+          <ProtectedRoute adminOnly>
+            <BuilderCourseEditPage />
           </ProtectedRoute>
         }
       />

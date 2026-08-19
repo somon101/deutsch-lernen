@@ -6,6 +6,10 @@ import { prisma } from "./db.js";
  * uniqueness key. "Hallo", "hallo" and "Hallo!" all normalise to the same
  * value, so none of them can be added twice under a different spelling.
  */
+/** The original, file-based course. Courses made in the builder use their
+ * own Course id, so words never clash across independent courses. */
+export const LEGACY_COURSE_ID = "legacy";
+
 export function normalizeWord(german: string): string {
   return german
     .toLowerCase()
@@ -126,7 +130,7 @@ export async function saveLessonContent(
       }
 
       const clashes = await tx.vocabularyItem.findMany({
-        where: { germanKey: { in: keys }, lessonId: { not: lessonId } },
+        where: { courseId: LEGACY_COURSE_ID, germanKey: { in: keys }, lessonId: { not: lessonId } },
         select: { german: true, lessonId: true },
       });
       if (clashes.length > 0) {

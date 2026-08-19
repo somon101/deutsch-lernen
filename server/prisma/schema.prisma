@@ -125,9 +125,13 @@ model VocabularyItem {
   position      Int
   // Case- and punctuation-insensitive form of `german`. The unique constraint
   // lives here so the same word cannot be entered into two different lessons
-  // of the course — enforced by the database, not only by validation.
-  germanKey     String  @unique
+  // of the SAME course — enforced by the database, not only by validation.
+  // Different courses are independent and may each use the same word.
+  germanKey     String
+  // "legacy" for the original file-based course; a Course id for built ones.
+  courseId      String  @default("legacy")
 
+  @@unique([courseId, germanKey])
   @@index([lessonId, position])
 }
 
@@ -142,6 +146,50 @@ model LessonQuestion {
   // can never silently change which answer is correct.
   correctAnswer String
   position      Int
+  courseId      String   @default("legacy")
 
   @@index([lessonId, setName, position])
+}
+
+// ---------------------------------------------------------------------------
+// Course builder.
+//
+// The original course is the set of /lessonN folders on disk and is untouched
+// by these tables. Courses created in the builder live entirely here, are
+// independent of each other, and never copy from one another.
+// ---------------------------------------------------------------------------
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  title       String
+  description String       @default("")
+  coverUrl    String?
+  status      CourseStatus @default(DRAFT)
+  position    Int
+  createdById String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  lessons CourseLesson[]
+}
+
+model CourseLesson {
+  id       String @id @default(uuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  title        String
+  description  String  @default("")
+  // Same plain/Markdown lesson text the existing parser already understands.
+  materialText String  @default("")
+  videoUrl     String?
+  audioUrl     String?
+  position     Int
+
+  @@index([courseId, position])
 }
