@@ -18,6 +18,23 @@ export function normalizeWord(german: string): string {
     .trim();
 }
 
+/** Formal marks stripped only from the edges of a quiz answer/option — never
+ * from the middle, where punctuation like a mid-phrase comma usually carries
+ * real meaning. Mirrors the client's cleanQuizText (src/content/textUtils.ts)
+ * exactly, since both must agree on what counts as a "hint" character. */
+const QUIZ_EDGE_PUNCTUATION = /^[.!?;:…"'«»„""()/]+|[.!?;:…"'«»„""()/]+$/g;
+
+/**
+ * Cleans a string before it's stored as a quiz option/answer, so its
+ * punctuation can never visually single out the correct choice among
+ * distractors. Never applied to material text or a question's own prompt —
+ * only to the answer-bearing fields validated in blockQuestionSchema
+ * (courses.ts).
+ */
+export function cleanQuizText(value: string): string {
+  return value.replace(QUIZ_EDGE_PUNCTUATION, "").replace(/\s+/g, " ").trim();
+}
+
 /** Human-readable lesson name for duplicate messages ("lesson2" -> "Урок 2"). */
 export function lessonLabel(lessonId: string): string {
   const n = lessonId.match(/(\d+)$/);

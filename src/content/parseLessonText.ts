@@ -1,5 +1,6 @@
 import { LessonBlock, PhraseEntry } from "./types";
 import {
+  cleanQuizText,
   extractBracketPronunciation,
   leadingEmoji,
   looksLikeContinuation,
@@ -57,17 +58,24 @@ export function parseLessonText(raw: string): {
 
   const pushPhrase = (icon: string | undefined, left: string, translation: string) => {
     const { text: german, pronunciation } = extractBracketPronunciation(left);
+    // The material card keeps the exact text as written — punctuation is
+    // part of normal German/Russian here and must stay visible to the reader.
     blocks.push({ type: "phrase", icon, german, pronunciation, translation });
 
     // Keyed by normalized text (case/punctuation-insensitive) rather than the
     // raw string, so "Hallo! — Привет!" and a later "Hallo — привет" collapse
     // into one practice-pool entry instead of feeding the exercise generator
-    // two options that only differ formally. The displayed card above still
-    // shows the raw text exactly as written.
+    // two options that only differ formally.
     const key = `${normalizeAnswer(german)}::${normalizeAnswer(translation)}`;
-    if (german && translation && !seenPhrases.has(key)) {
+    // Unlike the material card above, `phrases` only ever feeds quiz
+    // generation (scramble/cloze/choice/match) — cleaned here so a material
+    // line's trailing "!" or "?" can never become a positional or visual
+    // hint once it's turned into a quiz option or word-bank token.
+    const cleanGerman = cleanQuizText(german);
+    const cleanTranslation = cleanQuizText(translation);
+    if (cleanGerman && cleanTranslation && !seenPhrases.has(key)) {
       seenPhrases.add(key);
-      phrases.push({ id: `phrase-${phraseIndex++}`, german, pronunciation, translation });
+      phrases.push({ id: `phrase-${phraseIndex++}`, german: cleanGerman, pronunciation, translation: cleanTranslation });
     }
   };
 

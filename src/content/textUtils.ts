@@ -86,3 +86,25 @@ export function normalizeAnswer(value: string): string {
 export function answersMatch(a: string, b: string): boolean {
   return normalizeAnswer(a) === normalizeAnswer(b);
 }
+
+/** Formal marks stripped only from the *edges* of a quiz answer/option by
+ * {@link cleanQuizText} — never from the middle, where punctuation like a
+ * mid-phrase comma usually carries real meaning. `/` is included because it
+ * shows up as a leftover "or"-separator in some source lines (e.g. "/ Sehr
+ * gut, danke."), not as real German. The comma is deliberately absent: it's
+ * the one mark the platform's authors asked to keep whenever it might be
+ * meaningful, and never appears as an accidental trailing artifact. */
+const QUIZ_EDGE_PUNCTUATION = /^[.!?;:…"'«»„“”()/]+|[.!?;:…"'«»„“”()/]+$/g;
+
+/**
+ * Cleans a string that will be shown to the learner as a quiz option,
+ * answer, or word-bank token — strips only leading/trailing formal
+ * punctuation (?, !, ., :, ;, quotes, a stray leading "/") so its presence
+ * can never visually single out the correct choice among distractors, or
+ * (for a scramble token) reveal that a word sits at the end of a sentence.
+ * Never applied to lesson material or instructional prompt text, which keep
+ * their natural German/Russian punctuation as written.
+ */
+export function cleanQuizText(value: string): string {
+  return value.replace(QUIZ_EDGE_PUNCTUATION, "").replace(/\s+/g, " ").trim();
+}

@@ -9,6 +9,7 @@ import {
   addVocabularyWord,
   blockInputSchema,
   blockQuestionsPayloadSchema,
+  cleanQuestionsPayload,
   createBlock,
   courseInputSchema,
   createCourse,
@@ -322,7 +323,7 @@ builderRouter.delete("/courses/:courseId/lessons/:lessonId/blocks/:blockId", asy
 });
 
 builderRouter.put("/courses/:courseId/lessons/:lessonId/blocks/:blockId/questions", async (req, res) => {
-  const parsed = blockQuestionsPayloadSchema.safeParse(req.body);
+  const parsed = blockQuestionsPayloadSchema.safeParse(cleanQuestionsPayload(req.body));
   if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные вопросы") });
 
   const result = await saveBlockQuestions(

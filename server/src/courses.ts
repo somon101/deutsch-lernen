@@ -5,6 +5,7 @@ import {
   QUESTION_SETS,
   QuestionSet,
   DuplicateWordError,
+  cleanQuizText,
   lessonLabel,
   normalizeWord,
   questionSchema,
@@ -793,6 +794,59 @@ export const blockQuestionSchema = z
 export const blockQuestionsPayloadSchema = z.object({
   questions: z.array(blockQuestionSchema),
 });
+
+/**
+ * Strips formal edge punctuation from every answer-bearing field (options,
+ * correctAnswer, match pairs) before the payload reaches
+ * blockQuestionsPayloadSchema — never from `prompt`, which is the admin's
+ * own instructional text, not a candidate being visually compared against
+ * others. Runs ahead of validation on purpose: doing it first means the
+ * schema's existing "options must not repeat" check naturally rejects a
+ * question that only looked different because of a stray "!" or "?" — e.g.
+ * "Guten Tag" and "Guten Tag!" — instead of silently allowing it through
+ * with a hidden, punctuation-based hint. Unknown/malformed shapes are left
+ * alone; the schema below still catches those.
+ */
+export function cleanQuestionsPayload(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || !("questions" in raw)) return raw;
+  const questions = (raw as { questions: unknown }).questions;
+  if (!Array.isArray(questions)) return raw;
+
+  const cleaned = questions.map((q) => {
+    if (typeof q !== "object" || q === null) return q;
+    const question = q as Record<string, unknown>;
+    const cleanField = (v: unknown) => (typeof v === "string" ? cleanQuizText(v) : v);
+
+    switch (question.kind) {
+      case "choice":
+      case "cloze":
+      case "scramble":
+        return {
+          ...question,
+          options: Array.isArray(question.options) ? question.options.map(cleanField) : question.options,
+          correctAnswer: cleanField(question.correctAnswer),
+        };
+      case "match":
+        return {
+          ...question,
+          pairs: Array.isArray(question.pairs)
+            ? question.pairs.map((p) =>
+                typeof p === "object" && p !== null
+                  ? { ...p, left: cleanField((p as Record<string, unknown>).left), right: cleanField((p as Record<string, unknown>).right) }
+                  : p,
+              )
+            : question.pairs,
+        };
+      default:
+        // truefalse has no answer-candidate fields to clean — its "correct"
+        // is a boolean, and its prompt is the statement itself, always shown
+        // alone rather than compared against a sibling option.
+        return question;
+    }
+  });
+
+  return { ...(raw as object), questions: cleaned };
+}
 
 export async function createBlock(
   courseId: string,

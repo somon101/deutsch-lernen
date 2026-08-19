@@ -1,5 +1,5 @@
 import { AuthoredQuestion, LessonContent, PhraseEntry, VocabularyEntry } from "./types";
-import { answersMatch, hashString, normalizeAnswer, pickN, seededRandom, shuffle } from "./textUtils";
+import { answersMatch, cleanQuizText, hashString, normalizeAnswer, pickN, seededRandom, shuffle } from "./textUtils";
 import { exercisesForStage } from "./questionMapping";
 import {
   ChoiceQuestion,
@@ -28,7 +28,10 @@ function pool(content: LessonContent): Pair[] {
     const key = `${normalizeAnswer(entry.german)}::${normalizeAnswer(entry.translation)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push({ german: entry.german, translation: entry.translation });
+    // Cleaned here too (phrases are already clean at the source, vocabulary
+    // isn't) so no quiz option/distractor built from this pool can carry a
+    // stray trailing mark that hints at correctness.
+    items.push({ german: cleanQuizText(entry.german), translation: cleanQuizText(entry.translation) });
   }
   return items;
 }
@@ -217,7 +220,7 @@ function authoredFor(content: LessonContent, setName: AuthoredQuestion["setName"
 
 export function buildLessonExercises(content: LessonContent): LessonExerciseSets {
   const items = pool(content);
-  const vocabWords = content.vocabulary.map((v) => v.german);
+  const vocabWords = content.vocabulary.map((v) => cleanQuizText(v.german));
 
   // A stage that has admin-authored questions uses exactly those; otherwise
   // it is generated as it always was.
