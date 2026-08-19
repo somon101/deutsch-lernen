@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { api, ApiError } from "../../auth/api";
 import { StoredAuthUser } from "../../auth/tokenStore";
+import AdminTopNav from "../../components/admin/AdminTopNav";
 
 const emptyForm = {
   firstName: "",
@@ -47,25 +48,13 @@ export default function AdminUsersPage() {
 
   return (
     <div className="app-shell">
-      <nav className="top-nav">
-        <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
-        </Link>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Link to="/admin/courses" className="btn btn-ghost">
-            Курсы
-          </Link>
-          <Link to="/admin/builder" className="btn btn-ghost">
-            Конструктор
-          </Link>
-          <Link to="/profile" className="btn btn-ghost">
-            Профиль
-          </Link>
+      <AdminTopNav
+        extra={
           <button className="btn btn-ghost" onClick={logout}>
             Выйти
           </button>
-        </div>
-      </nav>
+        }
+      />
       <main className="home-main">
         <div className="admin-layout">
           <section className="profile-card">

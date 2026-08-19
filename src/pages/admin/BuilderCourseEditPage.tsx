@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { ApiError, assetUrl } from "../../auth/api";
 import {
   BuilderCourse,
@@ -7,16 +7,17 @@ import {
   QuestionSet,
   builderApi,
   uploadCourseCover,
-  uploadLessonMedia,
 } from "../../admin/builderApi";
 import BuilderLessonEditor from "./BuilderLessonEditor";
+import AdminTopNav from "../../components/admin/AdminTopNav";
+import Breadcrumbs from "../../components/admin/Breadcrumbs";
 
 const STATUS_LABEL = { DRAFT: "Черновик", PUBLISHED: "Опубликован" } as const;
 
 export const SET_LABELS: Record<QuestionSet, string> = {
   minitest: "Мини-тест",
   practice: "Практика",
-  review: "Закрепление (итоговый тест)",
+  review: "Закрепление",
 };
 
 export default function BuilderCourseEditPage() {
@@ -43,7 +44,7 @@ export default function BuilderCourseEditPage() {
         setTitle(c.title);
         setDescription(c.description);
       })
-      .catch(() => navigate("/admin/builder", { replace: true }));
+      .catch(() => navigate("/admin/courses", { replace: true }));
     return () => {
       cancelled = true;
     };
@@ -114,24 +115,18 @@ export default function BuilderCourseEditPage() {
   };
 
   const totalWords = course.lessons.reduce((n, l) => n + l.vocabulary.length, 0);
-  const totalQuestions = course.lessons.reduce((n, l) => n + l.questions.length, 0);
+  const totalQuestions = course.lessons.reduce(
+    (n, l) => n + l.blocks.reduce((m, b) => m + b.questions.length, 0),
+    0,
+  );
 
   return (
     <div className="app-shell">
-      <nav className="top-nav">
-        <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
-        </Link>
-        <Link to="/admin/builder" className="btn btn-ghost">
-          ← Ко всем курсам
-        </Link>
-      </nav>
+      <AdminTopNav back={{ label: "← Ко всем курсам", to: "/admin/courses" }} />
 
       <main className="home-main">
         <div className="admin-layout">
-          <p className="admin-breadcrumbs">
-            <Link to="/admin/builder">Конструктор курсов</Link> → {course.title}
-          </p>
+          <Breadcrumbs items={[{ label: "Курсы", to: "/admin/courses" }, { label: course.title }]} />
 
           {error && <div className="exercise-feedback incorrect">{error}</div>}
 
@@ -250,42 +245,36 @@ export default function BuilderCourseEditPage() {
                   </div>
 
                   <ul className="builder-tree__parts">
-                    <li className={lesson.materialText ? "" : "is-missing"}>
-                      <span>Материал</span>
-                      <span>{lesson.materialText ? `${lesson.materialText.length} символов` : "не заполнен"}</span>
-                    </li>
-                    <li className={lesson.videoUrl ? "" : "is-missing"}>
-                      <span>Видео</span>
-                      <span>{lesson.videoUrl ? "загружено" : "нет"}</span>
-                    </li>
-                    <li className={lesson.audioUrl ? "" : "is-missing"}>
-                      <span>Аудио</span>
-                      <span>{lesson.audioUrl ? "загружено" : "нет"}</span>
-                    </li>
                     <li className={lesson.vocabulary.length ? "" : "is-missing"}>
                       <span>Слова</span>
                       <span>{lesson.vocabulary.length}</span>
                     </li>
-                    {(Object.keys(SET_LABELS) as QuestionSet[]).map((set) => {
-                      const n = lesson.questions.filter((q) => q.setName === set).length;
+                    <li className={lesson.materialText ? "" : "is-missing"}>
+                      <span>Материал</span>
+                      <span>{lesson.materialText ? "заполнен" : "пусто"}</span>
+                    </li>
+                    <li className={lesson.videoUrl ? "" : "is-missing"}>
+                      <span>Видео</span>
+                      <span>{lesson.videoUrl ? "есть" : "нет"}</span>
+                    </li>
+                    <li className={lesson.audioUrl ? "" : "is-missing"}>
+                      <span>Аудио</span>
+                      <span>{lesson.audioUrl ? "есть" : "нет"}</span>
+                    </li>
+                    {(Object.keys(SET_LABELS) as QuestionSet[]).map((stage) => {
+                      const blocks = lesson.blocks.filter((b) => b.stage === stage);
+                      const n = blocks.reduce((sum, b) => sum + b.questions.length, 0);
                       return (
-                        <li key={set} className={n ? "" : "is-missing"}>
-                          <span>{SET_LABELS[set]}</span>
-                          <span>{n ? `${n} вопросов` : "нет вопросов"}</span>
+                        <li key={stage} className={blocks.length ? "" : "is-missing"}>
+                          <span>{SET_LABELS[stage]}</span>
+                          <span>{blocks.length ? `${blocks.length} бл. · ${n} вопр.` : "нет блоков"}</span>
                         </li>
                       );
                     })}
                   </ul>
 
                   {openLessonId === lesson.id && (
-                    <BuilderLessonEditor
-                      courseId={courseId}
-                      lesson={lesson}
-                      busy={busy}
-                      saved={saved}
-                      onRun={run}
-                      onUploadMedia={(kind, file) => run(`media-${lesson.id}`, () => uploadLessonMedia(courseId, lesson.id, kind, file))}
-                    />
+                    <BuilderLessonEditor courseId={courseId} lesson={lesson} busy={busy} saved={saved} onRun={run} />
                   )}
                 </div>
               ))}

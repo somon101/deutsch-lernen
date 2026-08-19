@@ -188,9 +188,13 @@ function ConfettiRibbons() {
 export default function CompleteStage({
   lessonId,
   content,
+  homeTo = "/",
+  homeLabel = "На главную",
 }: {
   lessonId: string;
   content: LessonContent;
+  homeTo?: string;
+  homeLabel?: string;
 }) {
   const progress = useLessonProgress(lessonId);
   const { completeLesson } = useProgressStore();
@@ -280,8 +284,8 @@ export default function CompleteStage({
         </div>
 
         <div className="stage-footer split">
-          <Link to="/" className="btn btn-secondary">
-            На главную
+          <Link to={homeTo} className="btn btn-secondary">
+            {homeLabel}
           </Link>
         </div>
       </div>

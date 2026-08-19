@@ -24,6 +24,9 @@ export default function Home() {
         </Link>
         {user ? (
           <div style={{ display: "flex", gap: 10 }}>
+            <Link to="/courses" className="btn btn-ghost">
+              Все курсы
+            </Link>
             {user.role === "ADMIN" && (
               <Link to="/admin" className="btn btn-ghost">
                 Admin

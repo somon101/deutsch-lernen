@@ -147,8 +147,19 @@ model LessonQuestion {
   correctAnswer String
   position      Int
   courseId      String   @default("legacy")
+  // Which named block inside the stage this question belongs to. Null for the
+  // original file-based course, which has a single unnamed set per stage.
+  blockId       String?
+  // "choice" | "truefalse" | "cloze" | "scramble" | "match". Every row ever
+  // written before this column existed is a plain multiple-choice question,
+  // so the default backfills them correctly with no migration of data.
+  kind          String   @default("choice")
+  // Only "match" questions use this — an array of { left, right } pairs. The
+  // other kinds fit entirely into prompt/options/correctAnswer above.
+  data          Json?
 
   @@index([lessonId, setName, position])
+  @@index([blockId, position])
 }
 
 // ---------------------------------------------------------------------------
@@ -192,4 +203,19 @@ model CourseLesson {
   position     Int
 
   @@index([courseId, position])
+}
+
+/// A named group of questions inside one stage of a built lesson, so a stage
+/// can hold several blocks ("Мини-тест 1", "Мини-тест 2") while the learner
+/// still passes through the same stage sequence as before.
+model LessonBlock {
+  id       String @id @default(uuid())
+  courseId String
+  lessonId String
+  /// Which stage the block belongs to: "minitest" | "practice" | "review".
+  stage    String
+  title    String
+  position Int
+
+  @@index([lessonId, stage, position])
 }

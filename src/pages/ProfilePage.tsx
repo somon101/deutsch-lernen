@@ -129,14 +129,19 @@ export default function ProfilePage() {
         <Link to="/" className="brand">
           <span className="brand-flag">🇩🇪</span> Deutsch Lernen
         </Link>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <Link to="/" className="btn btn-secondary">
-            ← К урокам
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <Link to="/courses" className="btn btn-secondary">
+            ← К курсам
           </Link>
           {user.role === "ADMIN" && (
-            <Link to="/admin" className="btn btn-ghost">
-              Admin
-            </Link>
+            <>
+              <Link to="/admin/courses" className="btn btn-ghost">
+                Курсы (админ)
+              </Link>
+              <Link to="/admin" className="btn btn-ghost">
+                Пользователи
+              </Link>
+            </>
           )}
           <button className="btn btn-ghost" onClick={logout}>
             Выйти

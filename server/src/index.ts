@@ -8,6 +8,7 @@ import { meRouter } from "./routes/me.routes.js";
 import { adminRouter } from "./routes/admin.routes.js";
 import { contentRouter } from "./routes/content.routes.js";
 import { builderRouter } from "./routes/builder.routes.js";
+import { learnerCoursesRouter } from "./routes/learnerCourses.routes.js";
 import { ensureAdminExists } from "./bootstrap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +38,7 @@ app.use("/api/me", meRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/content", contentRouter);
 app.use("/api/builder", builderRouter);
+app.use("/api/courses", learnerCoursesRouter);
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

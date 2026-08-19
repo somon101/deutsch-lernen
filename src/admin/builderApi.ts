@@ -11,11 +11,24 @@ export interface BuilderWord {
   audioUrl: string | null;
 }
 
-export interface BuilderQuestion {
-  setName: QuestionSet;
-  prompt: string;
-  options: string[];
-  correctAnswer: string;
+/**
+ * A question authored in the builder. `kind` matches `Exercise["kind"]` in
+ * src/content/exercises.ts exactly, so the learner-facing runner can map one
+ * straight onto the other with a plain switch.
+ */
+export type BuilderQuestion =
+  | { kind: "choice"; prompt: string; options: string[]; correctAnswer: string }
+  | { kind: "truefalse"; prompt: string; correct: boolean }
+  | { kind: "cloze"; prompt: string; options: string[]; correctAnswer: string }
+  | { kind: "scramble"; prompt: string; options: string[]; correctAnswer: string }
+  | { kind: "match"; prompt: string; pairs: { left: string; right: string }[] };
+
+export interface BuilderBlock {
+  id: string;
+  stage: QuestionSet;
+  title: string;
+  position: number;
+  questions: BuilderQuestion[];
 }
 
 export interface BuilderLesson {
@@ -28,6 +41,7 @@ export interface BuilderLesson {
   position: number;
   vocabulary: BuilderWord[];
   questions: BuilderQuestion[];
+  blocks: BuilderBlock[];
 }
 
 export interface BuilderCourse {
@@ -83,9 +97,39 @@ export const builderApi = {
     api
       .put<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary`, { vocabulary })
       .then((d) => d.course),
-  saveQuestions: (courseId: string, lessonId: string, questions: BuilderQuestion[]) =>
+  // Direct (non-block) lesson questions — unused by the current builder UI
+  // (everything goes through blocks below), still choice-only server-side.
+  saveQuestions: (
+    courseId: string,
+    lessonId: string,
+    questions: { setName: QuestionSet; prompt: string; options: string[]; correctAnswer: string }[],
+  ) =>
     api
       .put<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/questions`, { questions })
+      .then((d) => d.course),
+
+  addBlock: (courseId: string, lessonId: string, stage: QuestionSet, title: string) =>
+    api
+      .post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks`, { stage, title })
+      .then((d) => d.course),
+  renameBlock: (courseId: string, lessonId: string, blockId: string, title: string) =>
+    api
+      .patch<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}`, { title })
+      .then((d) => d.course),
+  removeBlock: (courseId: string, lessonId: string, blockId: string) =>
+    api
+      .delete<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}`)
+      .then((d) => d.course),
+  reorderBlocks: (courseId: string, lessonId: string, stage: QuestionSet, ids: string[]) =>
+    api
+      .post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/blocks/reorder`, { stage, ids })
+      .then((d) => d.course),
+  saveBlockQuestions: (courseId: string, lessonId: string, blockId: string, questions: BuilderQuestion[]) =>
+    api
+      .put<{ course: BuilderCourse }>(
+        `${base}/${courseId}/lessons/${lessonId}/blocks/${blockId}/questions`,
+        { questions },
+      )
       .then((d) => d.course),
 
   removeMedia: (courseId: string, lessonId: string, kind: "video" | "audio") =>

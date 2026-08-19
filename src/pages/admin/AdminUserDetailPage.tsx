@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { api, ApiError } from "../../auth/api";
 import { StoredAuthUser } from "../../auth/tokenStore";
 import { useAuth } from "../../auth/AuthContext";
 import { listLessonIds, loadLesson } from "../../content/loader";
+import AdminTopNav from "../../components/admin/AdminTopNav";
 
 interface LessonProgressSummary {
   lessonId: string;
@@ -21,7 +22,6 @@ interface LessonRow {
 
 export default function AdminUserDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
   const isSelf = currentUser?.id === id;
   const [user, setUser] = useState<StoredAuthUser | null>(null);
@@ -111,14 +111,7 @@ export default function AdminUserDetailPage() {
 
   return (
     <div className="app-shell">
-      <nav className="top-nav">
-        <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
-        </Link>
-        <button className="btn btn-ghost" onClick={() => navigate("/admin")}>
-          ← К списку пользователей
-        </button>
-      </nav>
+      <AdminTopNav back={{ label: "← К списку пользователей", to: "/admin" }} />
       <main className="home-main">
         <div className="admin-layout">
           <section className="profile-card">

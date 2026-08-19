@@ -6,10 +6,12 @@ export default function Stepper({
   lessonId,
   currentStage,
   progress,
+  stagePath = (stage) => `/lesson/${lessonId}/${stage}`,
 }: {
   lessonId: string;
   currentStage: StageId;
   progress: LessonProgress;
+  stagePath?: (stage: StageId) => string;
 }) {
   const navigate = useNavigate();
   const visibleStages = STAGE_ORDER.filter((s) => s !== "complete");
@@ -29,7 +31,7 @@ export default function Stepper({
                 type="button"
                 className={`stepper__dot-wrap ${clickable ? "clickable" : ""}`}
                 disabled={!clickable}
-                onClick={() => clickable && navigate(`/lesson/${lessonId}/${stage}`)}
+                onClick={() => clickable && navigate(stagePath(stage))}
                 title={STAGE_LABELS[stage]}
               >
                 <span className="stepper__dot">{done ? "✓" : i + 1}</span>

@@ -1,10 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { api, ApiError, API_URL } from "../../auth/api";
 import { getAuthToken } from "../../auth/tokenStore";
 import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
 import { invalidateLessonCache, loadLesson } from "../../content/loader";
 import { AuthoredQuestion, LessonContent } from "../../content/types";
+import AdminTopNav from "../../components/admin/AdminTopNav";
+import Breadcrumbs from "../../components/admin/Breadcrumbs";
 
 type SetName = AuthoredQuestion["setName"];
 
@@ -169,20 +171,17 @@ export default function AdminLessonEditPage() {
 
   return (
     <div className="app-shell">
-      <nav className="top-nav">
-        <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
-        </Link>
-        <Link to="/admin/courses" className="btn btn-ghost">
-          ← К урокам курса
-        </Link>
-      </nav>
+      <AdminTopNav back={{ label: "← К урокам курса", to: "/admin/courses/legacy" }} />
 
       <main className="home-main">
         <div className="admin-layout">
-          <p className="admin-breadcrumbs">
-            <Link to="/admin/courses">Курсы</Link> → <Link to="/admin/courses">Немецкий с нуля</Link> → {displayTitle}
-          </p>
+          <Breadcrumbs
+            items={[
+              { label: "Курсы", to: "/admin/courses" },
+              { label: "Немецкий с нуля", to: "/admin/courses/legacy" },
+              { label: displayTitle },
+            ]}
+          />
 
           {error && <div className="exercise-feedback incorrect">{error}</div>}
 

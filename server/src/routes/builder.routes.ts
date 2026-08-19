@@ -6,6 +6,9 @@ import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { DuplicateWordError } from "../content.js";
 import { COURSE_MEDIA_DIR, uploadCourseMedia } from "../upload.js";
 import {
+  blockInputSchema,
+  blockQuestionsPayloadSchema,
+  createBlock,
   courseInputSchema,
   createCourse,
   createLesson,
@@ -18,8 +21,12 @@ import {
   reorderCourses,
   reorderLessons,
   reorderSchema,
+  deleteBlock,
+  reorderBlocks,
+  saveBlockQuestions,
   saveLessonQuestions,
   saveLessonVocabulary,
+  updateBlock,
   setCourseCover,
   setLessonMedia,
   updateCourse,
@@ -195,5 +202,57 @@ builderRouter.put("/courses/:courseId/lessons/:lessonId/questions", async (req, 
 
   const course = await saveLessonQuestions(req.params.courseId, req.params.lessonId, parsed.data.questions);
   if (!course) return res.status(404).json({ error: "Урок не найден" });
+  res.json({ course });
+});
+
+// ---------------------------------------------------------------------------
+// Question blocks inside a stage (several mini-tests, practice blocks, etc.)
+// ---------------------------------------------------------------------------
+
+builderRouter.post("/courses/:courseId/lessons/:lessonId/blocks", async (req, res) => {
+  const parsed = blockInputSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные блока") });
+  const course = await createBlock(req.params.courseId, req.params.lessonId, parsed.data);
+  if (!course) return res.status(404).json({ error: "Урок не найден" });
+  res.status(201).json({ course });
+});
+
+builderRouter.post("/courses/:courseId/lessons/:lessonId/blocks/reorder", async (req, res) => {
+  const stage = z.enum(["minitest", "practice", "review"]).safeParse(req.body?.stage);
+  const parsed = reorderSchema.safeParse(req.body);
+  if (!stage.success) return res.status(400).json({ error: "Укажите этап" });
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректный порядок") });
+
+  const course = await reorderBlocks(req.params.courseId, req.params.lessonId, stage.data, parsed.data.ids);
+  if (!course) return res.status(400).json({ error: "Список блоков не совпадает с этапом" });
+  res.json({ course });
+});
+
+builderRouter.patch("/courses/:courseId/lessons/:lessonId/blocks/:blockId", async (req, res) => {
+  const title = z.string().trim().min(1, "Название блока не может быть пустым").max(200).safeParse(req.body?.title);
+  if (!title.success) return res.status(400).json({ error: firstIssue(title.error, "Некорректное название") });
+
+  const course = await updateBlock(req.params.courseId, req.params.lessonId, req.params.blockId, title.data);
+  if (!course) return res.status(404).json({ error: "Блок не найден" });
+  res.json({ course });
+});
+
+builderRouter.delete("/courses/:courseId/lessons/:lessonId/blocks/:blockId", async (req, res) => {
+  const course = await deleteBlock(req.params.courseId, req.params.lessonId, req.params.blockId);
+  if (!course) return res.status(404).json({ error: "Блок не найден" });
+  res.json({ course });
+});
+
+builderRouter.put("/courses/:courseId/lessons/:lessonId/blocks/:blockId/questions", async (req, res) => {
+  const parsed = blockQuestionsPayloadSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные вопросы") });
+
+  const course = await saveBlockQuestions(
+    req.params.courseId,
+    req.params.lessonId,
+    req.params.blockId,
+    parsed.data.questions,
+  );
+  if (!course) return res.status(404).json({ error: "Блок не найден" });
   res.json({ course });
 });

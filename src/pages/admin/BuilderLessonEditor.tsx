@@ -1,15 +1,26 @@
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { assetUrl } from "../../auth/api";
 import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
-import {
-  BuilderCourse,
-  BuilderLesson,
-  BuilderQuestion,
-  QuestionSet,
-  builderApi,
-} from "../../admin/builderApi";
+import { BuilderCourse, BuilderLesson, QuestionSet, builderApi, uploadLessonMedia } from "../../admin/builderApi";
+import BuilderBlockEditor from "./BuilderBlockEditor";
 
-const SET_LABELS: Record<QuestionSet, string> = {
+/**
+ * The chain a learner actually walks, in the order the app runs it. Only the
+ * three question stages hold blocks; "Аудио" is a listening stage and "Итог"
+ * is the results screen, so neither takes questions.
+ */
+export const LESSON_CHAIN: { key: string; label: string; note?: string }[] = [
+  { key: "vocabulary", label: "Слова", note: "карточки словаря" },
+  { key: "material", label: "Материал", note: "текст урока" },
+  { key: "video", label: "Видео" },
+  { key: "minitest", label: "Мини-тест", note: "вопросы после видео" },
+  { key: "audio", label: "Аудио", note: "прослушивание, без заданий" },
+  { key: "practice", label: "Практика", note: "вопросы" },
+  { key: "review", label: "Закрепление", note: "итоговый тест урока" },
+  { key: "complete", label: "Итог", note: "экран результатов" },
+];
+
+const STAGE_TITLES: Record<QuestionSet, string> = {
   minitest: "Мини-тест",
   practice: "Практика",
   review: "Закрепление",
@@ -22,11 +33,40 @@ interface WordRow {
   audioUrl: string | null;
 }
 
-interface QuestionRow {
-  setName: QuestionSet;
-  prompt: string;
-  options: string[];
-  correctIndex: number;
+/** One expandable element of the lesson chain. */
+function ChainItem({
+  index,
+  label,
+  note,
+  summary,
+  editable,
+  open,
+  onToggle,
+  children,
+}: {
+  index: number;
+  label: string;
+  note?: string;
+  summary: string;
+  editable: boolean;
+  open: boolean;
+  onToggle: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`chain-item ${open ? "is-open" : ""} ${editable ? "" : "is-readonly"}`}>
+      <button type="button" className="chain-item__head" onClick={onToggle} disabled={!editable}>
+        <span className="chain-item__index">{index}</span>
+        <span className="chain-item__label">
+          {label}
+          {note && <span className="chain-item__note">{note}</span>}
+        </span>
+        <span className="chain-item__summary">{summary}</span>
+        {editable && <span className="chain-item__caret">{open ? "▾" : "▸"}</span>}
+      </button>
+      {open && editable && <div className="chain-item__body">{children}</div>}
+    </div>
+  );
 }
 
 export default function BuilderLessonEditor({
@@ -35,22 +75,19 @@ export default function BuilderLessonEditor({
   busy,
   saved,
   onRun,
-  onUploadMedia,
 }: {
   courseId: string;
   lesson: BuilderLesson;
   busy: string | null;
   saved: string | null;
   onRun: (key: string, action: () => Promise<BuilderCourse>) => Promise<void>;
-  onUploadMedia: (kind: "video" | "audio", file: File) => void;
 }) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [title, setTitle] = useState(lesson.title);
   const [description, setDescription] = useState(lesson.description);
   const [materialText, setMaterialText] = useState(lesson.materialText);
   const [words, setWords] = useState<WordRow[]>([]);
-  const [questions, setQuestions] = useState<QuestionRow[]>([]);
 
-  // Re-sync whenever the server sends a fresh copy of this lesson.
   useEffect(() => {
     setTitle(lesson.title);
     setDescription(lesson.description);
@@ -63,25 +100,68 @@ export default function BuilderLessonEditor({
         audioUrl: w.audioUrl,
       })),
     );
-    setQuestions(
-      lesson.questions.map((q) => ({
-        setName: q.setName,
-        prompt: q.prompt,
-        options: q.options,
-        correctIndex: Math.max(0, q.options.indexOf(q.correctAnswer)),
-      })),
-    );
   }, [lesson]);
 
   const key = (name: string) => `${name}-${lesson.id}`;
+  const blocksOf = (stage: QuestionSet) =>
+    lesson.blocks.filter((b) => b.stage === stage).sort((a, b) => a.position - b.position);
+
+  const addBlock = (stage: QuestionSet) => {
+    const n = blocksOf(stage).length + 1;
+    onRun(key(`add-${stage}`), () => builderApi.addBlock(courseId, lesson.id, stage, `${STAGE_TITLES[stage]} ${n}`));
+  };
+
+  const moveBlock = (stage: QuestionSet, index: number, delta: number) => {
+    const ids = blocksOf(stage).map((b) => b.id);
+    const target = index + delta;
+    if (target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    onRun(key(`reorder-${stage}`), () => builderApi.reorderBlocks(courseId, lesson.id, stage, ids));
+  };
+
+  const stageSummary = (stage: QuestionSet) => {
+    const blocks = blocksOf(stage);
+    const questions = blocks.reduce((n, b) => n + b.questions.length, 0);
+    if (blocks.length === 0) return "нет блоков";
+    return `${blocks.length} блок(ов) · ${questions} вопросов`;
+  };
+
+  const questionStage = (stage: QuestionSet) => (
+    <>
+      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
+        Этап может содержать несколько блоков — например «{STAGE_TITLES[stage]} 1» и «{STAGE_TITLES[stage]} 2».
+        Ученик проходит их подряд внутри этого этапа.
+      </p>
+
+      {blocksOf(stage).map((block, i) => (
+        <BuilderBlockEditor
+          key={block.id}
+          courseId={courseId}
+          lessonId={lesson.id}
+          block={block}
+          index={i}
+          total={blocksOf(stage).length}
+          busy={busy}
+          saved={saved}
+          onRun={onRun}
+          onMove={(delta) => moveBlock(stage, i, delta)}
+        />
+      ))}
+
+      <div className="stage-footer">
+        <button type="button" className="btn btn-secondary" onClick={() => addBlock(stage)}>
+          + Добавить {STAGE_TITLES[stage].toLowerCase()}
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <div className="builder-lesson-editor">
-      {/* ---------------- Lesson details ---------------- */}
-      <h4 className="builder-section-title">Урок</h4>
+      {/* ---------- Lesson name ---------- */}
       <div className="auth-form-grid">
         <label className="auth-field">
-          <span>Название</span>
+          <span>Название урока</span>
           <input value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
         <label className="auth-field">
@@ -101,309 +181,223 @@ export default function BuilderLessonEditor({
         </button>
       </div>
 
-      {/* ---------------- Material ---------------- */}
-      <h4 className="builder-section-title">Материал</h4>
+      <h4 className="builder-section-title">Цепочка урока</h4>
       <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
-        Текст урока в том же формате, что и в основном курсе: заголовок, «Шаг 1. …», пары «Hallo [ха́лло] — привет».
-      </p>
-      <textarea
-        className="admin-textarea"
-        rows={10}
-        value={materialText}
-        onChange={(e) => setMaterialText(e.target.value)}
-        placeholder="# Урок 1&#10;&#10;Hallo [ха́лло] — привет"
-      />
-      <div className="stage-footer">
-        {saved === key("material") && <span className="admin-saved">Сохранено</span>}
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={busy === key("material")}
-          onClick={() => onRun(key("material"), () => builderApi.updateLesson(courseId, lesson.id, { materialText }))}
-        >
-          Сохранить материал
-        </button>
-      </div>
-
-      {/* ---------------- Media ---------------- */}
-      <h4 className="builder-section-title">Видео и аудио</h4>
-      {(["video", "audio"] as const).map((kind) => {
-        const url = kind === "video" ? lesson.videoUrl : lesson.audioUrl;
-        return (
-          <div className="builder-media-row" key={kind}>
-            <span className="builder-media-row__label">{kind === "video" ? "Видеоурок" : "Аудиоурок"}</span>
-            {url ? (
-              kind === "video" ? (
-                <video className="builder-media-preview" src={assetUrl(url)} controls preload="metadata" />
-              ) : (
-                <audio src={assetUrl(url)} controls preload="none" />
-              )
-            ) : (
-              <span className="progress-lesson-row__stats">файл не загружен</span>
-            )}
-            <div className="profile-avatar-actions">
-              <label className="btn btn-secondary">
-                {url ? "Заменить" : "Загрузить"}
-                <input
-                  type="file"
-                  accept={kind === "video" ? "video/mp4,video/webm,video/quicktime" : "audio/*"}
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    e.target.value = "";
-                    if (file) onUploadMedia(kind, file);
-                  }}
-                />
-              </label>
-              {url && (
-                <button
-                  type="button"
-                  className="btn btn-ghost admin-row__remove"
-                  onClick={() => onRun(key(`media-${kind}`), () => builderApi.removeMedia(courseId, lesson.id, kind))}
-                >
-                  Удалить
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
-
-      {/* ---------------- Vocabulary ---------------- */}
-      <h4 className="builder-section-title">Словарь ({words.length})</h4>
-      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
-        Слово нельзя добавить, если оно уже есть в другом уроке этого курса — регистр и знаки не помогут обойти
-        проверку. В других курсах то же слово использовать можно.
-      </p>
-      <div className="admin-rows">
-        {words.map((row, i) => (
-          <div className="admin-row builder-word-row" key={i}>
-            <input
-              placeholder="Hallo"
-              value={row.german}
-              onChange={(e) => setWords((w) => w.map((r, x) => (x === i ? { ...r, german: e.target.value } : r)))}
-            />
-            <input
-              placeholder="привет"
-              value={row.translation}
-              onChange={(e) => setWords((w) => w.map((r, x) => (x === i ? { ...r, translation: e.target.value } : r)))}
-            />
-            <input
-              placeholder="ха́лло"
-              value={row.pronunciation}
-              onChange={(e) => setWords((w) => w.map((r, x) => (x === i ? { ...r, pronunciation: e.target.value } : r)))}
-            />
-            <button
-              type="button"
-              className="btn btn-ghost"
-              title={row.audioUrl ? "Прослушать загруженное аудио" : "Прослушать синтезом речи"}
-              onClick={() => (row.audioUrl ? playWord(row.audioUrl) : speakGerman(row.german))}
-              disabled={!row.audioUrl && !canSynthesize()}
-            >
-              🔊
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost admin-row__remove"
-              onClick={() => setWords((w) => w.filter((_, x) => x !== i))}
-            >
-              Удалить
-            </button>
-          </div>
-        ))}
-      </div>
-      <div className="stage-footer split">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setWords((w) => [...w, { german: "", translation: "", pronunciation: "", audioUrl: null }])}
-        >
-          + Добавить слово
-        </button>
-        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {saved === key("words") && <span className="admin-saved">Сохранено</span>}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy === key("words")}
-            onClick={() =>
-              onRun(key("words"), () =>
-                builderApi.saveVocabulary(
-                  courseId,
-                  lesson.id,
-                  words.map((w) => ({
-                    german: w.german,
-                    translation: w.translation,
-                    pronunciation: w.pronunciation.trim() ? w.pronunciation : null,
-                    audioUrl: w.audioUrl,
-                  })),
-                ),
-              )
-            }
-          >
-            Сохранить словарь
-          </button>
-        </span>
-      </div>
-
-      {/* ---------------- Questions ---------------- */}
-      <h4 className="builder-section-title">Вопросы и тесты ({questions.length})</h4>
-      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
-        Вопросы распределяются по трём этапам урока: мини-тест после видео, практика и закрепление (итоговый тест).
-        Правильный вариант отмечаете вы — автоматически он не выбирается.
+        Порядок этапов задан методикой курса и одинаков для всех уроков. Нажмите на элемент, чтобы отредактировать его.
       </p>
 
-      {questions.map((q, qi) => (
-        <div className="admin-question" key={qi}>
-          <div className="admin-question__head">
-            <select
-              value={q.setName}
-              onChange={(e) =>
-                setQuestions((qs) => qs.map((r, x) => (x === qi ? { ...r, setName: e.target.value as QuestionSet } : r)))
-              }
-            >
-              {(Object.keys(SET_LABELS) as QuestionSet[]).map((s) => (
-                <option key={s} value={s}>
-                  {SET_LABELS[s]}
-                </option>
-              ))}
-            </select>
-            <div className="builder-order">
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={qi === 0}
-                onClick={() =>
-                  setQuestions((qs) => {
-                    const next = [...qs];
-                    [next[qi - 1], next[qi]] = [next[qi], next[qi - 1]];
-                    return next;
-                  })
-                }
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                disabled={qi === questions.length - 1}
-                onClick={() =>
-                  setQuestions((qs) => {
-                    const next = [...qs];
-                    [next[qi + 1], next[qi]] = [next[qi], next[qi + 1]];
-                    return next;
-                  })
-                }
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost admin-row__remove"
-                onClick={() => setQuestions((qs) => qs.filter((_, x) => x !== qi))}
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
+      <div className="lesson-chain">
+        {LESSON_CHAIN.map((step, i) => {
+          const open = openKey === step.key;
+          const toggle = () => setOpenKey(open ? null : step.key);
 
-          <label className="auth-field">
-            <span>Текст вопроса</span>
-            <input
-              value={q.prompt}
-              placeholder="Что значит «Hallo»?"
-              onChange={(e) => setQuestions((qs) => qs.map((r, x) => (x === qi ? { ...r, prompt: e.target.value } : r)))}
-            />
-          </label>
-
-          <span className="admin-question__hint">Отметьте правильный вариант:</span>
-          {q.options.map((option, oi) => (
-            <div className="admin-option" key={oi}>
-              <input
-                type="radio"
-                name={`correct-${lesson.id}-${qi}`}
-                checked={q.correctIndex === oi}
-                onChange={() => setQuestions((qs) => qs.map((r, x) => (x === qi ? { ...r, correctIndex: oi } : r)))}
-              />
-              <input
-                className="admin-option__text"
-                placeholder={`Вариант ${oi + 1}`}
-                value={option}
-                onChange={(e) =>
-                  setQuestions((qs) =>
-                    qs.map((r, x) =>
-                      x === qi ? { ...r, options: r.options.map((o, y) => (y === oi ? e.target.value : o)) } : r,
-                    ),
-                  )
-                }
-              />
-              <button
-                type="button"
-                className="btn btn-ghost admin-row__remove"
-                disabled={q.options.length <= 2}
-                onClick={() =>
-                  setQuestions((qs) =>
-                    qs.map((r, x) => {
-                      if (x !== qi) return r;
-                      const options = r.options.filter((_, y) => y !== oi);
-                      // Keep the same option marked correct after a removal.
-                      let correctIndex = r.correctIndex;
-                      if (oi === r.correctIndex) correctIndex = 0;
-                      else if (oi < r.correctIndex) correctIndex -= 1;
-                      return { ...r, options, correctIndex };
-                    }),
-                  )
-                }
+          if (step.key === "vocabulary") {
+            return (
+              <ChainItem
+                key={step.key}
+                index={i + 1}
+                label={step.label}
+                note={step.note}
+                summary={`${words.length} слов`}
+                editable
+                open={open}
+                onToggle={toggle}
               >
-                ✕
-              </button>
-            </div>
-          ))}
-
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setQuestions((qs) => qs.map((r, x) => (x === qi ? { ...r, options: [...r.options, ""] } : r)))}
-          >
-            + Вариант ответа
-          </button>
-        </div>
-      ))}
-
-      <div className="stage-footer split">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() =>
-            setQuestions((qs) => [...qs, { setName: "minitest", prompt: "", options: ["", ""], correctIndex: 0 }])
+                <div className="admin-rows">
+                  {words.map((row, wi) => (
+                    <div className="admin-row builder-word-row" key={wi}>
+                      <input
+                        placeholder="Hallo"
+                        value={row.german}
+                        onChange={(e) => setWords((w) => w.map((r, x) => (x === wi ? { ...r, german: e.target.value } : r)))}
+                      />
+                      <input
+                        placeholder="привет"
+                        value={row.translation}
+                        onChange={(e) =>
+                          setWords((w) => w.map((r, x) => (x === wi ? { ...r, translation: e.target.value } : r)))
+                        }
+                      />
+                      <input
+                        placeholder="ха́лло"
+                        value={row.pronunciation}
+                        onChange={(e) =>
+                          setWords((w) => w.map((r, x) => (x === wi ? { ...r, pronunciation: e.target.value } : r)))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        title={row.audioUrl ? "Прослушать загруженное аудио" : "Прослушать синтезом речи"}
+                        onClick={() => (row.audioUrl ? playWord(row.audioUrl) : speakGerman(row.german))}
+                        disabled={!row.audioUrl && !canSynthesize()}
+                      >
+                        🔊
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost admin-row__remove"
+                        onClick={() => setWords((w) => w.filter((_, x) => x !== wi))}
+                      >
+                        Удалить
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="stage-footer split">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setWords((w) => [...w, { german: "", translation: "", pronunciation: "", audioUrl: null }])}
+                  >
+                    + Добавить слово
+                  </button>
+                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    {saved === key("words") && <span className="admin-saved">Сохранено</span>}
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busy === key("words")}
+                      onClick={() =>
+                        onRun(key("words"), () =>
+                          builderApi.saveVocabulary(
+                            courseId,
+                            lesson.id,
+                            words.map((w) => ({
+                              german: w.german,
+                              translation: w.translation,
+                              pronunciation: w.pronunciation.trim() ? w.pronunciation : null,
+                              audioUrl: w.audioUrl,
+                            })),
+                          ),
+                        )
+                      }
+                    >
+                      Сохранить словарь
+                    </button>
+                  </span>
+                </div>
+              </ChainItem>
+            );
           }
-        >
-          + Добавить вопрос
-        </button>
-        <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {saved === key("questions") && <span className="admin-saved">Сохранено</span>}
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy === key("questions")}
-            onClick={() =>
-              onRun(key("questions"), () =>
-                builderApi.saveQuestions(
-                  courseId,
-                  lesson.id,
-                  questions.map<BuilderQuestion>((q) => ({
-                    setName: q.setName,
-                    prompt: q.prompt,
-                    options: q.options,
-                    correctAnswer: q.options[q.correctIndex] ?? "",
-                  })),
-                ),
-              )
-            }
-          >
-            Сохранить вопросы
-          </button>
-        </span>
+
+          if (step.key === "material") {
+            return (
+              <ChainItem
+                key={step.key}
+                index={i + 1}
+                label={step.label}
+                note={step.note}
+                summary={materialText ? `${materialText.length} символов` : "не заполнен"}
+                editable
+                open={open}
+                onToggle={toggle}
+              >
+                <textarea
+                  className="admin-textarea"
+                  rows={12}
+                  value={materialText}
+                  onChange={(e) => setMaterialText(e.target.value)}
+                  placeholder="# Урок 1&#10;&#10;Hallo [ха́лло] — привет"
+                />
+                <div className="stage-footer">
+                  {saved === key("material") && <span className="admin-saved">Сохранено</span>}
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={busy === key("material")}
+                    onClick={() => onRun(key("material"), () => builderApi.updateLesson(courseId, lesson.id, { materialText }))}
+                  >
+                    Сохранить материал
+                  </button>
+                </div>
+              </ChainItem>
+            );
+          }
+
+          if (step.key === "video" || step.key === "audio") {
+            const kind = step.key === "video" ? "video" : "audio";
+            const url = kind === "video" ? lesson.videoUrl : lesson.audioUrl;
+            return (
+              <ChainItem
+                key={step.key}
+                index={i + 1}
+                label={step.label}
+                note={step.note}
+                summary={url ? "файл загружен" : "файла нет"}
+                editable
+                open={open}
+                onToggle={toggle}
+              >
+                {url ? (
+                  kind === "video" ? (
+                    <video className="builder-media-preview" src={assetUrl(url)} controls preload="metadata" />
+                  ) : (
+                    <audio src={assetUrl(url)} controls preload="none" />
+                  )
+                ) : (
+                  <p className="stage-subtitle">Файл ещё не загружен.</p>
+                )}
+                <div className="profile-avatar-actions">
+                  <label className="btn btn-secondary">
+                    {url ? "Заменить файл" : "Загрузить файл"}
+                    <input
+                      type="file"
+                      accept={kind === "video" ? "video/mp4,video/webm,video/quicktime" : "audio/*"}
+                      hidden
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (file) onRun(key(`media-${kind}`), () => uploadLessonMedia(courseId, lesson.id, kind, file));
+                      }}
+                    />
+                  </label>
+                  {url && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost admin-row__remove"
+                      onClick={() => onRun(key(`media-${kind}`), () => builderApi.removeMedia(courseId, lesson.id, kind))}
+                    >
+                      Удалить файл
+                    </button>
+                  )}
+                </div>
+              </ChainItem>
+            );
+          }
+
+          if (step.key === "minitest" || step.key === "practice" || step.key === "review") {
+            const stage = step.key as QuestionSet;
+            return (
+              <ChainItem
+                key={step.key}
+                index={i + 1}
+                label={step.label}
+                note={step.note}
+                summary={stageSummary(stage)}
+                editable
+                open={open}
+                onToggle={toggle}
+              >
+                {questionStage(stage)}
+              </ChainItem>
+            );
+          }
+
+          // "Итог" is generated from the learner's results — nothing to edit.
+          return (
+            <ChainItem
+              key={step.key}
+              index={i + 1}
+              label={step.label}
+              note={step.note}
+              summary="считается автоматически"
+              editable={false}
+              open={false}
+              onToggle={() => {}}
+            />
+          );
+        })}
       </div>
     </div>
   );

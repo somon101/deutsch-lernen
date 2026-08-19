@@ -1928,6 +1928,185 @@ button {
   border-color: var(--color-primary);
 }
 
+/* ---------- Lesson chain in the builder ---------- */
+
+.lesson-chain {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 12px 0;
+}
+
+.chain-item {
+  position: relative;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  margin-bottom: 22px;
+}
+
+/* The arrow between consecutive steps makes the order explicit. */
+.chain-item:not(:last-child)::after {
+  content: "↓";
+  position: absolute;
+  left: 50%;
+  bottom: -20px;
+  transform: translateX(-50%);
+  color: var(--color-text-faint);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.chain-item.is-open {
+  border-color: var(--color-primary);
+}
+
+.chain-item.is-readonly {
+  background: var(--color-bg);
+}
+
+.chain-item__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chain-item__head:disabled {
+  cursor: default;
+}
+
+.chain-item__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.chain-item__label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.chain-item__note {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-faint);
+}
+
+.chain-item__summary {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.chain-item__caret {
+  color: var(--color-text-faint);
+  flex-shrink: 0;
+}
+
+.chain-item__body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+/* --- one named question block --- */
+
+.builder-block {
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  margin-bottom: 8px;
+}
+
+.builder-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+}
+
+.builder-block__toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  font-family: inherit;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.builder-block__toggle:hover {
+  color: var(--color-primary);
+}
+
+.builder-block__count {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-faint);
+}
+
+.builder-block__body {
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.builder-block__rename {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.builder-block__rename input {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14.5px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.builder-block__rename input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
 @media (max-width: 640px) {
   .top-nav {
     padding: 14px 16px;
@@ -1980,6 +2159,15 @@ button {
 
   .builder-tree__parts {
     grid-template-columns: 1fr;
+  }
+
+  .chain-item__head {
+    flex-wrap: wrap;
+  }
+
+  .chain-item__summary {
+    width: 100%;
+    padding-left: 36px;
   }
 
   .admin-row,

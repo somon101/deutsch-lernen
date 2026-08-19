@@ -2,8 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listLessonIds, loadLesson } from "../../content/loader";
 import { LessonContent } from "../../content/types";
+import AdminTopNav from "../../components/admin/AdminTopNav";
+import Breadcrumbs from "../../components/admin/Breadcrumbs";
 
-export default function AdminCoursesPage() {
+/** Lesson list for the original, file-based course. Moved here verbatim from
+ * the old /admin/courses route (now the unified courses hub) — same data,
+ * same logic, only the surrounding nav changed. */
+export default function AdminLegacyLessonsPage() {
   const [lessons, setLessons] = useState<LessonContent[] | null>(null);
 
   useEffect(() => {
@@ -12,26 +17,11 @@ export default function AdminCoursesPage() {
 
   return (
     <div className="app-shell">
-      <nav className="top-nav">
-        <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
-        </Link>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Link to="/admin" className="btn btn-ghost">
-            Пользователи
-          </Link>
-          <Link to="/admin/builder" className="btn btn-ghost">
-            Конструктор
-          </Link>
-          <Link to="/profile" className="btn btn-ghost">
-            Профиль
-          </Link>
-        </div>
-      </nav>
+      <AdminTopNav back={{ label: "← Ко всем курсам", to: "/admin/courses" }} />
 
       <main className="home-main">
         <div className="admin-layout">
-          <p className="admin-breadcrumbs">Курсы → Немецкий с нуля</p>
+          <Breadcrumbs items={[{ label: "Курсы", to: "/admin/courses" }, { label: "Немецкий с нуля" }]} />
 
           <section className="profile-card">
             <h1 className="stage-title" style={{ fontSize: 22 }}>

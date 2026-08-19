@@ -1,14 +1,17 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home";
 import LessonRedirect from "./pages/LessonRedirect";
 import LessonPage from "./pages/LessonPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import CoursesPage from "./pages/CoursesPage";
+import CourseLessonsPage from "./pages/CourseLessonsPage";
+import BuilderLessonPage from "./pages/BuilderLessonPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminUserDetailPage from "./pages/admin/AdminUserDetailPage";
-import AdminCoursesPage from "./pages/admin/AdminCoursesPage";
+import AdminCoursesHubPage from "./pages/admin/AdminCoursesHubPage";
+import AdminLegacyLessonsPage from "./pages/admin/AdminLegacyLessonsPage";
 import AdminLessonEditPage from "./pages/admin/AdminLessonEditPage";
-import BuilderCoursesPage from "./pages/admin/BuilderCoursesPage";
 import BuilderCourseEditPage from "./pages/admin/BuilderCourseEditPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -40,6 +43,31 @@ export default function App() {
         }
       />
 
+      <Route
+        path="/courses"
+        element={
+          <ProtectedRoute>
+            <CoursesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/courses/:courseId"
+        element={
+          <ProtectedRoute>
+            <CourseLessonsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/courses/:courseId/lesson/:lessonId/:stage"
+        element={
+          <ProtectedRoute>
+            <BuilderLessonPage />
+          </ProtectedRoute>
+        }
+      />
+
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/profile"
@@ -61,7 +89,15 @@ export default function App() {
         path="/admin/courses"
         element={
           <ProtectedRoute adminOnly>
-            <AdminCoursesPage />
+            <AdminCoursesHubPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/courses/legacy"
+        element={
+          <ProtectedRoute adminOnly>
+            <AdminLegacyLessonsPage />
           </ProtectedRoute>
         }
       />
@@ -73,14 +109,8 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/builder"
-        element={
-          <ProtectedRoute adminOnly>
-            <BuilderCoursesPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* Old constructor list URL — kept as a redirect so existing bookmarks/links still work. */}
+      <Route path="/admin/builder" element={<Navigate to="/admin/courses" replace />} />
       <Route
         path="/admin/builder/:courseId"
         element={
