@@ -2,8 +2,9 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { api, ApiError } from "../../auth/api";
-import { StoredAuthUser } from "../../auth/tokenStore";
+import { AdminUserSummary } from "../../auth/tokenStore";
 import AdminTopNav from "../../components/admin/AdminTopNav";
+import { formatDateTime } from "../../lib/formatDate";
 
 const emptyForm = {
   firstName: "",
@@ -17,13 +18,13 @@ const emptyForm = {
 
 export default function AdminUsersPage() {
   const { logout } = useAuth();
-  const [users, setUsers] = useState<StoredAuthUser[] | null>(null);
+  const [users, setUsers] = useState<AdminUserSummary[] | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = async () => {
-    const data = await api.get<{ users: StoredAuthUser[] }>("/api/admin/users");
+    const data = await api.get<{ users: AdminUserSummary[] }>("/api/admin/users");
     setUsers(data.users);
   };
 
@@ -61,6 +62,10 @@ export default function AdminUsersPage() {
             <h1 className="stage-title" style={{ fontSize: 22 }}>
               Пользователи
             </h1>
+            <p className="stage-subtitle" style={{ fontSize: 13 }}>
+              «Онлайн» — пользователь пользовался платформой в последние 5 минут. «Последний вход» — когда он в
+              последний раз вводил пароль (не показывает, сколько он потом оставался на сайте).
+            </p>
             {users === null && <p className="stage-subtitle">Загрузка…</p>}
             {users !== null && (
               <div className="admin-table-wrap">
@@ -72,6 +77,8 @@ export default function AdminUsersPage() {
                       <th>Email</th>
                       <th>Роль</th>
                       <th>Статус</th>
+                      <th>Онлайн</th>
+                      <th>Последний вход</th>
                       <th />
                     </tr>
                   </thead>
@@ -88,6 +95,18 @@ export default function AdminUsersPage() {
                           <span className={`admin-status admin-status--${u.status === "ACTIVE" ? "active" : "blocked"}`}>
                             {u.status === "ACTIVE" ? "Активен" : "Заблокирован"}
                           </span>
+                        </td>
+                        <td>
+                          <span className={`admin-status admin-status--${u.online ? "active" : "blocked"}`}>
+                            {u.online ? "● В сети" : "Не в сети"}
+                          </span>
+                        </td>
+                        <td>
+                          {u.lastLoginAt ? (
+                            formatDateTime(u.lastLoginAt)
+                          ) : (
+                            <span className="progress-lesson-row__stats--muted">никогда</span>
+                          )}
                         </td>
                         <td>
                           <Link className="btn btn-secondary" to={`/admin/users/${u.id}`}>

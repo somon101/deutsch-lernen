@@ -118,6 +118,28 @@ button {
   width: 100%;
 }
 
+.nav-profile-link {
+  padding: 6px 6px 6px 16px;
+}
+
+.nav-profile-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.nav-profile-avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
+  font-weight: 800;
+  font-size: 11.5px;
+}
+
 /* ---------- App shell / top nav ---------- */
 
 .app-shell {
@@ -1901,7 +1923,23 @@ button {
 }
 
 .builder-word-row {
-  grid-template-columns: 1fr 1fr 0.8fr auto auto;
+  grid-template-columns: 1fr 1fr 0.8fr auto auto auto;
+}
+
+.builder-vocab-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+
+.builder-vocab-import {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.builder-import-report {
+  margin-top: 10px;
 }
 
 .builder-add-lesson {

@@ -6,6 +6,7 @@ import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { DuplicateWordError } from "../content.js";
 import { COURSE_MEDIA_DIR, uploadCourseMedia } from "../upload.js";
 import {
+  addVocabularyWord,
   blockInputSchema,
   blockQuestionsPayloadSchema,
   createBlock,
@@ -14,9 +15,12 @@ import {
   createLesson,
   deleteCourse,
   deleteLesson,
+  deleteVocabularyWord,
   getCourse,
+  importVocabularyWords,
   lessonInputSchema,
   listCourses,
+  previewVocabularyImport,
   questionsPayloadSchema,
   reorderCourses,
   reorderLessons,
@@ -25,13 +29,14 @@ import {
   reorderBlocks,
   saveBlockQuestions,
   saveLessonQuestions,
-  saveLessonVocabulary,
   updateBlock,
+  updateVocabularyWord,
   setCourseCover,
   setLessonMedia,
   updateCourse,
   updateLesson,
-  vocabularyPayloadSchema,
+  vocabularyImportPayloadSchema,
+  vocabularyWordInputSchema,
 } from "../courses.js";
 
 /**
@@ -182,14 +187,59 @@ builderRouter.delete("/courses/:courseId/lessons/:lessonId/media", async (req, r
 // Lesson vocabulary and questions
 // ---------------------------------------------------------------------------
 
-builderRouter.put("/courses/:courseId/lessons/:lessonId/vocabulary", async (req, res) => {
-  const parsed = vocabularyPayloadSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректный словарь") });
+builderRouter.post("/courses/:courseId/lessons/:lessonId/vocabulary", async (req, res) => {
+  const parsed = vocabularyWordInputSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректное слово") });
 
   try {
-    const course = await saveLessonVocabulary(req.params.courseId, req.params.lessonId, parsed.data.vocabulary);
+    const course = await addVocabularyWord(req.params.courseId, req.params.lessonId, parsed.data);
     if (!course) return res.status(404).json({ error: "Урок не найден" });
+    res.status(201).json({ course });
+  } catch (e) {
+    if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
+    throw e;
+  }
+});
+
+builderRouter.patch("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", async (req, res) => {
+  const parsed = vocabularyWordInputSchema.partial().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректное слово") });
+
+  try {
+    const course = await updateVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId, parsed.data);
+    if (!course) return res.status(404).json({ error: "Слово не найдено" });
     res.json({ course });
+  } catch (e) {
+    if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
+    throw e;
+  }
+});
+
+builderRouter.delete("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", async (req, res) => {
+  const course = await deleteVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId);
+  if (!course) return res.status(404).json({ error: "Слово не найдено" });
+  res.json({ course });
+});
+
+// Dry run: validates a JSON word list against the whole course without
+// writing anything, for the builder's "Проверить JSON" preview button.
+builderRouter.post("/courses/:courseId/lessons/:lessonId/vocabulary/import/preview", async (req, res) => {
+  const parsed = vocabularyImportPayloadSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректный формат JSON") });
+
+  const preview = await previewVocabularyImport(req.params.courseId, req.params.lessonId, parsed.data.words);
+  if (!preview) return res.status(404).json({ error: "Урок не найден" });
+  res.json({ preview });
+});
+
+builderRouter.post("/courses/:courseId/lessons/:lessonId/vocabulary/import", async (req, res) => {
+  const parsed = vocabularyImportPayloadSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректный формат JSON") });
+
+  try {
+    const result = await importVocabularyWords(req.params.courseId, req.params.lessonId, parsed.data.words);
+    if (!result) return res.status(404).json({ error: "Урок не найден" });
+    res.status(201).json(result);
   } catch (e) {
     if (e instanceof DuplicateWordError) return res.status(409).json({ error: e.message });
     throw e;

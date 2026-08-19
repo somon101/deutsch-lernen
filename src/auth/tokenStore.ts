@@ -13,6 +13,17 @@ export interface StoredAuthUser {
   status: "ACTIVE" | "BLOCKED";
   avatarUrl: string | null;
   canEditProfile: boolean;
+  lastLoginAt: string | null;
+  /** Refreshed on every authenticated request the user makes, not just
+   * login — see server/src/auth/middleware.ts. Admin pages derive an
+   * "online now" badge from how recent this is. */
+  lastActiveAt: string | null;
+}
+
+/** Admin-only view of a user, with the online/offline badge the server
+ * derives from `lastActiveAt` (see withOnlineStatus in admin.routes.ts). */
+export interface AdminUserSummary extends StoredAuthUser {
+  online: boolean;
 }
 
 interface StoredAuth {

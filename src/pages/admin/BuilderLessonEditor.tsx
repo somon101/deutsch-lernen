@@ -1,8 +1,8 @@
 import { ReactNode, useEffect, useState } from "react";
 import { assetUrl } from "../../auth/api";
-import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
 import { BuilderCourse, BuilderLesson, QuestionSet, builderApi, uploadLessonMedia } from "../../admin/builderApi";
 import BuilderBlockEditor from "./BuilderBlockEditor";
+import BuilderVocabularyEditor from "./BuilderVocabularyEditor";
 
 /**
  * The chain a learner actually walks, in the order the app runs it. Only the
@@ -25,13 +25,6 @@ const STAGE_TITLES: Record<QuestionSet, string> = {
   practice: "Практика",
   review: "Закрепление",
 };
-
-interface WordRow {
-  german: string;
-  translation: string;
-  pronunciation: string;
-  audioUrl: string | null;
-}
 
 /** One expandable element of the lesson chain. */
 function ChainItem({
@@ -86,20 +79,11 @@ export default function BuilderLessonEditor({
   const [title, setTitle] = useState(lesson.title);
   const [description, setDescription] = useState(lesson.description);
   const [materialText, setMaterialText] = useState(lesson.materialText);
-  const [words, setWords] = useState<WordRow[]>([]);
 
   useEffect(() => {
     setTitle(lesson.title);
     setDescription(lesson.description);
     setMaterialText(lesson.materialText);
-    setWords(
-      lesson.vocabulary.map((w) => ({
-        german: w.german,
-        translation: w.translation,
-        pronunciation: w.pronunciation ?? "",
-        audioUrl: w.audioUrl,
-      })),
-    );
   }, [lesson]);
 
   const key = (name: string) => `${name}-${lesson.id}`;
@@ -198,85 +182,19 @@ export default function BuilderLessonEditor({
                 index={i + 1}
                 label={step.label}
                 note={step.note}
-                summary={`${words.length} слов`}
+                summary={`${lesson.vocabulary.length} слов`}
                 editable
                 open={open}
                 onToggle={toggle}
               >
-                <div className="admin-rows">
-                  {words.map((row, wi) => (
-                    <div className="admin-row builder-word-row" key={wi}>
-                      <input
-                        placeholder="Hallo"
-                        value={row.german}
-                        onChange={(e) => setWords((w) => w.map((r, x) => (x === wi ? { ...r, german: e.target.value } : r)))}
-                      />
-                      <input
-                        placeholder="привет"
-                        value={row.translation}
-                        onChange={(e) =>
-                          setWords((w) => w.map((r, x) => (x === wi ? { ...r, translation: e.target.value } : r)))
-                        }
-                      />
-                      <input
-                        placeholder="ха́лло"
-                        value={row.pronunciation}
-                        onChange={(e) =>
-                          setWords((w) => w.map((r, x) => (x === wi ? { ...r, pronunciation: e.target.value } : r)))
-                        }
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        title={row.audioUrl ? "Прослушать загруженное аудио" : "Прослушать синтезом речи"}
-                        onClick={() => (row.audioUrl ? playWord(row.audioUrl) : speakGerman(row.german))}
-                        disabled={!row.audioUrl && !canSynthesize()}
-                      >
-                        🔊
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost admin-row__remove"
-                        onClick={() => setWords((w) => w.filter((_, x) => x !== wi))}
-                      >
-                        Удалить
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <div className="stage-footer split">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={() => setWords((w) => [...w, { german: "", translation: "", pronunciation: "", audioUrl: null }])}
-                  >
-                    + Добавить слово
-                  </button>
-                  <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    {saved === key("words") && <span className="admin-saved">Сохранено</span>}
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={busy === key("words")}
-                      onClick={() =>
-                        onRun(key("words"), () =>
-                          builderApi.saveVocabulary(
-                            courseId,
-                            lesson.id,
-                            words.map((w) => ({
-                              german: w.german,
-                              translation: w.translation,
-                              pronunciation: w.pronunciation.trim() ? w.pronunciation : null,
-                              audioUrl: w.audioUrl,
-                            })),
-                          ),
-                        )
-                      }
-                    >
-                      Сохранить словарь
-                    </button>
-                  </span>
-                </div>
+                <BuilderVocabularyEditor
+                  courseId={courseId}
+                  lessonId={lesson.id}
+                  words={lesson.vocabulary}
+                  busy={busy}
+                  saved={saved}
+                  onRun={onRun}
+                />
               </ChainItem>
             );
           }

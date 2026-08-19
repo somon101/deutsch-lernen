@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "./db.js";
-import { QUESTION_SETS, QuestionSet, DuplicateWordError, normalizeWord, questionSchema, vocabularyItemSchema } from "./content.js";
+import { QUESTION_SETS, QuestionSet, DuplicateWordError, normalizeWord, questionSchema } from "./content.js";
 
 /**
  * Courses built from scratch in the admin panel. They live entirely in the
@@ -24,8 +24,41 @@ export const reorderSchema = z.object({
   ids: z.array(z.string().min(1)).min(1, "Нужен хотя бы один элемент"),
 });
 
-export const vocabularyPayloadSchema = z.object({
-  vocabulary: z.array(vocabularyItemSchema),
+// ---------------------------------------------------------------------------
+// Vocabulary — one new-word-to-learn record per course. Uniqueness (by
+// normalizeWord(german), case/punctuation-insensitive) is enforced course-wide,
+// not per-lesson: the same word can't be taught twice in one course, but the
+// same word in two independent courses is fine (the DB constraint below is
+// scoped by courseId).
+// ---------------------------------------------------------------------------
+
+export const vocabularyWordInputSchema = z.object({
+  german: z.string({ required_error: "Слово обязательно" }).trim().min(1, "Слово не может быть пустым"),
+  translation: z.string({ required_error: "Перевод обязателен" }).trim().min(1, "Перевод не может быть пустым"),
+  pronunciation: z.string({ required_error: "Транскрипция обязательна" }).trim().min(1, "Транскрипция не может быть пустой"),
+});
+
+// The admin-facing import format uses its own field names (original /
+// transcription / translation) rather than the internal german / pronunciation
+// ones — mapped at this boundary only, so nothing else in the app needs to
+// know about it.
+export const vocabularyImportWordSchema = z.object({
+  original: z
+    .string({ required_error: "Поле original обязательно", invalid_type_error: "Поле original должно быть строкой" })
+    .trim()
+    .min(1, "Поле original не может быть пустым"),
+  transcription: z
+    .string({ required_error: "Поле transcription обязательно", invalid_type_error: "Поле transcription должно быть строкой" })
+    .trim()
+    .min(1, "Поле transcription не может быть пустым"),
+  translation: z
+    .string({ required_error: "Поле translation обязательно", invalid_type_error: "Поле translation должно быть строкой" })
+    .trim()
+    .min(1, "Поле translation не может быть пустым"),
+});
+
+export const vocabularyImportPayloadSchema = z.object({
+  words: z.array(vocabularyImportWordSchema).min(1, "Список слов пуст"),
 });
 
 export const questionsPayloadSchema = z.object({
@@ -96,7 +129,7 @@ export interface CourseLessonDTO {
   videoUrl: string | null;
   audioUrl: string | null;
   position: number;
-  vocabulary: { german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
+  vocabulary: { id: string; german: string; translation: string; pronunciation: string | null; audioUrl: string | null }[];
   questions: (BuilderQuestionDTO & { setName: string })[];
   /** Named question blocks, grouped by stage and ordered within it. */
   blocks: LessonBlockDTO[];
@@ -176,6 +209,7 @@ export async function getCourse(courseId: string): Promise<CourseDTO | null> {
       vocabulary: words
         .filter((w) => w.lessonId === lesson.id)
         .map((w) => ({
+          id: w.id,
           german: w.german,
           translation: w.translation,
           pronunciation: w.pronunciation,
@@ -330,70 +364,287 @@ export async function setCourseCover(courseId: string, url: string | null): Prom
   return getCourse(courseId);
 }
 
-/**
- * Replaces a lesson's word list. A word may only appear once per course, so
- * the whole save is rejected — naming the lesson it already lives in — rather
- * than silently dropping the duplicate.
- */
-export async function saveLessonVocabulary(
+// ---------------------------------------------------------------------------
+// Vocabulary — add / edit / delete one word at a time, plus a bulk JSON
+// import. Every write path funnels through findWordClashes, so there is
+// exactly one place a duplicate can slip through. Uniqueness is course-wide
+// (by normalizeWord(german)) via the DB's @@unique([courseId, germanKey]) —
+// the pre-write check below gives a friendly message in the common case, and
+// the DB constraint is the actual guarantee when two requests race.
+// ---------------------------------------------------------------------------
+
+interface WordClash {
+  germanKey: string;
+  german: string;
+  lessonId: string;
+  lessonLabel: string;
+}
+
+function isUniqueConstraintError(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2002";
+}
+
+/** Course-wide clash lookup, labelled the way the rest of the admin UI
+ * numbers lessons ("Урок 2 «...»"). `excludeWordId` lets an edit ignore its
+ * own row when the word's spelling didn't actually change. */
+async function findWordClashes(courseId: string, keys: string[], excludeWordId?: string): Promise<WordClash[]> {
+  if (keys.length === 0) return [];
+  const rows = await prisma.vocabularyItem.findMany({
+    where: { courseId, germanKey: { in: keys }, ...(excludeWordId ? { id: { not: excludeWordId } } : {}) },
+    select: { germanKey: true, german: true, lessonId: true },
+  });
+  if (rows.length === 0) return [];
+
+  const lessons = await prisma.courseLesson.findMany({
+    where: { courseId },
+    orderBy: { position: "asc" },
+    select: { id: true, title: true },
+  });
+  const indexById = new Map(lessons.map((l, i) => [l.id, i]));
+  const titleById = new Map(lessons.map((l) => [l.id, l.title]));
+  const labelFor = (lessonId: string) =>
+    indexById.has(lessonId) ? `Урок ${indexById.get(lessonId)! + 1} «${titleById.get(lessonId)}»` : "другом уроке";
+
+  return rows.map((r) => ({ germanKey: r.germanKey, german: r.german, lessonId: r.lessonId, lessonLabel: labelFor(r.lessonId) }));
+}
+
+function clashMessage(clashes: WordClash[]): string {
+  if (clashes.length <= 1) {
+    const label = clashes[0]?.lessonLabel ?? "другом уроке";
+    return `Это слово уже добавлено в словарь курса. Оно изучается в ${label}.`;
+  }
+  return `Это слово уже добавлено в словарь курса. Оно изучается в: ${clashes.map((c) => c.lessonLabel).join(", ")}.`;
+}
+
+export async function addVocabularyWord(
   courseId: string,
   lessonId: string,
-  items: z.infer<typeof vocabularyItemSchema>[],
+  input: z.infer<typeof vocabularyWordInputSchema>,
 ): Promise<CourseDTO | null> {
-  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId } });
+  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
   if (!lesson) return null;
 
-  const keys = items.map((item) => normalizeWord(item.german));
-  const twiceHere = keys.find((key, i) => keys.indexOf(key) !== i);
-  if (twiceHere) {
-    throw new DuplicateWordError(`Слово «${items[keys.indexOf(twiceHere)].german}» указано в этом уроке дважды`);
-  }
+  const germanKey = normalizeWord(input.german);
+  const clashes = await findWordClashes(courseId, [germanKey]);
+  if (clashes.length > 0) throw new DuplicateWordError(clashMessage(clashes));
 
-  const clashes = await prisma.vocabularyItem.findMany({
-    where: { courseId, germanKey: { in: keys }, lessonId: { not: lessonId } },
-    select: { german: true, lessonId: true },
+  const last = await prisma.vocabularyItem.findFirst({
+    where: { lessonId },
+    orderBy: { position: "desc" },
+    select: { position: true },
   });
-  if (clashes.length > 0) {
-    const lessons = await prisma.courseLesson.findMany({
-      where: { id: { in: clashes.map((c) => c.lessonId) } },
-      select: { id: true, title: true },
+
+  try {
+    await prisma.vocabularyItem.create({
+      data: {
+        courseId,
+        lessonId,
+        german: input.german,
+        translation: input.translation,
+        pronunciation: input.pronunciation,
+        position: (last?.position ?? -1) + 1,
+        germanKey,
+      },
     });
-    const titleById = new Map(lessons.map((l) => [l.id, l.title]));
-    const list = clashes
-      .map((c) => `«${c.german}» — уже в уроке «${titleById.get(c.lessonId) ?? c.lessonId}»`)
-      .join("; ");
-    throw new DuplicateWordError(`Это слово уже используется в другом уроке курса: ${list}`);
+  } catch (e) {
+    // Two concurrent adds of the same word both pass the check above — the
+    // database's unique index is what actually stops the second one from
+    // creating a duplicate; this just turns that into a friendly message.
+    if (!isUniqueConstraintError(e)) throw e;
+    const clashesNow = await findWordClashes(courseId, [germanKey]);
+    throw new DuplicateWordError(clashMessage(clashesNow));
   }
 
-  await prisma.$transaction(async (tx) => {
-    // Recorded pronunciations belong to the word, so they survive a rewrite.
-    const existing = await tx.vocabularyItem.findMany({
-      where: { lessonId },
-      select: { germanKey: true, audioUrl: true },
-    });
-    const audioByKey = new Map(existing.map((e) => [e.germanKey, e.audioUrl]));
+  return getCourse(courseId);
+}
 
-    await tx.vocabularyItem.deleteMany({ where: { lessonId } });
-    if (items.length > 0) {
-      await tx.vocabularyItem.createMany({
-        data: items.map((item, index) => {
-          const germanKey = normalizeWord(item.german);
+export async function updateVocabularyWord(
+  courseId: string,
+  lessonId: string,
+  wordId: string,
+  input: Partial<z.infer<typeof vocabularyWordInputSchema>>,
+): Promise<CourseDTO | null> {
+  const word = await prisma.vocabularyItem.findFirst({ where: { id: wordId, lessonId, courseId } });
+  if (!word) return null;
+
+  const data: { german?: string; germanKey?: string; translation?: string; pronunciation?: string } = {};
+  if (input.translation !== undefined) data.translation = input.translation;
+  if (input.pronunciation !== undefined) data.pronunciation = input.pronunciation;
+
+  // Only re-run the uniqueness check when the word's spelling actually
+  // changes — editing just the translation/transcription of a word already
+  // known to be unique can never create a new clash.
+  if (input.german !== undefined) {
+    const germanKey = normalizeWord(input.german);
+    if (germanKey !== word.germanKey) {
+      const clashes = await findWordClashes(courseId, [germanKey], wordId);
+      if (clashes.length > 0) throw new DuplicateWordError(clashMessage(clashes));
+    }
+    data.german = input.german;
+    data.germanKey = germanKey;
+  }
+
+  try {
+    await prisma.vocabularyItem.update({ where: { id: wordId }, data });
+  } catch (e) {
+    if (!isUniqueConstraintError(e)) throw e;
+    const clashesNow = await findWordClashes(courseId, [data.germanKey ?? word.germanKey], wordId);
+    throw new DuplicateWordError(clashMessage(clashesNow));
+  }
+
+  return getCourse(courseId);
+}
+
+export async function deleteVocabularyWord(courseId: string, lessonId: string, wordId: string): Promise<CourseDTO | null> {
+  const word = await prisma.vocabularyItem.findFirst({ where: { id: wordId, lessonId, courseId }, select: { id: true } });
+  if (!word) return null;
+  await prisma.vocabularyItem.delete({ where: { id: wordId } });
+  return getCourse(courseId);
+}
+
+// ---------------------------------------------------------------------------
+// Vocabulary JSON import — every word is checked against the course before
+// anything is written; duplicates are skipped automatically and reported,
+// the rest are added (see importVocabularyWords below).
+// ---------------------------------------------------------------------------
+
+export interface VocabularyImportItemResult {
+  index: number;
+  original: string;
+  status: "new" | "duplicate-in-json" | "duplicate-in-course";
+  message?: string;
+  existingLessons?: string[];
+}
+
+export interface VocabularyImportPreview {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  errorCount: number;
+  items: VocabularyImportItemResult[];
+}
+
+async function evaluateVocabularyImport(
+  courseId: string,
+  words: z.infer<typeof vocabularyImportWordSchema>[],
+): Promise<VocabularyImportPreview> {
+  const seenInPayload = new Map<string, number>();
+  const items: VocabularyImportItemResult[] = words.map((w, index) => {
+    const germanKey = normalizeWord(w.original);
+    const firstIndex = seenInPayload.get(germanKey);
+    if (firstIndex !== undefined) {
+      return {
+        index,
+        original: w.original,
+        status: "duplicate-in-json",
+        message: `Слово «${w.original}» повторяется в этом же JSON (уже указано в строке ${firstIndex + 1}).`,
+      };
+    }
+    seenInPayload.set(germanKey, index);
+    return { index, original: w.original, status: "new" };
+  });
+
+  const candidateKeys = Array.from(
+    new Set(items.filter((i) => i.status === "new").map((i) => normalizeWord(words[i.index].original))),
+  );
+  const clashes = await findWordClashes(courseId, candidateKeys);
+  const clashesByKey = new Map<string, WordClash[]>();
+  for (const c of clashes) clashesByKey.set(c.germanKey, [...(clashesByKey.get(c.germanKey) ?? []), c]);
+
+  const finalItems = items.map((item) => {
+    if (item.status !== "new") return item;
+    const courseClashes = clashesByKey.get(normalizeWord(words[item.index].original));
+    if (!courseClashes || courseClashes.length === 0) return item;
+    return {
+      ...item,
+      status: "duplicate-in-course" as const,
+      message: clashMessage(courseClashes),
+      existingLessons: courseClashes.map((c) => c.lessonLabel),
+    };
+  });
+
+  return {
+    total: words.length,
+    newCount: finalItems.filter((i) => i.status === "new").length,
+    duplicateCount: finalItems.filter((i) => i.status !== "new").length,
+    errorCount: 0,
+    items: finalItems,
+  };
+}
+
+/** Dry run — validates and reports, writes nothing. Powers the "Проверить
+ * JSON" preview button. */
+export async function previewVocabularyImport(
+  courseId: string,
+  lessonId: string,
+  words: z.infer<typeof vocabularyImportWordSchema>[],
+): Promise<VocabularyImportPreview | null> {
+  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
+  if (!lesson) return null;
+  return evaluateVocabularyImport(courseId, words);
+}
+
+export interface VocabularyImportResult {
+  course: CourseDTO;
+  addedCount: number;
+  skipped: VocabularyImportItemResult[];
+}
+
+/**
+ * Duplicates are skipped automatically rather than blocking the whole
+ * import — every word that isn't a duplicate (of the rest of the course, or
+ * of an earlier word in the same JSON) gets added, and the response reports
+ * exactly which ones were skipped and why, so it's never a silent partial
+ * import, just a self-explaining one.
+ */
+export async function importVocabularyWords(
+  courseId: string,
+  lessonId: string,
+  words: z.infer<typeof vocabularyImportWordSchema>[],
+): Promise<VocabularyImportResult | null> {
+  const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
+  if (!lesson) return null;
+
+  const preview = await evaluateVocabularyImport(courseId, words);
+  const toInsert = preview.items.filter((i) => i.status === "new");
+  const skipped = preview.items.filter((i) => i.status !== "new");
+
+  if (toInsert.length > 0) {
+    const last = await prisma.vocabularyItem.findFirst({
+      where: { lessonId },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    });
+    const startPosition = (last?.position ?? -1) + 1;
+
+    try {
+      await prisma.vocabularyItem.createMany({
+        data: toInsert.map((item, i) => {
+          const w = words[item.index];
           return {
             courseId,
             lessonId,
-            german: item.german,
-            translation: item.translation,
-            pronunciation: item.pronunciation?.trim() ? item.pronunciation.trim() : null,
-            audioUrl: item.audioUrl?.trim() ? item.audioUrl.trim() : (audioByKey.get(germanKey) ?? null),
-            position: index,
-            germanKey,
+            german: w.original,
+            translation: w.translation,
+            pronunciation: w.transcription,
+            position: startPosition + i,
+            germanKey: normalizeWord(w.original),
           };
         }),
       });
+    } catch (e) {
+      // A race with another request that created one of these exact words
+      // between the check above and this write. createMany is one
+      // statement, so it all rolls back together — the admin just retries
+      // the import and whichever word raced will now show up as a skip.
+      if (!isUniqueConstraintError(e)) throw e;
+      const keys = toInsert.map((item) => normalizeWord(words[item.index].original));
+      const clashesNow = await findWordClashes(courseId, keys);
+      throw new DuplicateWordError(clashMessage(clashesNow));
     }
-  });
+  }
 
-  return getCourse(courseId);
+  return { course: (await getCourse(courseId))!, addedCount: toInsert.length, skipped };
 }
 
 export async function saveLessonQuestions(

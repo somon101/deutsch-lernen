@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { assetUrl } from "../auth/api";
 import { BuilderCourseSummary, listPublishedCourses } from "../content/learnerCourses";
+import ProfileNavLink from "../components/ProfileNavLink";
 
 /** Learner-facing hub: the legacy course card, plus one card per published
  * course built in the admin constructor. Purely additive — the legacy
@@ -28,9 +29,7 @@ export default function CoursesPage() {
                 Admin
               </Link>
             )}
-            <Link to="/profile" className="btn btn-ghost">
-              {user.firstName}
-            </Link>
+            <ProfileNavLink />
           </div>
         ) : (
           <Link to="/login" className="btn btn-ghost">

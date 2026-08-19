@@ -5,10 +5,35 @@ export type CourseStatus = "DRAFT" | "PUBLISHED";
 export type QuestionSet = "minitest" | "practice" | "review";
 
 export interface BuilderWord {
+  id: string;
   german: string;
   translation: string;
   pronunciation: string | null;
   audioUrl: string | null;
+}
+
+/** The admin-facing JSON import shape — its own field names, mapped onto
+ * BuilderWord (german/pronunciation) only at the API boundary. */
+export interface VocabularyImportWord {
+  original: string;
+  transcription: string;
+  translation: string;
+}
+
+export interface VocabularyImportItemResult {
+  index: number;
+  original: string;
+  status: "new" | "duplicate-in-json" | "duplicate-in-course";
+  message?: string;
+  existingLessons?: string[];
+}
+
+export interface VocabularyImportPreview {
+  total: number;
+  newCount: number;
+  duplicateCount: number;
+  errorCount: number;
+  items: VocabularyImportItemResult[];
 }
 
 /**
@@ -93,10 +118,34 @@ export const builderApi = {
   reorderLessons: (courseId: string, ids: string[]) =>
     api.post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/reorder`, { ids }).then((d) => d.course),
 
-  saveVocabulary: (courseId: string, lessonId: string, vocabulary: Omit<BuilderWord, "audioUrl">[] | BuilderWord[]) =>
+  addWord: (courseId: string, lessonId: string, input: { german: string; translation: string; pronunciation: string }) =>
     api
-      .put<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary`, { vocabulary })
+      .post<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary`, input)
       .then((d) => d.course),
+  updateWord: (
+    courseId: string,
+    lessonId: string,
+    wordId: string,
+    input: Partial<{ german: string; translation: string; pronunciation: string }>,
+  ) =>
+    api
+      .patch<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`, input)
+      .then((d) => d.course),
+  removeWord: (courseId: string, lessonId: string, wordId: string) =>
+    api
+      .delete<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`)
+      .then((d) => d.course),
+  previewVocabularyImport: (courseId: string, lessonId: string, words: VocabularyImportWord[]) =>
+    api
+      .post<{ preview: VocabularyImportPreview }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/import/preview`, { words })
+      .then((d) => d.preview),
+  // Duplicates are skipped automatically rather than blocking the whole
+  // import — addedCount/skipped report exactly what happened.
+  importVocabulary: (courseId: string, lessonId: string, words: VocabularyImportWord[]) =>
+    api.post<{ course: BuilderCourse; addedCount: number; skipped: VocabularyImportItemResult[] }>(
+      `${base}/${courseId}/lessons/${lessonId}/vocabulary/import`,
+      { words },
+    ),
   // Direct (non-block) lesson questions — unused by the current builder UI
   // (everything goes through blocks below), still choice-only server-side.
   saveQuestions: (

@@ -37,11 +37,32 @@ model User {
   status         UserStatus @default(ACTIVE)
   avatarUrl      String?
   canEditProfile Boolean  @default(true)
+  // Timestamp of the most recent successful login — a denormalized copy of
+  // the newest LoginEvent below, kept here too so the admin user list can
+  // show it without joining/aggregating per row.
+  lastLoginAt    DateTime?
+  // Updated (throttled, see requireAuth) on every authenticated request, not
+  // just login — this is what "online" is computed from, since a user can
+  // stay signed in and keep using the app for a long time after their last
+  // actual login.
+  lastActiveAt   DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   attempts LessonAttempt[]
   lessonStates LessonState[]
+  loginEvents  LoginEvent[]
+}
+
+/// One row per successful login, so an admin can see a user's full login
+/// history (date and time of each), not just the most recent one.
+model LoginEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 // Live "where the user is inside a lesson" state — the stage-by-stage

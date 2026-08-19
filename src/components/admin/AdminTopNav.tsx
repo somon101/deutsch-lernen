@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import ProfileNavLink from "../ProfileNavLink";
 
 /**
  * Shared top bar for every admin/profile page, so "Курсы" / "Пользователи" /
@@ -26,9 +27,7 @@ export default function AdminTopNav({ back, extra }: { back?: { label: string; t
         <Link to="/admin" className="btn btn-ghost">
           Пользователи
         </Link>
-        <Link to="/profile" className="btn btn-ghost">
-          Профиль
-        </Link>
+        <ProfileNavLink label="Профиль" />
         {extra}
       </div>
     </nav>

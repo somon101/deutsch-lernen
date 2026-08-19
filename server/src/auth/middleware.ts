@@ -12,6 +12,13 @@ declare global {
   }
 }
 
+// How "online" is decided: lastActiveAt is refreshed on every authenticated
+// request (below), throttled to at most once per this many ms so a user
+// actively browsing the app doesn't cause a DB write on every single call.
+// The admin UI's "в сети" indicator considers a user online within roughly
+// this same window of their last request.
+export const ACTIVITY_UPDATE_THROTTLE_MS = 2 * 60 * 1000; // 2 minutes
+
 /**
  * Verifies the JWT and re-loads the user from the database on every request
  * (not just trusting the token's claims) so a role change or block takes
@@ -30,6 +37,15 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (user.status !== "ACTIVE") return res.status(403).json({ error: "Учётная запись заблокирована" });
 
   req.user = user;
+
+  // Fire-and-forget: this is "was the user just using the app", not
+  // security-critical, so it must never slow down or fail the actual
+  // request. Throttled — see ACTIVITY_UPDATE_THROTTLE_MS above.
+  const msSinceActive = user.lastActiveAt ? Date.now() - user.lastActiveAt.getTime() : Infinity;
+  if (msSinceActive > ACTIVITY_UPDATE_THROTTLE_MS) {
+    prisma.user.update({ where: { id: user.id }, data: { lastActiveAt: new Date() } }).catch(() => {});
+  }
+
   next();
 }
 

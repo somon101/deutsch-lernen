@@ -5,6 +5,7 @@ import { BuilderCourse, loadBuilderCourse } from "../content/learnerCourses";
 import { useProgressStore } from "../progress/ProgressContext";
 import { courseProgressRatio, nextIncompleteStage } from "../progress/types";
 import Breadcrumbs from "../components/admin/Breadcrumbs";
+import ProfileNavLink from "../components/ProfileNavLink";
 
 /** Lesson list for one published builder course — the same card-grid pattern
  * as Home.tsx, sourced from the builder API instead of the on-disk lessons. */
@@ -46,9 +47,7 @@ export default function CourseLessonsPage() {
               Admin
             </Link>
           )}
-          <Link to="/profile" className="btn btn-ghost">
-            {user?.firstName ?? "Профиль"}
-          </Link>
+          <ProfileNavLink />
         </div>
       </nav>
 

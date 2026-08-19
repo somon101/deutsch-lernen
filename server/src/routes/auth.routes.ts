@@ -30,8 +30,14 @@ authRouter.post("/login", async (req, res) => {
   const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return res.status(401).json({ error: "Неверный логин или пароль" });
 
+  const now = new Date();
+  const [updated] = await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: now } }),
+    prisma.loginEvent.create({ data: { userId: user.id, createdAt: now } }),
+  ]);
+
   const token = signToken(user.id);
-  res.json({ token, user: publicUser(user) });
+  res.json({ token, user: publicUser(updated) });
 });
 
 authRouter.get("/me", requireAuth, async (req, res) => {

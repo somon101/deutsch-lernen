@@ -5,6 +5,7 @@ import { LessonContent } from "../content/types";
 import { useProgressStore } from "../progress/ProgressContext";
 import { courseProgressRatio, nextIncompleteStage } from "../progress/types";
 import { useAuth } from "../auth/AuthContext";
+import ProfileNavLink from "../components/ProfileNavLink";
 
 export default function Home() {
   const [lessons, setLessons] = useState<LessonContent[] | null>(null);
@@ -32,9 +33,7 @@ export default function Home() {
                 Admin
               </Link>
             )}
-            <Link to="/profile" className="btn btn-ghost">
-              {user.firstName}
-            </Link>
+            <ProfileNavLink />
           </div>
         ) : (
           <Link to="/login" className="btn btn-ghost">

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { Prisma, type User } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAdmin, requireAuth } from "../auth/middleware.js";
 import { hashPassword } from "../auth/hash.js";
@@ -51,9 +51,20 @@ export const adminRouter = Router();
 
 adminRouter.use(requireAuth, requireAdmin);
 
+// A user counts as "online" if lastActiveAt (refreshed on every authenticated
+// request they make — see requireAuth) falls inside this window. Kept a bit
+// wider than requireAuth's own write-throttle so the indicator doesn't flicker
+// offline between two of a user's requests.
+const ONLINE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+
+function withOnlineStatus(user: User) {
+  const online = user.lastActiveAt !== null && Date.now() - user.lastActiveAt.getTime() <= ONLINE_WINDOW_MS;
+  return { ...publicUser(user), online };
+}
+
 adminRouter.get("/users", async (_req, res) => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
-  res.json({ users: users.map(publicUser) });
+  res.json({ users: users.map(withOnlineStatus) });
 });
 
 const createUserSchema = z.object({
@@ -82,7 +93,7 @@ adminRouter.post("/users", async (req, res) => {
         passwordHash: await hashPassword(password),
       },
     });
-    res.status(201).json({ user: publicUser(user) });
+    res.status(201).json({ user: withOnlineStatus(user) });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return res.status(409).json({
@@ -96,7 +107,7 @@ adminRouter.post("/users", async (req, res) => {
 adminRouter.get("/users/:id", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Пользователь не найден" });
-  res.json({ user: publicUser(user) });
+  res.json({ user: withOnlineStatus(user) });
 });
 
 const updateUserSchema = z.object({
@@ -147,7 +158,7 @@ adminRouter.patch("/users/:id", async (req, res) => {
         ...(parsed.data.username ? { usernameLower: normalizeUsername(parsed.data.username) } : {}),
       },
     });
-    res.json({ user: publicUser(user) });
+    res.json({ user: withOnlineStatus(user) });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
       return res.status(404).json({ error: "Пользователь не найден" });
@@ -192,6 +203,20 @@ adminRouter.get("/users/:id/progress", async (req, res) => {
   if (!user) return res.status(404).json({ error: "Пользователь не найден" });
   const summary = await getProgressSummaryForUser(user.id);
   res.json({ progress: summary });
+});
+
+// Newest-first login history — capped at 50 so a long-lived account's page
+// never has to render an unbounded list.
+adminRouter.get("/users/:id/logins", async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+  if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+  const logins = await prisma.loginEvent.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: { id: true, createdAt: true },
+  });
+  res.json({ logins });
 });
 
 // ---------------------------------------------------------------------------
