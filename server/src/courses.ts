@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
 import {
   LEGACY_COURSE_ID,
@@ -30,6 +31,10 @@ export const lessonInputSchema = z.object({
   title: z.string().trim().min(1, "Название урока не может быть пустым").max(200),
   description: z.string().trim().max(4000).optional(),
   materialText: z.string().optional(),
+  // Node positions + edges for LessonFlowCanvas — purely visual, so accepted
+  // as opaque JSON rather than a strict shape (see schema.prisma's
+  // CourseLesson.canvasLayout comment).
+  canvasLayout: z.unknown().optional(),
 });
 
 export const reorderSchema = z.object({
@@ -126,6 +131,8 @@ export interface CourseLessonDTO {
   questions: (BuilderQuestionDTO & { setName: string })[];
   /** Named question blocks, grouped by stage and ordered within it. */
   blocks: LessonBlockDTO[];
+  /** Saved LessonFlowCanvas layout, or null if never saved yet. */
+  canvasLayout: unknown;
 }
 
 export interface CourseDTO extends Omit<CourseSummaryDTO, "lessonCount" | "wordCount" | "questionCount"> {
@@ -199,6 +206,7 @@ export async function getCourse(courseId: string): Promise<CourseDTO | null> {
       videoUrl: lesson.videoUrl,
       audioUrl: lesson.audioUrl,
       position: lesson.position,
+      canvasLayout: lesson.canvasLayout,
       vocabulary: words
         .filter((w) => w.lessonId === lesson.id)
         .map((w) => ({
@@ -307,7 +315,15 @@ export async function updateLesson(
 ): Promise<CourseDTO | null> {
   const lesson = await prisma.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { id: true } });
   if (!lesson) return null;
-  await prisma.courseLesson.update({ where: { id: lessonId }, data: input });
+  // canvasLayout is validated only as "opaque JSON" (z.unknown()) by
+  // lessonInputSchema — it's presentation-only data, not something the
+  // server needs to understand — so Prisma's stricter Json input type is
+  // satisfied with a cast here rather than a schema that pretends to know
+  // its shape.
+  await prisma.courseLesson.update({
+    where: { id: lessonId },
+    data: input as Prisma.CourseLessonUpdateInput,
+  });
   return getCourse(courseId);
 }
 
@@ -499,6 +515,22 @@ export async function deleteVocabularyWord(courseId: string, lessonId: string, w
   const word = await prisma.vocabularyItem.findFirst({ where: { id: wordId, lessonId, courseId }, select: { id: true } });
   if (!word) return null;
   await prisma.vocabularyItem.delete({ where: { id: wordId } });
+  return { ok: true };
+}
+
+/** Reorders a lesson's vocabulary; ids from another lesson/course are refused. */
+export async function reorderVocabulary(
+  courseId: string,
+  lessonId: string,
+  ids: string[],
+): Promise<{ ok: true } | null> {
+  const words = await prisma.vocabularyItem.findMany({ where: { lessonId, courseId }, select: { id: true } });
+  const owned = new Set(words.map((w) => w.id));
+  if (ids.length !== owned.size || !ids.every((id) => owned.has(id))) return null;
+
+  await prisma.$transaction(
+    ids.map((id, index) => prisma.vocabularyItem.update({ where: { id }, data: { position: index } })),
+  );
   return { ok: true };
 }
 

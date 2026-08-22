@@ -9,6 +9,7 @@ datasource db {
 
 enum Role {
   ADMIN
+  TEACHER
   USER
 }
 
@@ -136,6 +137,12 @@ model LessonContent {
   // file that ships in the lesson folder".
   videoUrl     String?
   audioUrl     String?
+  // Node positions + edges for the visual lesson-flow canvas (LessonFlowCanvas
+  // on the client) — purely presentational layout on top of the real data
+  // above and in VocabularyItem/LessonQuestion/LessonBlock; nothing here is
+  // read by the learner-facing runner. Null means "no saved layout yet",
+  // in which case the client computes a default left-to-right arrangement.
+  canvasLayout Json?
   updatedAt    DateTime @updatedAt
   updatedById  String?
 }
@@ -228,6 +235,9 @@ model CourseLesson {
   videoUrl     String?
   audioUrl     String?
   position     Int
+  // Same purely-visual canvas layout as LessonContent.canvasLayout above —
+  // see that field's comment.
+  canvasLayout Json?
 
   @@index([courseId, position])
 }

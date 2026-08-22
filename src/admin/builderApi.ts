@@ -67,6 +67,9 @@ export interface BuilderLesson {
   vocabulary: BuilderWord[];
   questions: BuilderQuestion[];
   blocks: BuilderBlock[];
+  /** Saved LessonFlowCanvas layout ({nodes, edges} — see that component), or
+   * null if this lesson has never had its canvas arranged and saved yet. */
+  canvasLayout: unknown;
 }
 
 export interface BuilderCourse {
@@ -111,7 +114,7 @@ export const builderApi = {
   updateLesson: (
     courseId: string,
     lessonId: string,
-    input: { title?: string; description?: string; materialText?: string },
+    input: { title?: string; description?: string; materialText?: string; canvasLayout?: unknown },
   ) => api.patch<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}`, input).then((d) => d.course),
   removeLesson: (courseId: string, lessonId: string) =>
     api.delete<{ course: BuilderCourse }>(`${base}/${courseId}/lessons/${lessonId}`).then((d) => d.course),
@@ -133,6 +136,8 @@ export const builderApi = {
   ) => api.patch(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`, input),
   removeWord: (courseId: string, lessonId: string, wordId: string) =>
     api.delete(`${base}/${courseId}/lessons/${lessonId}/vocabulary/${wordId}`),
+  reorderVocabulary: (courseId: string, lessonId: string, ids: string[]) =>
+    api.post(`${base}/${courseId}/lessons/${lessonId}/vocabulary/reorder`, { ids }),
   previewVocabularyImport: (courseId: string, lessonId: string, words: VocabularyImportWord[]) =>
     api
       .post<{ preview: VocabularyImportPreview }>(`${base}/${courseId}/lessons/${lessonId}/vocabulary/import/preview`, { words })

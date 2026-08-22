@@ -133,15 +133,15 @@ export default function ProfilePage() {
           <Link to="/courses" className="btn btn-secondary">
             ← К курсам
           </Link>
+          {(user.role === "ADMIN" || user.role === "TEACHER") && (
+            <Link to="/admin/courses" className="btn btn-ghost">
+              Курсы (админ)
+            </Link>
+          )}
           {user.role === "ADMIN" && (
-            <>
-              <Link to="/admin/courses" className="btn btn-ghost">
-                Курсы (админ)
-              </Link>
-              <Link to="/admin" className="btn btn-ghost">
-                Пользователи
-              </Link>
-            </>
+            <Link to="/admin" className="btn btn-ghost">
+              Пользователи
+            </Link>
           )}
           <button className="btn btn-ghost" onClick={logout}>
             Выйти

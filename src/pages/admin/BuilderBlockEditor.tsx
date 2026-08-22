@@ -1,18 +1,27 @@
 import { useEffect, useState } from "react";
 import { BuilderBlock, BuilderQuestion, builderApi } from "../../admin/builderApi";
+import DragList from "./DragList";
 
 type QuestionKind = BuilderQuestion["kind"];
 
 /** Draft shape used while editing — choice/cloze track the correct option by
  * index (so retyping option text can't silently change which one is marked
  * correct), and scramble keeps the admin's typed phrase separate from the
- * extra decoy words so both can be edited independently. */
-type EditableQuestion =
+ * extra decoy words so both can be edited independently. `id` exists only
+ * client-side (drag identity for DragList) and is never sent to the server -
+ * toSaved() below drops it along with the rest of the editing-only shape. */
+type EditableQuestionBase =
   | { kind: "choice"; prompt: string; options: string[]; correctIndex: number }
   | { kind: "cloze"; prompt: string; options: string[]; correctIndex: number }
   | { kind: "truefalse"; prompt: string; correct: boolean }
   | { kind: "scramble"; prompt: string; correctPhrase: string; extraWords: string[] }
   | { kind: "match"; prompt: string; pairs: { left: string; right: string }[] };
+
+type EditableQuestion = EditableQuestionBase & { id: string };
+
+function newQuestionId(): string {
+  return crypto.randomUUID();
+}
 
 const KIND_LABELS: Record<QuestionKind, string> = {
   choice: "Вопрос с вариантами",
@@ -27,51 +36,57 @@ function tokenize(text: string): string[] {
 }
 
 function emptyQuestion(kind: QuestionKind): EditableQuestion {
-  switch (kind) {
-    case "choice":
-      return { kind: "choice", prompt: "", options: ["", ""], correctIndex: 0 };
-    case "cloze":
-      return { kind: "cloze", prompt: "", options: ["", ""], correctIndex: 0 };
-    case "truefalse":
-      return { kind: "truefalse", prompt: "", correct: true };
-    case "scramble":
-      return { kind: "scramble", prompt: "", correctPhrase: "", extraWords: [] };
-    case "match":
-      return {
-        kind: "match",
-        prompt: "",
-        pairs: [
-          { left: "", right: "" },
-          { left: "", right: "" },
-        ],
-      };
-  }
+  const base = ((): EditableQuestionBase => {
+    switch (kind) {
+      case "choice":
+        return { kind: "choice", prompt: "", options: ["", ""], correctIndex: 0 };
+      case "cloze":
+        return { kind: "cloze", prompt: "", options: ["", ""], correctIndex: 0 };
+      case "truefalse":
+        return { kind: "truefalse", prompt: "", correct: true };
+      case "scramble":
+        return { kind: "scramble", prompt: "", correctPhrase: "", extraWords: [] };
+      case "match":
+        return {
+          kind: "match",
+          prompt: "",
+          pairs: [
+            { left: "", right: "" },
+            { left: "", right: "" },
+          ],
+        };
+    }
+  })();
+  return { ...base, id: newQuestionId() } as EditableQuestion;
 }
 
 function toEditable(q: BuilderQuestion): EditableQuestion {
-  switch (q.kind) {
-    case "choice":
-      return { kind: "choice", prompt: q.prompt, options: q.options, correctIndex: Math.max(0, q.options.indexOf(q.correctAnswer)) };
-    case "cloze":
-      return { kind: "cloze", prompt: q.prompt, options: q.options, correctIndex: Math.max(0, q.options.indexOf(q.correctAnswer)) };
-    case "truefalse":
-      return { kind: "truefalse", prompt: q.prompt, correct: q.correct };
-    case "scramble": {
-      const correctTokens = tokenize(q.correctAnswer);
-      const extraWords = [...q.options];
-      for (const token of correctTokens) {
-        const idx = extraWords.indexOf(token);
-        if (idx !== -1) extraWords.splice(idx, 1);
+  const base = ((): EditableQuestionBase => {
+    switch (q.kind) {
+      case "choice":
+        return { kind: "choice", prompt: q.prompt, options: q.options, correctIndex: Math.max(0, q.options.indexOf(q.correctAnswer)) };
+      case "cloze":
+        return { kind: "cloze", prompt: q.prompt, options: q.options, correctIndex: Math.max(0, q.options.indexOf(q.correctAnswer)) };
+      case "truefalse":
+        return { kind: "truefalse", prompt: q.prompt, correct: q.correct };
+      case "scramble": {
+        const correctTokens = tokenize(q.correctAnswer);
+        const extraWords = [...q.options];
+        for (const token of correctTokens) {
+          const idx = extraWords.indexOf(token);
+          if (idx !== -1) extraWords.splice(idx, 1);
+        }
+        return { kind: "scramble", prompt: q.prompt, correctPhrase: q.correctAnswer, extraWords };
       }
-      return { kind: "scramble", prompt: q.prompt, correctPhrase: q.correctAnswer, extraWords };
+      case "match":
+        return {
+          kind: "match",
+          prompt: q.prompt,
+          pairs: q.pairs.length > 0 ? q.pairs : [{ left: "", right: "" }, { left: "", right: "" }],
+        };
     }
-    case "match":
-      return {
-        kind: "match",
-        prompt: q.prompt,
-        pairs: q.pairs.length > 0 ? q.pairs : [{ left: "", right: "" }, { left: "", right: "" }],
-      };
-  }
+  })();
+  return { ...base, id: newQuestionId() } as EditableQuestion;
 }
 
 function toSaved(q: EditableQuestion): BuilderQuestion {
@@ -96,22 +111,16 @@ export default function BuilderBlockEditor({
   courseId,
   lessonId,
   block,
-  index,
-  total,
   busy,
   saved,
   onRun,
-  onMove,
 }: {
   courseId: string;
   lessonId: string;
   block: BuilderBlock;
-  index: number;
-  total: number;
   busy: string | null;
   saved: string | null;
   onRun: (key: string, action: () => Promise<unknown>) => Promise<void>;
-  onMove: (delta: number) => void;
 }) {
   const [title, setTitle] = useState(block.title);
   const [questions, setQuestions] = useState<EditableQuestion[]>([]);
@@ -127,6 +136,10 @@ export default function BuilderBlockEditor({
     setQuestions((qs) => qs.map((r, x) => (x === qi ? patch(r) : r)));
 
   const addQuestion = (kind: QuestionKind) => setQuestions((qs) => [...qs, emptyQuestion(kind)]);
+  const reorderQuestions = (ids: string[]) => {
+    const byId = new Map(questions.map((q) => [q.id, q]));
+    setQuestions(ids.map((id) => byId.get(id)!));
+  };
 
   return (
     <div className="builder-block">
@@ -136,12 +149,6 @@ export default function BuilderBlockEditor({
           <span className="builder-block__count">{block.questions.length} вопросов</span>
         </button>
         <div className="builder-order">
-          <button type="button" className="btn btn-ghost" disabled={index === 0} onClick={() => onMove(-1)}>
-            ↑
-          </button>
-          <button type="button" className="btn btn-ghost" disabled={index === total - 1} onClick={() => onMove(1)}>
-            ↓
-          </button>
           <button
             type="button"
             className="btn btn-ghost admin-row__remove"
@@ -170,8 +177,11 @@ export default function BuilderBlockEditor({
             </button>
           </div>
 
-          {questions.map((q, qi) => (
-            <div className="admin-question" key={qi}>
+          <DragList
+            items={questions}
+            onReorder={reorderQuestions}
+            renderItem={(q, qi) => (
+            <div className="admin-question">
               <div className="admin-question__head">
                 <span className="admin-question__hint">
                   Задание {qi + 1} · {KIND_LABELS[q.kind]}
@@ -179,36 +189,8 @@ export default function BuilderBlockEditor({
                 <div className="builder-order">
                   <button
                     type="button"
-                    className="btn btn-ghost"
-                    disabled={qi === 0}
-                    onClick={() =>
-                      setQuestions((qs) => {
-                        const next = [...qs];
-                        [next[qi - 1], next[qi]] = [next[qi], next[qi - 1]];
-                        return next;
-                      })
-                    }
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    disabled={qi === questions.length - 1}
-                    onClick={() =>
-                      setQuestions((qs) => {
-                        const next = [...qs];
-                        [next[qi + 1], next[qi]] = [next[qi], next[qi + 1]];
-                        return next;
-                      })
-                    }
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
                     className="btn btn-ghost admin-row__remove"
-                    onClick={() => setQuestions((qs) => qs.filter((_, x) => x !== qi))}
+                    onClick={() => setQuestions((qs) => qs.filter((r) => r.id !== q.id))}
                   >
                     Удалить
                   </button>
@@ -429,7 +411,8 @@ export default function BuilderBlockEditor({
                 </>
               )}
             </div>
-          ))}
+            )}
+          />
 
           <div className="stage-footer split">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

@@ -1305,6 +1305,12 @@ button {
   gap: 20px;
 }
 
+/* A dedicated lesson editor (LessonChainEditor) wants real room for the
+ * node-flow canvas to breathe, unlike the narrower forms/lists elsewhere. */
+.admin-layout--wide {
+  max-width: 1240px;
+}
+
 .profile-card {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
@@ -1897,6 +1903,10 @@ button {
 }
 
 .builder-tree__toggle {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   padding: 6px 0;
@@ -1906,6 +1916,15 @@ button {
   color: var(--color-text);
   cursor: pointer;
   text-align: left;
+}
+
+.builder-tree__open-hint {
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
 }
 
 .builder-tree__index {
@@ -1994,16 +2013,29 @@ button {
   grid-template-columns: 1fr 1fr 0.8fr auto auto auto auto auto;
 }
 
-.builder-vocab-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 14px 0 10px;
+/* The "add a word" row sits right at the end of the same list, marked off
+ * with just a top divider — a lighter touch than a whole separate section,
+ * so it still reads as part of the same table. */
+.builder-word-row--new {
+  padding-top: 10px;
+  border-top: 1.5px dashed var(--color-border);
+}
+
+.builder-word-row--new input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.builder-vocab-import-toggle {
+  margin: 14px 0 4px;
+  font-size: 13.5px;
+  color: var(--color-text-muted);
 }
 
 .builder-vocab-import {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: 8px;
 }
 
 .builder-import-report {
@@ -2034,108 +2066,372 @@ button {
   border-color: var(--color-primary);
 }
 
-/* ---------- Lesson chain in the builder ---------- */
+/* ---------------------------------------------------------------------
+   Drag-to-reorder rows (DragList) - used for course lessons, stage
+   blocks, block questions and lesson vocabulary.
+   ------------------------------------------------------------------- */
 
-.lesson-chain {
+.dnd-row {
   display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin: 12px 0;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.chain-item {
-  position: relative;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  margin-bottom: 22px;
+.dnd-row.is-dragging {
+  opacity: 0.5;
+  z-index: 1;
 }
 
-/* The arrow between consecutive steps makes the order explicit. */
-.chain-item:not(:last-child)::after {
-  content: "↓";
-  position: absolute;
-  left: 50%;
-  bottom: -20px;
-  transform: translateX(-50%);
-  color: var(--color-text-faint);
-  font-size: 14px;
-  line-height: 1;
+.dnd-row__content {
+  flex: 1;
+  min-width: 0;
 }
 
-.chain-item.is-open {
-  border-color: var(--color-primary);
-}
-
-.chain-item.is-readonly {
-  background: var(--color-bg);
-}
-
-.chain-item__head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  background: none;
-  border: none;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.chain-item__head:disabled {
-  cursor: default;
-}
-
-.chain-item__index {
+.dnd-handle {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-primary-soft);
-  color: var(--color-primary-dark);
-  font-size: 12px;
-  font-weight: 800;
-  flex-shrink: 0;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  font-size: 16px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
 }
 
-.chain-item__label {
+.dnd-handle:hover {
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+.dnd-handle:active {
+  cursor: grabbing;
+}
+
+/* ---------------------------------------------------------------------
+   Lesson flow - dark node-graph view of a lesson's fixed 8-step chain
+   (see LessonChainEditor.tsx). Scoped to its own dark tokens on
+   .lesson-flow-wrap so the rest of the (light) admin UI is untouched;
+   the step order and every editor inside the panel are unchanged, only
+   this wrapping layout is new.
+   ------------------------------------------------------------------- */
+
+.lesson-flow-wrap {
+  --flow-bg: #0d1020;
+  --flow-surface: #171b30;
+  --flow-surface-hover: #1e2340;
+  --flow-border: #2a2f4d;
+  --flow-text: #f1f2fa;
+  --flow-text-muted: #9a9fc2;
+  --flow-text-faint: #666b93;
+
+  background: var(--flow-bg);
+  border-radius: var(--radius-lg);
+  padding: 18px 16px 20px;
+  margin: 14px 0;
+}
+
+/* React Flow needs an explicit height on its container — "100%" of this
+ * fills whatever the wrap gives it, so the canvas takes the full available
+ * width/height with no inner scrollbar of its own (React Flow pans/zooms
+ * instead of scrolling). */
+.flow-canvas {
+  display: flex;
+  align-items: stretch;
+  height: min(75vh, 720px);
+  min-height: 460px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* The palette sits beside the graph as a real sidebar (matching the
+ * reference) rather than floating over it — an overlay would sit at a fixed
+ * screen position regardless of where fitView scales the graph to, and could
+ * end up covering whichever node lands in that corner. */
+.flow-canvas > .react-flow {
   flex: 1;
   min-width: 0;
+  background: var(--flow-bg);
+}
+
+.flow-canvas .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: var(--flow-text-faint);
+  border: 1.5px solid var(--flow-bg);
+}
+
+.flow-canvas .react-flow__handle:hover,
+.flow-canvas .react-flow__handle-connecting {
+  background: var(--flow-accent, #7c8cff);
+}
+
+.flow-canvas .react-flow__edge-path {
+  stroke: var(--flow-text-faint);
+  stroke-width: 1.75;
+}
+
+.flow-canvas .react-flow__edge.selected .react-flow__edge-path,
+.flow-canvas .react-flow__edge:hover .react-flow__edge-path {
+  stroke: #7c8cff;
+}
+
+.flow-canvas .react-flow__connection-path {
+  stroke: #7c8cff;
+}
+
+.flow-canvas .react-flow__controls {
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1.5px solid var(--flow-border);
+}
+
+.flow-canvas .react-flow__controls-button {
+  background: var(--flow-surface);
+  border-bottom: 1px solid var(--flow-border);
+  fill: var(--flow-text-muted);
+  stroke: var(--flow-text-muted);
+}
+
+.flow-canvas .react-flow__controls-button:hover {
+  background: var(--flow-surface-hover);
+}
+
+.flow-canvas .react-flow__minimap {
+  background: var(--flow-surface);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--flow-border);
+}
+
+.flow-palette {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+  padding: 14px 10px;
+  width: 180px;
+  flex-shrink: 0;
+  background: var(--flow-surface);
+  border-right: 1.5px solid var(--flow-border);
+  overflow-y: auto;
+}
+
+.flow-palette__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--flow-text-faint);
+  margin-bottom: 2px;
+}
+
+.flow-palette__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--flow-text-muted);
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+}
+
+.flow-palette__item.is-fixed {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.flow-palette__item--add {
+  color: var(--flow-text);
+  background: var(--flow-surface-hover);
+  cursor: pointer;
+}
+
+.flow-palette__item--add:hover {
+  background: rgba(124, 140, 255, 0.18);
+}
+
+.flow-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.flow-toolbar__btn {
+  background: var(--flow-surface);
+  border-color: var(--flow-border);
+  color: var(--flow-text);
+  font-size: 12.5px;
+  padding: 6px 12px;
+}
+
+.flow-toolbar__btn:hover {
+  background: var(--flow-surface-hover);
+}
+
+.flow-save-indicator {
+  font-size: 12px;
+  color: var(--flow-text-faint);
+  min-width: 130px;
+  text-align: right;
+}
+
+.flow-save-indicator.saved {
+  color: #34d399;
+}
+
+.flow-note {
+  width: 180px;
+  min-height: 90px;
+  border-radius: var(--radius-md);
+  border: 1.5px dashed var(--flow-border);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+}
+
+.flow-note__text {
+  width: 100%;
+  height: 74px;
+  resize: none;
+  background: transparent;
+  border: none;
+  color: var(--flow-text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.flow-note__text:focus {
+  outline: none;
+}
+
+.flow-note__text::placeholder {
+  color: var(--flow-text-faint);
+}
+
+.flow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 168px;
+  min-height: 108px;
+  padding: 12px;
+  border: 1.5px solid var(--flow-border);
+  border-radius: var(--radius-md);
+  background: var(--flow-surface);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.flow-card:hover {
+  background: var(--flow-surface-hover);
+  border-color: var(--flow-accent, var(--flow-border));
+}
+
+.flow-card.is-open {
+  border-color: var(--flow-accent, #7c8cff);
+  box-shadow: 0 0 0 1px var(--flow-accent, #7c8cff);
+}
+
+.flow-card__head {
+  display: flex;
+  align-items: center;
+}
+
+.flow-card__icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.flow-card__title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--flow-text);
+}
+
+.flow-card__summary {
+  font-size: 11.5px;
+  color: var(--flow-text-muted);
+}
+
+.flow-card__preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.flow-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--flow-text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.flow-panel {
+  margin-top: 4px;
+  border-radius: var(--radius-md);
+  background: var(--flow-surface);
+  border: 1.5px solid var(--flow-border);
+  overflow: hidden;
+}
+
+.flow-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--flow-border);
+}
+
+.flow-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--flow-text);
 }
 
-.chain-item__note {
+.flow-panel__note {
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-text-faint);
+  color: var(--flow-text-faint);
 }
 
-.chain-item__summary {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
+.flow-panel__close {
+  border: none;
+  background: none;
+  color: var(--flow-text-faint);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px 8px;
 }
 
-.chain-item__caret {
-  color: var(--color-text-faint);
-  flex-shrink: 0;
+.flow-panel__close:hover {
+  color: var(--flow-text);
 }
 
-.chain-item__body {
-  padding: 0 14px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border-top: 1px solid var(--color-border);
-  padding-top: 12px;
+.flow-panel__body {
+  padding: 16px;
+  background: var(--color-bg);
 }
 
 /* --- one named question block --- */

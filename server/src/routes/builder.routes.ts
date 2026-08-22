@@ -2,7 +2,7 @@ import { Router } from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { requireAdmin, requireAuth } from "../auth/middleware.js";
+import { requireAuth, requireStaff } from "../auth/middleware.js";
 import { DuplicateWordError } from "../content.js";
 import { COURSE_MEDIA_DIR, uploadCourseMedia, WORD_AUDIO_DIR, uploadWordAudio } from "../upload.js";
 import {
@@ -26,6 +26,7 @@ import {
   reorderCourses,
   reorderLessons,
   reorderSchema,
+  reorderVocabulary,
   deleteBlock,
   reorderBlocks,
   saveBlockQuestions,
@@ -42,12 +43,13 @@ import {
 } from "../courses.js";
 
 /**
- * Course builder. Every route here sits behind requireAuth + requireAdmin, so
- * a USER token is refused no matter what the interface offers.
+ * Course builder. Every route here sits behind requireAuth + requireStaff
+ * (ADMIN or TEACHER), so a plain USER token is refused no matter what the
+ * interface offers.
  */
 export const builderRouter = Router();
 
-builderRouter.use(requireAuth, requireAdmin);
+builderRouter.use(requireAuth, requireStaff);
 
 function firstIssue(error: z.ZodError, fallback: string): string {
   return error.issues[0]?.message ?? fallback;
@@ -220,6 +222,15 @@ builderRouter.patch("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", a
 builderRouter.delete("/courses/:courseId/lessons/:lessonId/vocabulary/:wordId", async (req, res) => {
   const result = await deleteVocabularyWord(req.params.courseId, req.params.lessonId, req.params.wordId);
   if (!result) return res.status(404).json({ error: "Слово не найдено" });
+  res.json(result);
+});
+
+builderRouter.post("/courses/:courseId/lessons/:lessonId/vocabulary/reorder", async (req, res) => {
+  const parsed = reorderSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error, "Некорректный порядок") });
+
+  const result = await reorderVocabulary(req.params.courseId, req.params.lessonId, parsed.data.ids);
+  if (!result) return res.status(400).json({ error: "Список слов не совпадает с уроком" });
   res.json(result);
 });
 

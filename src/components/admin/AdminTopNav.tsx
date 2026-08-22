@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext";
 import ProfileNavLink from "../ProfileNavLink";
 
 /**
@@ -7,9 +8,13 @@ import ProfileNavLink from "../ProfileNavLink";
  * "Профиль" are always one click away instead of only appearing on whichever
  * page happened to hand-roll a link to them. `back` adds an optional
  * page-specific "← Назад к …" link before those three; `extra` adds
- * page-specific controls (e.g. a logout button) after them.
+ * page-specific controls (e.g. a logout button) after them. "Пользователи"
+ * only renders for ADMIN — a TEACHER has no access to that section (see
+ * ProtectedRoute's adminOnly), so linking to it would just dead-end at /403.
  */
 export default function AdminTopNav({ back, extra }: { back?: { label: string; to: string }; extra?: ReactNode }) {
+  const { user } = useAuth();
+
   return (
     <nav className="top-nav">
       <Link to="/" className="brand">
@@ -24,9 +29,11 @@ export default function AdminTopNav({ back, extra }: { back?: { label: string; t
         <Link to="/admin/courses" className="btn btn-ghost">
           Курсы
         </Link>
-        <Link to="/admin" className="btn btn-ghost">
-          Пользователи
-        </Link>
+        {user?.role === "ADMIN" && (
+          <Link to="/admin" className="btn btn-ghost">
+            Пользователи
+          </Link>
+        )}
         <ProfileNavLink label="Профиль" />
         {extra}
       </div>

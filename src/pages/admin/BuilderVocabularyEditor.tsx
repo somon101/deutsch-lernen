@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "../../auth/api";
 import { canSynthesize, playWord, speakGerman } from "../../lib/speech";
+import DragList from "./DragList";
 import {
   BuilderWord,
   VocabularyImportItemResult,
@@ -54,7 +55,7 @@ export default function BuilderVocabularyEditor({
   onRun: (key: string, action: () => Promise<unknown>) => Promise<void>;
 }) {
   const [rows, setRows] = useState<WordRow[]>([]);
-  const [mode, setMode] = useState<"manual" | "import">("manual");
+  const [importOpen, setImportOpen] = useState(false);
   const [newWord, setNewWord] = useState({ german: "", translation: "", pronunciation: "" });
 
   const [jsonText, setJsonText] = useState("");
@@ -108,6 +109,9 @@ export default function BuilderVocabularyEditor({
   const removeRowAudio = (row: WordRow) => {
     onRun(key(`word-audio-${row.id}`), () => wordAudioApi.remove(courseId, lessonId, row.id));
   };
+
+  const reorderRows = (ids: string[]) =>
+    onRun(key("word-reorder"), () => builderApi.reorderVocabulary(courseId, lessonId, ids));
 
   const resetImport = () => {
     setPreview(null);
@@ -171,8 +175,11 @@ export default function BuilderVocabularyEditor({
   return (
     <>
       <div className="admin-rows">
-        {rows.map((row) => (
-          <div className="admin-row builder-word-row" key={row.id}>
+        <DragList
+          items={rows}
+          onReorder={reorderRows}
+          renderItem={(row) => (
+          <div className="admin-row builder-word-row">
             <input
               placeholder="Hallo"
               value={row.german}
@@ -232,21 +239,12 @@ export default function BuilderVocabularyEditor({
               Удалить
             </button>
           </div>
-        ))}
-        {rows.length === 0 && <p className="stage-subtitle">Слов пока нет — добавьте первое ниже.</p>}
-      </div>
-
-      <div className="builder-vocab-tabs">
-        <button type="button" className={`btn ${mode === "manual" ? "btn-primary" : "btn-secondary"}`} onClick={() => setMode("manual")}>
-          Добавить слово
-        </button>
-        <button type="button" className={`btn ${mode === "import" ? "btn-primary" : "btn-secondary"}`} onClick={() => setMode("import")}>
-          Импортировать JSON
-        </button>
-      </div>
-
-      {mode === "manual" && (
-        <div className="admin-row builder-word-row">
+          )}
+        />
+        {/* Adding a word is just one more row at the end of the same list —
+            not a separate section below, so it reads as "fill in this row
+            to add a word" rather than a disconnected form. */}
+        <div className="admin-row builder-word-row builder-word-row--new">
           <input placeholder="Hallo" value={newWord.german} onChange={(e) => setNewWord((w) => ({ ...w, german: e.target.value }))} />
           <input
             placeholder="привет"
@@ -267,9 +265,14 @@ export default function BuilderVocabularyEditor({
             + Добавить слово
           </button>
         </div>
-      )}
+        {rows.length === 0 && <p className="stage-subtitle">Слов пока нет — добавьте первое выше.</p>}
+      </div>
 
-      {mode === "import" && (
+      <button type="button" className="btn btn-ghost builder-vocab-import-toggle" onClick={() => setImportOpen((o) => !o)}>
+        {importOpen ? "▾" : "▸"} Импортировать JSON
+      </button>
+
+      {importOpen && (
         <div className="builder-vocab-import">
           <div className="profile-avatar-actions">
             <label className="btn btn-secondary">
