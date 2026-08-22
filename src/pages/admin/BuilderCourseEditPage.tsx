@@ -8,9 +8,9 @@ import {
   builderApi,
   uploadCourseCover,
 } from "../../admin/builderApi";
+import BuilderLessonEditor from "./BuilderLessonEditor";
 import AdminTopNav from "../../components/admin/AdminTopNav";
 import Breadcrumbs from "../../components/admin/Breadcrumbs";
-import DragList from "./DragList";
 
 const STATUS_LABEL = { DRAFT: "Черновик", PUBLISHED: "Опубликован" } as const;
 
@@ -25,6 +25,7 @@ export default function BuilderCourseEditPage() {
   const navigate = useNavigate();
 
   const [course, setCourse] = useState<BuilderCourse | null>(null);
+  const [openLessonId, setOpenLessonId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -103,7 +104,13 @@ export default function BuilderCourseEditPage() {
     });
   };
 
-  const reorderLessons = (ids: string[]) => run("reorder", () => builderApi.reorderLessons(courseId, ids));
+  const moveLesson = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= course.lessons.length) return;
+    const ids = course.lessons.map((l) => l.id);
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    run("reorder", () => builderApi.reorderLessons(courseId, ids));
+  };
 
   const removeLesson = (lesson: BuilderLesson) => {
     if (!window.confirm(`Удалить урок «${lesson.title}» вместе со словами и вопросами?`)) return;
@@ -208,61 +215,72 @@ export default function BuilderCourseEditPage() {
               {course.lessons.length === 0 && (
                 <div className="builder-tree__empty">Уроков пока нет — добавьте первый ниже.</div>
               )}
-              <DragList
-                items={course.lessons}
-                onReorder={reorderLessons}
-                renderItem={(lesson, i) => (
-                  <div className="builder-tree__lesson">
-                    <div className="builder-tree__lesson-head">
+              {course.lessons.map((lesson, i) => (
+                <div className="builder-tree__lesson" key={lesson.id}>
+                  <div className="builder-tree__lesson-head">
+                    <button
+                      type="button"
+                      className="builder-tree__toggle"
+                      onClick={() => setOpenLessonId(openLessonId === lesson.id ? null : lesson.id)}
+                    >
+                      {openLessonId === lesson.id ? "▾" : "▸"}
+                      {/* The number comes from the position, so it stays right
+                          however the admin chooses to name the lesson. */}
+                      <span className="builder-tree__index">{i + 1}</span>
+                      {lesson.title}
+                    </button>
+                    <div className="builder-order">
+                      <button type="button" className="btn btn-ghost" onClick={() => moveLesson(i, -1)} disabled={i === 0}>
+                        ↑
+                      </button>
                       <button
                         type="button"
-                        className="builder-tree__toggle"
-                        onClick={() => navigate(`/admin/builder/${courseId}/lessons/${lesson.id}`)}
+                        className="btn btn-ghost"
+                        onClick={() => moveLesson(i, 1)}
+                        disabled={i === course.lessons.length - 1}
                       >
-                        {/* The number comes from the position, so it stays right
-                            however the admin chooses to name the lesson. */}
-                        <span className="builder-tree__index">{i + 1}</span>
-                        {lesson.title}
-                        <span className="builder-tree__open-hint">Открыть →</span>
+                        ↓
                       </button>
-                      <div className="builder-order">
-                        <button type="button" className="btn btn-ghost admin-row__remove" onClick={() => removeLesson(lesson)}>
-                          Удалить
-                        </button>
-                      </div>
+                      <button type="button" className="btn btn-ghost admin-row__remove" onClick={() => removeLesson(lesson)}>
+                        Удалить
+                      </button>
                     </div>
-
-                    <ul className="builder-tree__parts">
-                      <li className={lesson.vocabulary.length ? "" : "is-missing"}>
-                        <span>Слова</span>
-                        <span>{lesson.vocabulary.length}</span>
-                      </li>
-                      <li className={lesson.materialText ? "" : "is-missing"}>
-                        <span>Материал</span>
-                        <span>{lesson.materialText ? "заполнен" : "пусто"}</span>
-                      </li>
-                      <li className={lesson.videoUrl ? "" : "is-missing"}>
-                        <span>Видео</span>
-                        <span>{lesson.videoUrl ? "есть" : "нет"}</span>
-                      </li>
-                      <li className={lesson.audioUrl ? "" : "is-missing"}>
-                        <span>Аудио</span>
-                        <span>{lesson.audioUrl ? "есть" : "нет"}</span>
-                      </li>
-                      {(Object.keys(SET_LABELS) as QuestionSet[]).map((stage) => {
-                        const blocks = lesson.blocks.filter((b) => b.stage === stage);
-                        const n = blocks.reduce((sum, b) => sum + b.questions.length, 0);
-                        return (
-                          <li key={stage} className={blocks.length ? "" : "is-missing"}>
-                            <span>{SET_LABELS[stage]}</span>
-                            <span>{blocks.length ? `${blocks.length} бл. · ${n} вопр.` : "нет блоков"}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
                   </div>
-                )}
-              />
+
+                  <ul className="builder-tree__parts">
+                    <li className={lesson.vocabulary.length ? "" : "is-missing"}>
+                      <span>Слова</span>
+                      <span>{lesson.vocabulary.length}</span>
+                    </li>
+                    <li className={lesson.materialText ? "" : "is-missing"}>
+                      <span>Материал</span>
+                      <span>{lesson.materialText ? "заполнен" : "пусто"}</span>
+                    </li>
+                    <li className={lesson.videoUrl ? "" : "is-missing"}>
+                      <span>Видео</span>
+                      <span>{lesson.videoUrl ? "есть" : "нет"}</span>
+                    </li>
+                    <li className={lesson.audioUrl ? "" : "is-missing"}>
+                      <span>Аудио</span>
+                      <span>{lesson.audioUrl ? "есть" : "нет"}</span>
+                    </li>
+                    {(Object.keys(SET_LABELS) as QuestionSet[]).map((stage) => {
+                      const blocks = lesson.blocks.filter((b) => b.stage === stage);
+                      const n = blocks.reduce((sum, b) => sum + b.questions.length, 0);
+                      return (
+                        <li key={stage} className={blocks.length ? "" : "is-missing"}>
+                          <span>{SET_LABELS[stage]}</span>
+                          <span>{blocks.length ? `${blocks.length} бл. · ${n} вопр.` : "нет блоков"}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {openLessonId === lesson.id && (
+                    <BuilderLessonEditor courseId={courseId} lesson={lesson} busy={busy} saved={saved} onRun={run} />
+                  )}
+                </div>
+              ))}
             </div>
 
             <form className="builder-add-lesson" onSubmit={addLesson}>

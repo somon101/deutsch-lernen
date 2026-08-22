@@ -28,11 +28,6 @@ export default function Home() {
             <Link to="/courses" className="btn btn-ghost">
               Все курсы
             </Link>
-            {(user.role === "ADMIN" || user.role === "TEACHER") && (
-              <Link to="/admin/courses" className="btn btn-ghost">
-                Курсы (админ)
-              </Link>
-            )}
             {user.role === "ADMIN" && (
               <Link to="/admin" className="btn btn-ghost">
                 Admin

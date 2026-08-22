@@ -185,10 +185,9 @@ export default function AdminUserDetailPage() {
                   <select
                     value={user.role}
                     disabled={isSelf}
-                    onChange={(e) => setUser({ ...user, role: e.target.value as "ADMIN" | "TEACHER" | "USER" })}
+                    onChange={(e) => setUser({ ...user, role: e.target.value as "ADMIN" | "USER" })}
                   >
                     <option value="USER">USER</option>
-                    <option value="TEACHER">TEACHER</option>
                     <option value="ADMIN">ADMIN</option>
                   </select>
                 </label>

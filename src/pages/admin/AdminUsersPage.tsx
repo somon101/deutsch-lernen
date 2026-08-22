@@ -13,7 +13,6 @@ const emptyForm = {
   phone: "",
   username: "",
   password: "",
-  role: "USER" as "ADMIN" | "TEACHER" | "USER",
   canEditProfile: true,
 };
 
@@ -168,17 +167,6 @@ export default function AdminUsersPage() {
                     value={form.password}
                     onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                   />
-                </label>
-                <label className="auth-field">
-                  <span>Роль</span>
-                  <select
-                    value={form.role}
-                    onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "ADMIN" | "TEACHER" | "USER" }))}
-                  >
-                    <option value="USER">USER — ученик</option>
-                    <option value="TEACHER">TEACHER — преподаватель</option>
-                    <option value="ADMIN">ADMIN — администратор</option>
-                  </select>
                 </label>
               </div>
 

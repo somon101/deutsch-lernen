@@ -9,7 +9,7 @@ export interface StoredAuthUser {
   email: string;
   phone: string | null;
   username: string;
-  role: "ADMIN" | "TEACHER" | "USER";
+  role: "ADMIN" | "USER";
   status: "ACTIVE" | "BLOCKED";
   avatarUrl: string | null;
   canEditProfile: boolean;

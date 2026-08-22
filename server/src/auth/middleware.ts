@@ -49,17 +49,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-export function requireRole(...roles: Role[]) {
+export function requireRole(role: Role) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ error: "Не авторизован" });
-    if (!roles.includes(req.user.role)) return res.status(403).json({ error: "Недостаточно прав" });
+    if (req.user.role !== role) return res.status(403).json({ error: "Недостаточно прав" });
     next();
   };
 }
 
 export const requireAdmin = requireRole("ADMIN");
-/** Course/lesson content editing — everything an ADMIN can do there, a
- * TEACHER can too (see server/src/routes/builder.routes.ts and the
- * /content/* routes in admin.routes.ts). User management and system
- * settings stay requireAdmin-only. */
-export const requireStaff = requireRole("ADMIN", "TEACHER");

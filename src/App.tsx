@@ -13,8 +13,6 @@ import AdminCoursesHubPage from "./pages/admin/AdminCoursesHubPage";
 import AdminLegacyLessonsPage from "./pages/admin/AdminLegacyLessonsPage";
 import AdminLessonEditPage from "./pages/admin/AdminLessonEditPage";
 import BuilderCourseEditPage from "./pages/admin/BuilderCourseEditPage";
-import BuilderLessonEditPage from "./pages/admin/BuilderLessonEditPage";
-import ForbiddenPage from "./pages/ForbiddenPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -90,7 +88,7 @@ export default function App() {
       <Route
         path="/admin/courses"
         element={
-          <ProtectedRoute staffOnly>
+          <ProtectedRoute adminOnly>
             <AdminCoursesHubPage />
           </ProtectedRoute>
         }
@@ -98,7 +96,7 @@ export default function App() {
       <Route
         path="/admin/courses/legacy"
         element={
-          <ProtectedRoute staffOnly>
+          <ProtectedRoute adminOnly>
             <AdminLegacyLessonsPage />
           </ProtectedRoute>
         }
@@ -106,7 +104,7 @@ export default function App() {
       <Route
         path="/admin/lessons/:lessonId"
         element={
-          <ProtectedRoute staffOnly>
+          <ProtectedRoute adminOnly>
             <AdminLessonEditPage />
           </ProtectedRoute>
         }
@@ -116,16 +114,8 @@ export default function App() {
       <Route
         path="/admin/builder/:courseId"
         element={
-          <ProtectedRoute staffOnly>
+          <ProtectedRoute adminOnly>
             <BuilderCourseEditPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/builder/:courseId/lessons/:lessonId"
-        element={
-          <ProtectedRoute staffOnly>
-            <BuilderLessonEditPage />
           </ProtectedRoute>
         }
       />
@@ -137,7 +127,6 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="/403" element={<ForbiddenPage />} />
     </Routes>
   );
 }

@@ -4,22 +4,33 @@ import { ApiError, api } from "../../auth/api";
 import { invalidateLessonCache, loadLesson } from "../../content/loader";
 import { fetchContentOverrides } from "../../content/overrides";
 import { LessonContent } from "../../content/types";
-import { builderApi } from "../../admin/builderApi";
-import { legacyLayoutApi, legacyMediaApi } from "../../admin/legacyContentApi";
+import { QuestionSet, builderApi } from "../../admin/builderApi";
+import { legacyMediaApi } from "../../admin/legacyContentApi";
 import AdminTopNav from "../../components/admin/AdminTopNav";
 import Breadcrumbs from "../../components/admin/Breadcrumbs";
-import LessonChainEditor from "./LessonChainEditor";
-import { asCanvasLayout } from "./LessonFlowCanvas";
+import ChainItem from "./ChainItem";
+import LessonMediaEditor from "./LessonMediaEditor";
+import MaterialFormatGuide from "./MaterialFormatGuide";
+import BuilderVocabularyEditor from "./BuilderVocabularyEditor";
+import BuilderBlockEditor from "./BuilderBlockEditor";
+import { LESSON_CHAIN } from "./BuilderLessonEditor";
 
 /** courseId all of lesson1/lesson2's vocabulary/questions/blocks live under
  * — see content.ts's LEGACY_COURSE_ID on the server. */
 const LEGACY_COURSE_ID = "legacy";
 
+const STAGE_TITLES: Record<QuestionSet, string> = {
+  minitest: "Мини-тест",
+  practice: "Практика",
+  review: "Закрепление",
+};
+
 /**
  * Full admin editor for one of the two lessons that predate the course
  * builder (lesson1/lesson2 — file-based material/video/audio, with an
- * optional DB override layer). Deliberately reuses the exact same
- * LessonChainEditor the builder uses for brand-new courses — see
+ * optional DB override layer). Deliberately reuses the exact same editing
+ * components the builder uses for brand-new courses
+ * (BuilderVocabularyEditor, BuilderBlockEditor, LessonMediaEditor) — see
  * courses.ts's ownedLesson() helper, which is what lets those components'
  * mutations target courseId="legacy" without a Course/CourseLesson row to
  * back them. Nothing is copied into the builder's tables; the file +
@@ -30,7 +41,7 @@ export default function AdminLessonEditPage() {
 
   const [lesson, setLesson] = useState<LessonContent | null>(null);
   const [materialText, setMaterialText] = useState("");
-  const [canvasLayout, setCanvasLayout] = useState<unknown>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +79,9 @@ export default function AdminLessonEditPage() {
       }
     }
 
-    // Fetched together and applied in one setState batch — LessonFlowCanvas
-    // only reads its `savedLayout` prop on first mount, so if `lesson` (which
-    // gates that mount) turned non-null before this had resolved, the canvas
-    // would start from an empty layout and never notice the real one arrive.
-    const [content, layout] = await Promise.all([loadLesson(lessonId), legacyLayoutApi.get(lessonId).catch(() => null)]);
+    const content = await loadLesson(lessonId);
     setLesson(content);
     setMaterialText(content.materialText);
-    setCanvasLayout(layout);
   };
 
   useEffect(() => {
@@ -117,13 +123,35 @@ export default function AdminLessonEditPage() {
   }
 
   const displayTitle = lesson.title.replace(/^\p{Extended_Pictographic}\s*/u, "");
+  const blocksOf = (stage: QuestionSet) =>
+    lesson.blocks.filter((b) => b.stage === stage).sort((a, b) => a.position - b.position);
+
+  const addBlock = (stage: QuestionSet) => {
+    const n = blocksOf(stage).length + 1;
+    run(`add-${stage}`, () => builderApi.addBlock(LEGACY_COURSE_ID, lessonId, stage, `${STAGE_TITLES[stage]} ${n}`));
+  };
+
+  const moveBlock = (stage: QuestionSet, index: number, delta: number) => {
+    const ids = blocksOf(stage).map((b) => b.id);
+    const target = index + delta;
+    if (target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    run(`reorder-${stage}`, () => builderApi.reorderBlocks(LEGACY_COURSE_ID, lessonId, stage, ids));
+  };
+
+  const stageSummary = (stage: QuestionSet) => {
+    const blocks = blocksOf(stage);
+    const questions = blocks.reduce((n, b) => n + b.questions.length, 0);
+    if (blocks.length === 0) return "нет блоков — вопросы генерируются автоматически";
+    return `${blocks.length} блок(ов) · ${questions} вопросов`;
+  };
 
   return (
     <div className="app-shell">
       <AdminTopNav back={{ label: "← К урокам курса", to: "/admin/courses/legacy" }} />
 
       <main className="home-main">
-        <div className="admin-layout admin-layout--wide">
+        <div className="admin-layout">
           <Breadcrumbs
             items={[
               { label: "Курсы", to: "/admin/courses" },
@@ -142,41 +170,165 @@ export default function AdminLessonEditPage() {
               Полный доступ к редактированию этого урока — тот же редактор, что и в конструкторе курсов. Материал,
               словарь, видео, аудио и все вопросы редактируются здесь напрямую; ничего не копируется в конструктор.
             </p>
-          </section>
 
-          <LessonChainEditor
-            lessonId={lessonId}
-            courseId={LEGACY_COURSE_ID}
-            vocabulary={lesson.vocabulary.map((v) => ({
-              id: v.id,
-              german: v.german,
-              translation: v.translation,
-              pronunciation: v.pronunciation ?? null,
-              audioUrl: v.audioUrl ?? null,
-            }))}
-            materialText={materialText}
-            onMaterialChange={setMaterialText}
-            saveMaterial={() => api.put(`/api/admin/content/${encodeURIComponent(lessonId)}`, { materialText })}
-            videoUrl={lesson.assets.video?.url ?? null}
-            audioUrl={lesson.assets.audio?.url ?? null}
-            uploadMedia={(kind, file) => legacyMediaApi.upload(lessonId, kind, file)}
-            removeMedia={(kind) => legacyMediaApi.remove(lessonId, kind)}
-            blocks={lesson.blocks}
-            addBlock={(stage) => {
-              const n = lesson.blocks.filter((b) => b.stage === stage).length + 1;
-              const stageTitle = { minitest: "Мини-тест", practice: "Практика", review: "Закрепление" }[stage];
-              return builderApi.addBlock(LEGACY_COURSE_ID, lessonId, stage, `${stageTitle} ${n}`);
-            }}
-            reorderBlocks={(stage, ids) => builderApi.reorderBlocks(LEGACY_COURSE_ID, lessonId, stage, ids)}
-            canvasLayout={asCanvasLayout(canvasLayout)}
-            // Not routed through `run` — same reasoning as the builder's
-            // lesson editor: frequent, purely-visual, shouldn't trigger this
-            // page's full reload (which also re-checks vocabulary seeding).
-            saveLayout={(layout) => legacyLayoutApi.save(lessonId, layout)}
-            busy={busy}
-            saved={saved}
-            onRun={run}
-          />
+            <div className="lesson-chain">
+              {LESSON_CHAIN.map((step, i) => {
+                const open = openKey === step.key;
+                const toggle = () => setOpenKey(open ? null : step.key);
+
+                if (step.key === "vocabulary") {
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={`${lesson.vocabulary.length} слов`}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <BuilderVocabularyEditor
+                        courseId={LEGACY_COURSE_ID}
+                        lessonId={lessonId}
+                        words={lesson.vocabulary.map((v) => ({
+                          id: v.id,
+                          german: v.german,
+                          translation: v.translation,
+                          pronunciation: v.pronunciation ?? null,
+                          audioUrl: v.audioUrl ?? null,
+                        }))}
+                        busy={busy}
+                        saved={saved}
+                        onRun={run}
+                      />
+                    </ChainItem>
+                  );
+                }
+
+                if (step.key === "material") {
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={materialText ? `${materialText.length} символов` : "не заполнен"}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
+                        Текст урока в том же формате, что и раньше — заголовок, строки «Шаг 1. …» и пары «Hallo!
+                        [ха́лло] — Привет!». Он разбирается тем же способом, что и файл урока: добавить/удалить/
+                        переставить блок значит добавить/удалить/переставить строку.
+                      </p>
+                      <MaterialFormatGuide />
+                      <textarea
+                        className="admin-textarea"
+                        rows={16}
+                        value={materialText}
+                        onChange={(e) => setMaterialText(e.target.value)}
+                      />
+                      <div className="stage-footer">
+                        {saved === "material" && <span className="admin-saved">Сохранено</span>}
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy === "material"}
+                          onClick={() => run("material", () => api.put(`/api/admin/content/${encodeURIComponent(lessonId)}`, { materialText }))}
+                        >
+                          {busy === "material" ? "Сохраняем…" : "Сохранить материал"}
+                        </button>
+                      </div>
+                    </ChainItem>
+                  );
+                }
+
+                if (step.key === "video" || step.key === "audio") {
+                  const kind = step.key as "video" | "audio";
+                  const url = kind === "video" ? (lesson.assets.video?.url ?? null) : (lesson.assets.audio?.url ?? null);
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={url ? "файл загружен" : "файла нет"}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <LessonMediaEditor
+                        kind={kind}
+                        url={url}
+                        busy={busy === `media-${kind}`}
+                        onUpload={(file) => run(`media-${kind}`, () => legacyMediaApi.upload(lessonId, kind, file))}
+                        onRemove={() => run(`media-${kind}`, () => legacyMediaApi.remove(lessonId, kind))}
+                      />
+                    </ChainItem>
+                  );
+                }
+
+                if (step.key === "minitest" || step.key === "practice" || step.key === "review") {
+                  const stage = step.key as QuestionSet;
+                  return (
+                    <ChainItem
+                      key={step.key}
+                      index={i + 1}
+                      label={step.label}
+                      note={step.note}
+                      summary={stageSummary(stage)}
+                      editable
+                      open={open}
+                      onToggle={toggle}
+                    >
+                      <p className="stage-subtitle" style={{ fontSize: 13.5 }}>
+                        Этап может содержать несколько блоков — например «{STAGE_TITLES[stage]} 1» и «
+                        {STAGE_TITLES[stage]} 2». Пока блоков нет, ученик видит вопросы, сгенерированные автоматически
+                        из словаря — как и раньше.
+                      </p>
+
+                      {blocksOf(stage).map((block, bi) => (
+                        <BuilderBlockEditor
+                          key={block.id}
+                          courseId={LEGACY_COURSE_ID}
+                          lessonId={lessonId}
+                          block={block}
+                          index={bi}
+                          total={blocksOf(stage).length}
+                          busy={busy}
+                          saved={saved}
+                          onRun={run}
+                          onMove={(delta) => moveBlock(stage, bi, delta)}
+                        />
+                      ))}
+
+                      <div className="stage-footer">
+                        <button type="button" className="btn btn-secondary" onClick={() => addBlock(stage)}>
+                          + Добавить {STAGE_TITLES[stage].toLowerCase()}
+                        </button>
+                      </div>
+                    </ChainItem>
+                  );
+                }
+
+                // "Итог" is generated from the learner's results — nothing to edit.
+                return (
+                  <ChainItem
+                    key={step.key}
+                    index={i + 1}
+                    label={step.label}
+                    note={step.note}
+                    summary="считается автоматически"
+                    editable={false}
+                    open={false}
+                    onToggle={() => {}}
+                  />
+                );
+              })}
+            </div>
+          </section>
         </div>
       </main>
     </div>

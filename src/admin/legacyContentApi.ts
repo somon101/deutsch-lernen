@@ -20,14 +20,3 @@ export const legacyMediaApi = {
   remove: (lessonId: string, kind: "video" | "audio") =>
     api.delete(`/api/admin/content/${encodeURIComponent(lessonId)}/media?kind=${kind}`),
 };
-
-/** LessonFlowCanvas layout for one of the two legacy lessons — admin-only,
- * never surfaced to learners (unlike material/vocabulary, it has no
- * override-if-present fallback: it's purely the editor's own node
- * positions/edges, read straight from LessonContent.canvasLayout). */
-export const legacyLayoutApi = {
-  get: (lessonId: string) =>
-    api.get<{ content: { canvasLayout: unknown } }>(`/api/admin/content/${encodeURIComponent(lessonId)}`).then((d) => d.content.canvasLayout),
-  save: (lessonId: string, layout: unknown) =>
-    api.put(`/api/admin/content/${encodeURIComponent(lessonId)}/layout`, { layout }),
-};

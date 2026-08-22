@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
 
 /**
@@ -137,8 +136,6 @@ export interface LessonContentDTO {
   /** False when nothing has ever been saved for this lesson. */
   hasOverrides: boolean;
   updatedAt: string | null;
-  /** Saved LessonFlowCanvas layout, or null if never saved yet. */
-  canvasLayout: unknown;
 }
 
 export async function getLessonContent(lessonId: string): Promise<LessonContentDTO> {
@@ -176,7 +173,6 @@ export async function getLessonContent(lessonId: string): Promise<LessonContentD
     })),
     hasOverrides: Boolean(content) || vocabulary.length > 0 || questions.length > 0,
     updatedAt: content?.updatedAt.toISOString() ?? null,
-    canvasLayout: content?.canvasLayout ?? null,
   };
 }
 
@@ -290,18 +286,6 @@ export async function setLegacyLessonMedia(
     where: { lessonId },
     update: { [field]: url },
     create: { lessonId, [field]: url },
-  });
-  return getLessonContent(lessonId);
-}
-
-/** Saves the LessonFlowCanvas layout for a legacy lesson — same upsert
- * pattern as setLegacyLessonMedia above, and just as presentation-only
- * (accepted as opaque JSON; see LessonContentDTO.canvasLayout). */
-export async function saveLegacyCanvasLayout(lessonId: string, layout: unknown): Promise<LessonContentDTO> {
-  await prisma.lessonContent.upsert({
-    where: { lessonId },
-    update: { canvasLayout: layout as Prisma.InputJsonValue },
-    create: { lessonId, canvasLayout: layout as Prisma.InputJsonValue },
   });
   return getLessonContent(lessonId);
 }
