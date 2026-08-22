@@ -60,7 +60,7 @@ export default function AdminCoursesHubPage() {
 
   return (
     <div className="app-shell">
-      <AdminTopNav />
+      <AdminTopNav back={{ label: "← На главную", to: "/" }} />
 
       <main className="home-main">
         <div className="admin-layout">

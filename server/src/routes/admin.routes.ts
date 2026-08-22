@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, type User } from "@prisma/client";
 import { prisma } from "../db.js";
-import { requireAdmin, requireAuth } from "../auth/middleware.js";
+import { requireAdmin, requireAuth, requireStaff } from "../auth/middleware.js";
 import { hashPassword } from "../auth/hash.js";
 import { publicUser } from "../serialize.js";
 import { getProgressSummaryForUser } from "../progress.js";
@@ -50,7 +50,11 @@ async function conflictMessage(
 
 export const adminRouter = Router();
 
-adminRouter.use(requireAuth, requireAdmin);
+// User management stays ADMIN-only (see each /users* route below); course
+// content editing (mounted further down) is requireStaff — a TEACHER can
+// reach that, but not this. Applied per-route rather than once here so the
+// split is explicit and can't silently regress if a route is added later.
+adminRouter.use(requireAuth);
 
 // A user counts as "online" if lastActiveAt (refreshed on every authenticated
 // request they make — see requireAuth) falls inside this window. Kept a bit
@@ -63,7 +67,7 @@ function withOnlineStatus(user: User) {
   return { ...publicUser(user), online };
 }
 
-adminRouter.get("/users", async (_req, res) => {
+adminRouter.get("/users", requireAdmin, async (_req, res) => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
   res.json({ users: users.map(withOnlineStatus) });
 });
@@ -75,11 +79,11 @@ const createUserSchema = z.object({
   phone: z.string().optional(),
   username: usernameSchema,
   password: z.string().min(6),
-  role: z.enum(["ADMIN", "USER"]).default("USER"),
+  role: z.enum(["ADMIN", "TEACHER", "USER"]).default("USER"),
   canEditProfile: z.boolean().default(true),
 });
 
-adminRouter.post("/users", async (req, res) => {
+adminRouter.post("/users", requireAdmin, async (req, res) => {
   const parsed = createUserSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные пользователя") });
@@ -105,7 +109,7 @@ adminRouter.post("/users", async (req, res) => {
   }
 });
 
-adminRouter.get("/users/:id", async (req, res) => {
+adminRouter.get("/users/:id", requireAdmin, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Пользователь не найден" });
   res.json({ user: withOnlineStatus(user) });
@@ -117,12 +121,12 @@ const updateUserSchema = z.object({
   email: z.string().email().optional(),
   phone: z.string().optional(),
   username: usernameSchema.optional(),
-  role: z.enum(["ADMIN", "USER"]).optional(),
+  role: z.enum(["ADMIN", "TEACHER", "USER"]).optional(),
   status: z.enum(["ACTIVE", "BLOCKED"]).optional(),
   canEditProfile: z.boolean().optional(),
 });
 
-adminRouter.patch("/users/:id", async (req, res) => {
+adminRouter.patch("/users/:id", requireAdmin, async (req, res) => {
   const parsed = updateUserSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные пользователя") });
@@ -130,17 +134,19 @@ adminRouter.patch("/users/:id", async (req, res) => {
 
   // Locking yourself out is unrecoverable through the UI — an admin who
   // blocks or demotes their own account could only be restored directly in
-  // the database, so both are refused here.
+  // the database, so both are refused here. Any role other than ADMIN counts
+  // as a demotion (not just "USER") now that TEACHER also exists.
   const isSelf = req.params.id === req.user!.id;
+  const isDemotion = parsed.data.role !== undefined && parsed.data.role !== "ADMIN";
   if (isSelf && parsed.data.status === "BLOCKED") {
     return res.status(400).json({ error: "Нельзя заблокировать собственную учётную запись" });
   }
-  if (isSelf && parsed.data.role === "USER") {
+  if (isSelf && isDemotion) {
     return res.status(400).json({ error: "Нельзя снять с себя роль администратора" });
   }
 
   // Likewise, the course must never be left without a working admin.
-  if (!isSelf && (parsed.data.status === "BLOCKED" || parsed.data.role === "USER")) {
+  if (!isSelf && (parsed.data.status === "BLOCKED" || isDemotion)) {
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (target?.role === "ADMIN" && target.status === "ACTIVE") {
       const activeAdmins = await prisma.user.count({ where: { role: "ADMIN", status: "ACTIVE" } });
@@ -181,7 +187,7 @@ const resetPasswordSchema = z.object({
   newPassword: z.string().min(6),
 });
 
-adminRouter.post("/users/:id/reset-password", async (req, res) => {
+adminRouter.post("/users/:id/reset-password", requireAdmin, async (req, res) => {
   const parsed = resetPasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Пароль должен быть не короче 6 символов" });
 
@@ -199,7 +205,7 @@ adminRouter.post("/users/:id/reset-password", async (req, res) => {
   }
 });
 
-adminRouter.get("/users/:id/progress", async (req, res) => {
+adminRouter.get("/users/:id/progress", requireAdmin, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "Пользователь не найден" });
   const summary = await getProgressSummaryForUser(user.id);
@@ -208,7 +214,7 @@ adminRouter.get("/users/:id/progress", async (req, res) => {
 
 // Newest-first login history — capped at 50 so a long-lived account's page
 // never has to render an unbounded list.
-adminRouter.get("/users/:id/logins", async (req, res) => {
+adminRouter.get("/users/:id/logins", requireAdmin, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
   if (!user) return res.status(404).json({ error: "Пользователь не найден" });
   const logins = await prisma.loginEvent.findMany({
@@ -221,16 +227,16 @@ adminRouter.get("/users/:id/logins", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Course content editing. Mounted on the admin router, so requireAuth +
-// requireAdmin above already guard every route here — a USER token cannot
-// reach these no matter what the frontend shows.
+// Course content editing. requireStaff (ADMIN or TEACHER) rather than
+// requireAdmin — a TEACHER has full access to lesson content, just not to
+// user management above.
 // ---------------------------------------------------------------------------
 
-adminRouter.get("/content/:lessonId", async (req, res) => {
+adminRouter.get("/content/:lessonId", requireStaff, async (req, res) => {
   res.json({ content: await getLessonContent(req.params.lessonId) });
 });
 
-adminRouter.put("/content/:lessonId", async (req, res) => {
+adminRouter.put("/content/:lessonId", requireStaff, async (req, res) => {
   const parsed = contentPayloadSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: firstIssue(parsed.error, "Некорректные данные урока") });
@@ -252,6 +258,7 @@ const legacyMediaKindSchema = z.enum(["video", "audio"]);
 
 adminRouter.post(
   "/content/:lessonId/media",
+  requireStaff,
   uploadCourseMedia.single("file"),
   async (req, res) => {
     const kind = legacyMediaKindSchema.safeParse(req.body?.kind);
@@ -271,7 +278,7 @@ adminRouter.post(
   },
 );
 
-adminRouter.delete("/content/:lessonId/media", async (req, res) => {
+adminRouter.delete("/content/:lessonId/media", requireStaff, async (req, res) => {
   const kind = legacyMediaKindSchema.safeParse(req.query.kind);
   if (!kind.success) return res.status(400).json({ error: "Укажите тип файла: video или audio" });
 
@@ -292,7 +299,7 @@ async function findWord(lessonId: string, german: string) {
   });
 }
 
-adminRouter.post("/content/:lessonId/word-audio", uploadWordAudio.single("audio"), async (req, res) => {
+adminRouter.post("/content/:lessonId/word-audio", requireStaff, uploadWordAudio.single("audio"), async (req, res) => {
   const german = String(req.body?.german ?? "");
   if (!german) return res.status(400).json({ error: "Не указано слово" });
   if (!req.file) return res.status(400).json({ error: "Файл не получен" });
@@ -313,7 +320,7 @@ adminRouter.post("/content/:lessonId/word-audio", uploadWordAudio.single("audio"
   res.json({ german: updated.german, audioUrl: updated.audioUrl });
 });
 
-adminRouter.delete("/content/:lessonId/word-audio", async (req, res) => {
+adminRouter.delete("/content/:lessonId/word-audio", requireStaff, async (req, res) => {
   const german = String(req.query.german ?? "");
   if (!german) return res.status(400).json({ error: "Не указано слово" });
 

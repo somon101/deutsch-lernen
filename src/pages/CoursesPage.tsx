@@ -24,6 +24,11 @@ export default function CoursesPage() {
         </Link>
         {user ? (
           <div style={{ display: "flex", gap: 10 }}>
+            {(user.role === "ADMIN" || user.role === "TEACHER") && (
+              <Link to="/admin/courses" className="btn btn-ghost">
+                Курсы (админ)
+              </Link>
+            )}
             {user.role === "ADMIN" && (
               <Link to="/admin" className="btn btn-ghost">
                 Admin

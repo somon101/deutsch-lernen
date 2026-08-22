@@ -2,7 +2,7 @@ import { Router } from "express";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { requireAdmin, requireAuth } from "../auth/middleware.js";
+import { requireAuth, requireStaff } from "../auth/middleware.js";
 import { DuplicateWordError } from "../content.js";
 import { COURSE_MEDIA_DIR, uploadCourseMedia, WORD_AUDIO_DIR, uploadWordAudio } from "../upload.js";
 import {
@@ -42,12 +42,13 @@ import {
 } from "../courses.js";
 
 /**
- * Course builder. Every route here sits behind requireAuth + requireAdmin, so
- * a USER token is refused no matter what the interface offers.
+ * Course builder. Every route here sits behind requireAuth + requireStaff
+ * (ADMIN or TEACHER), so a plain USER token is refused no matter what the
+ * interface offers.
  */
 export const builderRouter = Router();
 
-builderRouter.use(requireAuth, requireAdmin);
+builderRouter.use(requireAuth, requireStaff);
 
 function firstIssue(error: z.ZodError, fallback: string): string {
   return error.issues[0]?.message ?? fallback;
