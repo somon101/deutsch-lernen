@@ -23,6 +23,11 @@ app.use(
       // Any localhost port is allowed for local dev, since Vite may pick a
       // different port if its default one is already in use.
       if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
+      // The Capacitor mobile app's bundled web content is served from these
+      // fixed origins (Android's default "https" scheme, iOS's "capacitor"
+      // scheme) — not a real internet host, so allowing them doesn't open
+      // this up to arbitrary websites.
+      if (origin === "https://localhost" || origin === "capacitor://localhost") return callback(null, true);
       if (env.corsOrigins.includes(origin)) return callback(null, true);
       callback(new Error("Not allowed by CORS"));
     },
