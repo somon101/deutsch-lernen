@@ -350,6 +350,70 @@ export async function setLessonMedia(
   return getCourse(courseId);
 }
 
+export interface MediaLibraryEntry {
+  url: string;
+  label: string;
+}
+
+/**
+ * Every video/audio file currently attached to any lesson (builder course
+ * or legacy), deduped by URL — the "library" an admin can reuse a file from
+ * instead of re-uploading the same recording to a second lesson. Like
+ * searchWordLibrary, this is just a read over data that already exists,
+ * not a separate media table.
+ */
+export async function listMediaLibrary(kind: "video" | "audio"): Promise<MediaLibraryEntry[]> {
+  const [lessons, legacyContents] = await Promise.all([
+    prisma.courseLesson.findMany({
+      where: kind === "video" ? { videoUrl: { not: null } } : { audioUrl: { not: null } },
+      select: { videoUrl: true, audioUrl: true, title: true, course: { select: { title: true } } },
+    }),
+    prisma.lessonContent.findMany({
+      where: kind === "video" ? { videoUrl: { not: null } } : { audioUrl: { not: null } },
+      select: { videoUrl: true, audioUrl: true, lessonId: true },
+    }),
+  ]);
+
+  const byUrl = new Map<string, string>();
+  for (const l of lessons) {
+    const url = kind === "video" ? l.videoUrl : l.audioUrl;
+    if (url && !byUrl.has(url)) byUrl.set(url, `${l.course.title} — ${l.title}`);
+  }
+  for (const c of legacyContents) {
+    const url = kind === "video" ? c.videoUrl : c.audioUrl;
+    if (url && !byUrl.has(url)) byUrl.set(url, `Немецкий с нуля — ${lessonLabel(c.lessonId)}`);
+  }
+  return Array.from(byUrl.entries()).map(([url, label]) => ({ url, label }));
+}
+
+/**
+ * True if some lesson OTHER than the one given still points at this media
+ * URL — checked before ever deleting the underlying file from disk, since
+ * reusing a file (see listMediaLibrary) means several lessons can now
+ * legitimately share the same physical upload. Deleting it for one would
+ * otherwise silently break playback for all the others.
+ */
+export async function mediaUrlStillInUse(
+  url: string,
+  excluding: { courseLessonId?: string; legacyLessonId?: string },
+): Promise<boolean> {
+  const [lessonCount, contentCount] = await Promise.all([
+    prisma.courseLesson.count({
+      where: {
+        OR: [{ videoUrl: url }, { audioUrl: url }],
+        ...(excluding.courseLessonId ? { id: { not: excluding.courseLessonId } } : {}),
+      },
+    }),
+    prisma.lessonContent.count({
+      where: {
+        OR: [{ videoUrl: url }, { audioUrl: url }],
+        ...(excluding.legacyLessonId ? { lessonId: { not: excluding.legacyLessonId } } : {}),
+      },
+    }),
+  ]);
+  return lessonCount + contentCount > 0;
+}
+
 export async function setCourseCover(courseId: string, url: string | null): Promise<CourseDTO | null> {
   const course = await prisma.course.findUnique({ where: { id: courseId }, select: { id: true } });
   if (!course) return null;
@@ -415,6 +479,87 @@ function clashMessage(clashes: WordClash[]): string {
     return `Это слово уже добавлено в словарь курса. Оно изучается в ${label}.`;
   }
   return `Это слово уже добавлено в словарь курса. Оно изучается в: ${clashes.map((c) => c.lessonLabel).join(", ")}.`;
+}
+
+/**
+ * Every question whose prompt matches the search text, from any block in
+ * any course — lets an admin reuse an already-written exercise instead of
+ * writing an equivalent one from scratch. Same read-over-existing-data
+ * approach as searchWordLibrary/listMediaLibrary; no separate question bank.
+ */
+export async function searchQuestionLibrary(query: string): Promise<QuestionDTO[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const rows = await prisma.lessonQuestion.findMany({
+    where: { prompt: { contains: q, mode: "insensitive" } },
+    take: 15,
+  });
+  return rows.map(toQuestionDTO);
+}
+
+export interface MaterialLibraryEntry {
+  label: string;
+  snippet: string;
+  materialText: string;
+}
+
+/**
+ * Lesson material (theory/text) whose content matches the search text, from
+ * any builder-course lesson — lets an admin reuse or start from an existing
+ * write-up instead of starting from a blank textarea. Legacy lessons
+ * (lesson1/lesson2) aren't included: their material lives in a bundled file
+ * the server has no access to unless an admin has already saved an override
+ * for it (see content.ts's LessonContentDTO comments), so there's nothing
+ * reliable to search there.
+ */
+export async function searchMaterialLibrary(query: string): Promise<MaterialLibraryEntry[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  const lessons = await prisma.courseLesson.findMany({
+    where: { materialText: { contains: q, mode: "insensitive" } },
+    select: { title: true, materialText: true, course: { select: { title: true } } },
+    take: 10,
+  });
+  return lessons.map((l) => ({
+    label: `${l.course.title} — ${l.title}`,
+    snippet: l.materialText.length > 140 ? `${l.materialText.slice(0, 140)}…` : l.materialText,
+    materialText: l.materialText,
+  }));
+}
+
+export interface WordLibraryEntry {
+  german: string;
+  translation: string;
+  pronunciation: string | null;
+}
+
+/**
+ * Every word ever entered anywhere on the platform (any course, any
+ * lesson), deduped by its normalized form and matched against the search
+ * text — the "library" an admin can pick from instead of retyping a word
+ * (and its transcription) that already exists somewhere else. Not a
+ * separate table: it's just a search over the same VocabularyItem rows
+ * everything else already uses, so it grows automatically as words are
+ * added anywhere and never needs syncing.
+ */
+export async function searchWordLibrary(query: string): Promise<WordLibraryEntry[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const rows = await prisma.vocabularyItem.findMany({
+    where: { OR: [{ german: { contains: q, mode: "insensitive" } }, { translation: { contains: q, mode: "insensitive" } }] },
+    select: { german: true, translation: true, pronunciation: true, germanKey: true },
+    orderBy: { german: "asc" },
+    take: 300,
+  });
+
+  const byKey = new Map<string, WordLibraryEntry>();
+  for (const r of rows) {
+    if (!byKey.has(r.germanKey)) {
+      byKey.set(r.germanKey, { german: r.german, translation: r.translation, pronunciation: r.pronunciation });
+    }
+  }
+  return Array.from(byKey.values()).slice(0, 20);
 }
 
 export async function addVocabularyWord(

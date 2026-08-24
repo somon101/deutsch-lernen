@@ -14,6 +14,7 @@ import {
   saveLessonContent,
   setLegacyLessonMedia,
 } from "../content.js";
+import { listMediaLibrary, mediaUrlStillInUse } from "../courses.js";
 import { uploadWordAudio, WORD_AUDIO_DIR, uploadCourseMedia, COURSE_MEDIA_DIR } from "../upload.js";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -273,10 +274,33 @@ adminRouter.post(
       kind.data,
       `/uploads/courses/${req.file.filename}`,
     );
-    if (previousUrl) fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(previousUrl))).catch(() => {});
+    // Only delete the old file if no other lesson reuses it (see
+    // listMediaLibrary) — otherwise this would silently break playback
+    // wherever else it's used.
+    if (previousUrl && !(await mediaUrlStillInUse(previousUrl, { legacyLessonId: req.params.lessonId }))) {
+      fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(previousUrl))).catch(() => {});
+    }
     res.json({ content });
   },
 );
+
+// Points this lesson at a file *already* attached to some other lesson,
+// instead of uploading a new one — see listMediaLibrary. Only ever accepts
+// a URL that lookup itself returned, so a request can't point a lesson at
+// an arbitrary path on disk.
+adminRouter.put("/content/:lessonId/media/reuse", requireStaff, async (req, res) => {
+  const kind = legacyMediaKindSchema.safeParse(req.body?.kind);
+  if (!kind.success) return res.status(400).json({ error: "Укажите тип файла: video или audio" });
+  const url = String(req.body?.url ?? "");
+
+  const library = await listMediaLibrary(kind.data);
+  if (!library.some((entry) => entry.url === url)) {
+    return res.status(400).json({ error: "Файл не найден в библиотеке" });
+  }
+
+  const content = await setLegacyLessonMedia(req.params.lessonId, kind.data, url);
+  res.json({ content });
+});
 
 adminRouter.delete("/content/:lessonId/media", requireStaff, async (req, res) => {
   const kind = legacyMediaKindSchema.safeParse(req.query.kind);
@@ -284,7 +308,9 @@ adminRouter.delete("/content/:lessonId/media", requireStaff, async (req, res) =>
 
   const existing = await getLessonContent(req.params.lessonId);
   const previousUrl = kind.data === "video" ? existing.videoUrl : existing.audioUrl;
-  if (previousUrl) fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(previousUrl))).catch(() => {});
+  if (previousUrl && !(await mediaUrlStillInUse(previousUrl, { legacyLessonId: req.params.lessonId }))) {
+    fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(previousUrl))).catch(() => {});
+  }
 
   const content = await setLegacyLessonMedia(req.params.lessonId, kind.data, null);
   res.json({ content });

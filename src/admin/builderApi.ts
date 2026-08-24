@@ -36,6 +36,29 @@ export interface VocabularyImportPreview {
   items: VocabularyImportItemResult[];
 }
 
+/** A word already entered somewhere on the platform (any course, any
+ * lesson) — see server/src/courses.ts's searchWordLibrary. */
+export interface WordLibraryEntry {
+  german: string;
+  translation: string;
+  pronunciation: string | null;
+}
+
+/** A video/audio file already attached to some lesson (any course) — see
+ * server/src/courses.ts's listMediaLibrary. */
+export interface MediaLibraryEntry {
+  url: string;
+  label: string;
+}
+
+/** Lesson material text matching a search, from some builder-course lesson
+ * — see server/src/courses.ts's searchMaterialLibrary. */
+export interface MaterialLibraryEntry {
+  label: string;
+  snippet: string;
+  materialText: string;
+}
+
 /**
  * A question authored in the builder. `kind` matches `Exercise["kind"]` in
  * src/content/exercises.ts exactly, so the learner-facing runner can map one
@@ -144,6 +167,19 @@ export const builderApi = {
       `${base}/${courseId}/lessons/${lessonId}/vocabulary/import`,
       { words },
     ),
+  // Global — not scoped to a course/lesson (mounted directly under
+  // /api/builder, not /api/builder/courses), searches every word entered
+  // anywhere so it can be reused instead of retyped. Debounced by the caller.
+  searchWordLibrary: (query: string) =>
+    api.get<{ words: WordLibraryEntry[] }>(`/api/builder/words/search?q=${encodeURIComponent(query)}`).then((d) => d.words),
+  listMediaLibrary: (kind: "video" | "audio") =>
+    api.get<{ items: MediaLibraryEntry[] }>(`/api/builder/media/library?kind=${kind}`).then((d) => d.items),
+  searchQuestions: (query: string) =>
+    api.get<{ questions: BuilderQuestion[] }>(`/api/builder/questions/search?q=${encodeURIComponent(query)}`).then((d) => d.questions),
+  searchMaterials: (query: string) =>
+    api
+      .get<{ materials: MaterialLibraryEntry[] }>(`/api/builder/materials/search?q=${encodeURIComponent(query)}`)
+      .then((d) => d.materials),
 
   addBlock: (courseId: string, lessonId: string, stage: QuestionSet, title: string) =>
     api.post(`${base}/${courseId}/lessons/${lessonId}/blocks`, { stage, title }),
@@ -165,6 +201,8 @@ export const builderApi = {
 export const builderMedia = {
   removeMedia: (courseId: string, lessonId: string, kind: "video" | "audio") =>
     api.delete(`${base}/${courseId}/lessons/${lessonId}/media?kind=${kind}`),
+  reuseMedia: (courseId: string, lessonId: string, kind: "video" | "audio", url: string) =>
+    api.put(`${base}/${courseId}/lessons/${lessonId}/media/reuse`, { kind, url }),
 };
 
 /** Multipart word-audio upload/remove — used for both real-course and

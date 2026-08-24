@@ -19,4 +19,6 @@ export const legacyMediaApi = {
   },
   remove: (lessonId: string, kind: "video" | "audio") =>
     api.delete(`/api/admin/content/${encodeURIComponent(lessonId)}/media?kind=${kind}`),
+  reuse: (lessonId: string, kind: "video" | "audio", url: string) =>
+    api.put(`/api/admin/content/${encodeURIComponent(lessonId)}/media/reuse`, { kind, url }),
 };

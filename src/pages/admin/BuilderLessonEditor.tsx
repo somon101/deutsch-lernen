@@ -6,6 +6,7 @@ import BuilderVocabularyEditor from "./BuilderVocabularyEditor";
 import LessonMediaEditor from "./LessonMediaEditor";
 import ChainItem from "./ChainItem";
 import MaterialFormatGuide from "./MaterialFormatGuide";
+import MaterialLibraryPicker from "./MaterialLibraryPicker";
 
 /**
  * The chain a learner actually walks, in the order the app runs it. Only the
@@ -178,6 +179,12 @@ export default function BuilderLessonEditor({
                 open={open}
                 onToggle={toggle}
               >
+                <MaterialLibraryPicker
+                  onPick={(text) => {
+                    if (materialText.trim() && !window.confirm("Заменить текущий текст материала найденным?")) return;
+                    setMaterialText(text);
+                  }}
+                />
                 <MaterialFormatGuide />
                 <textarea
                   className="admin-textarea"
@@ -221,6 +228,7 @@ export default function BuilderLessonEditor({
                   busy={busy === key(`media-${kind}`)}
                   onUpload={(file) => onRun(key(`media-${kind}`), () => uploadLessonMedia(courseId, lesson.id, kind, file))}
                   onRemove={() => onRun(key(`media-${kind}`), () => builderMedia.removeMedia(courseId, lesson.id, kind))}
+                  onReuse={(url) => onRun(key(`media-${kind}`), () => builderMedia.reuseMedia(courseId, lesson.id, kind, url))}
                 />
               </ChainItem>
             );

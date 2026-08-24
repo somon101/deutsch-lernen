@@ -117,16 +117,38 @@ export default function BuilderBlockEditor({
   const [questions, setQuestions] = useState<EditableQuestion[]>([]);
   const [open, setOpen] = useState(false);
 
+  // "Reuse an already-written exercise instead of writing an equivalent one
+  // from scratch" — searches every block in every course by prompt text.
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryResults, setLibraryResults] = useState<BuilderQuestion[]>([]);
+
   useEffect(() => {
     setTitle(block.title);
     setQuestions(block.questions.map(toEditable));
   }, [block]);
+
+  useEffect(() => {
+    const q = libraryQuery.trim();
+    if (q.length < 2) {
+      setLibraryResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      builderApi.searchQuestions(q).then(setLibraryResults).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [libraryQuery]);
 
   const key = (name: string) => `${name}-${block.id}`;
   const update = (qi: number, patch: (q: EditableQuestion) => EditableQuestion) =>
     setQuestions((qs) => qs.map((r, x) => (x === qi ? patch(r) : r)));
 
   const addQuestion = (kind: QuestionKind) => setQuestions((qs) => [...qs, emptyQuestion(kind)]);
+  const addExistingQuestion = (q: BuilderQuestion) => {
+    setQuestions((qs) => [...qs, toEditable(q)]);
+    setLibraryQuery("");
+    setLibraryResults([]);
+  };
 
   return (
     <div className="builder-block">
@@ -430,6 +452,32 @@ export default function BuilderBlockEditor({
               )}
             </div>
           ))}
+
+          <div className="builder-question-library">
+            <label className="auth-field">
+              <span>Найти готовое задание в других уроках</span>
+              <input
+                value={libraryQuery}
+                onChange={(e) => setLibraryQuery(e.target.value)}
+                placeholder="Начните вводить текст вопроса…"
+              />
+            </label>
+            {libraryResults.length > 0 && (
+              <div className="builder-question-library__results">
+                {libraryResults.map((q, i) => (
+                  <button
+                    type="button"
+                    key={i}
+                    className="builder-question-library__item"
+                    onClick={() => addExistingQuestion(q)}
+                  >
+                    <span className="builder-question-library__kind">{KIND_LABELS[q.kind]}</span>
+                    <span className="builder-question-library__prompt">{q.prompt}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="stage-footer split">
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

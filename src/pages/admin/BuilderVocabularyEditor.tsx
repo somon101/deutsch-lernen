@@ -6,6 +6,7 @@ import {
   VocabularyImportItemResult,
   VocabularyImportPreview,
   VocabularyImportWord,
+  WordLibraryEntry,
   builderApi,
   wordAudioApi,
 } from "../../admin/builderApi";
@@ -54,8 +55,14 @@ export default function BuilderVocabularyEditor({
   onRun: (key: string, action: () => Promise<unknown>) => Promise<void>;
 }) {
   const [rows, setRows] = useState<WordRow[]>([]);
-  const [mode, setMode] = useState<"manual" | "import">("manual");
+  const [importOpen, setImportOpen] = useState(false);
   const [newWord, setNewWord] = useState({ german: "", translation: "", pronunciation: "" });
+
+  // "Reuse a word already entered somewhere else instead of retyping it" —
+  // searches every course's vocabulary, not just this lesson's. See
+  // builderApi.searchWordLibrary / server's searchWordLibrary.
+  const [libraryResults, setLibraryResults] = useState<WordLibraryEntry[]>([]);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const [jsonText, setJsonText] = useState("");
   const [preview, setPreview] = useState<VocabularyImportPreview | null>(null);
@@ -79,6 +86,29 @@ export default function BuilderVocabularyEditor({
     if (saved === key("word-add")) setNewWord({ german: "", translation: "", pronunciation: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saved]);
+
+  useEffect(() => {
+    const q = newWord.german.trim();
+    if (q.length < 2) {
+      setLibraryResults([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      builderApi
+        .searchWordLibrary(q)
+        .then((results) => {
+          setLibraryResults(results);
+          setLibraryOpen(results.length > 0);
+        })
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [newWord.german]);
+
+  const pickLibraryWord = (entry: WordLibraryEntry) => {
+    setNewWord({ german: entry.german, translation: entry.translation, pronunciation: entry.pronunciation ?? "" });
+    setLibraryOpen(false);
+  };
 
   const addWord = () => {
     const german = newWord.german.trim();
@@ -233,21 +263,38 @@ export default function BuilderVocabularyEditor({
             </button>
           </div>
         ))}
-        {rows.length === 0 && <p className="stage-subtitle">Слов пока нет — добавьте первое ниже.</p>}
-      </div>
 
-      <div className="builder-vocab-tabs">
-        <button type="button" className={`btn ${mode === "manual" ? "btn-primary" : "btn-secondary"}`} onClick={() => setMode("manual")}>
-          Добавить слово
-        </button>
-        <button type="button" className={`btn ${mode === "import" ? "btn-primary" : "btn-secondary"}`} onClick={() => setMode("import")}>
-          Импортировать JSON
-        </button>
-      </div>
-
-      {mode === "manual" && (
-        <div className="admin-row builder-word-row">
-          <input placeholder="Hallo" value={newWord.german} onChange={(e) => setNewWord((w) => ({ ...w, german: e.target.value }))} />
+        {/* Adding a word is just one more row at the end of the same list —
+            not a separate section below, so it reads as "fill in this row
+            to add a word" rather than a disconnected form. */}
+        <div className="admin-row builder-word-row builder-word-row--new">
+          <div className="builder-word-library">
+            <input
+              placeholder="Hallo"
+              value={newWord.german}
+              onChange={(e) => setNewWord((w) => ({ ...w, german: e.target.value }))}
+              onFocus={() => libraryResults.length > 0 && setLibraryOpen(true)}
+              onBlur={() => setTimeout(() => setLibraryOpen(false), 150)}
+              autoComplete="off"
+            />
+            {libraryOpen && (
+              <div className="builder-word-library__menu">
+                <div className="builder-word-library__hint">Уже есть в другом уроке — использовать?</div>
+                {libraryResults.map((entry) => (
+                  <button
+                    type="button"
+                    key={entry.german + entry.translation}
+                    className="builder-word-library__item"
+                    // onMouseDown (not onClick) fires before the input's onBlur closes the menu.
+                    onMouseDown={() => pickLibraryWord(entry)}
+                  >
+                    <span className="builder-word-library__german">{entry.german}</span>
+                    <span className="builder-word-library__translation">{entry.translation}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <input
             placeholder="привет"
             value={newWord.translation}
@@ -267,9 +314,14 @@ export default function BuilderVocabularyEditor({
             + Добавить слово
           </button>
         </div>
-      )}
+        {rows.length === 0 && <p className="stage-subtitle">Слов пока нет — добавьте первое выше.</p>}
+      </div>
 
-      {mode === "import" && (
+      <button type="button" className="btn btn-ghost builder-vocab-import-toggle" onClick={() => setImportOpen((o) => !o)}>
+        {importOpen ? "▾" : "▸"} Импортировать JSON
+      </button>
+
+      {importOpen && (
         <div className="builder-vocab-import">
           <div className="profile-avatar-actions">
             <label className="btn btn-secondary">

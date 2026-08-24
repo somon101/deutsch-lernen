@@ -11,6 +11,7 @@ import Breadcrumbs from "../../components/admin/Breadcrumbs";
 import ChainItem from "./ChainItem";
 import LessonMediaEditor from "./LessonMediaEditor";
 import MaterialFormatGuide from "./MaterialFormatGuide";
+import MaterialLibraryPicker from "./MaterialLibraryPicker";
 import BuilderVocabularyEditor from "./BuilderVocabularyEditor";
 import BuilderBlockEditor from "./BuilderBlockEditor";
 import { LESSON_CHAIN } from "./BuilderLessonEditor";
@@ -223,6 +224,12 @@ export default function AdminLessonEditPage() {
                         [ха́лло] — Привет!». Он разбирается тем же способом, что и файл урока: добавить/удалить/
                         переставить блок значит добавить/удалить/переставить строку.
                       </p>
+                      <MaterialLibraryPicker
+                        onPick={(text) => {
+                          if (materialText.trim() && !window.confirm("Заменить текущий текст материала найденным?")) return;
+                          setMaterialText(text);
+                        }}
+                      />
                       <MaterialFormatGuide />
                       <textarea
                         className="admin-textarea"
@@ -265,6 +272,7 @@ export default function AdminLessonEditPage() {
                         busy={busy === `media-${kind}`}
                         onUpload={(file) => run(`media-${kind}`, () => legacyMediaApi.upload(lessonId, kind, file))}
                         onRemove={() => run(`media-${kind}`, () => legacyMediaApi.remove(lessonId, kind))}
+                        onReuse={(url) => run(`media-${kind}`, () => legacyMediaApi.reuse(lessonId, kind, url))}
                       />
                     </ChainItem>
                   );

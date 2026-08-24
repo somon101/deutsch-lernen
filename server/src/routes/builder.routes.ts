@@ -21,6 +21,8 @@ import {
   importVocabularyWords,
   lessonInputSchema,
   listCourses,
+  listMediaLibrary,
+  mediaUrlStillInUse,
   previewVocabularyImport,
   questionsPayloadSchema,
   reorderCourses,
@@ -30,6 +32,9 @@ import {
   reorderBlocks,
   saveBlockQuestions,
   saveLessonQuestions,
+  searchMaterialLibrary,
+  searchQuestionLibrary,
+  searchWordLibrary,
   setVocabularyWordAudio,
   updateBlock,
   updateVocabularyWord,
@@ -180,15 +185,69 @@ builderRouter.delete("/courses/:courseId/lessons/:lessonId/media", async (req, r
   if (!lesson) return res.status(404).json({ error: "Урок не найден" });
 
   const url = kind.data === "video" ? lesson.videoUrl : lesson.audioUrl;
-  if (url) fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(url))).catch(() => {});
+  // Only delete the file if no other lesson reuses it (see listMediaLibrary)
+  // — otherwise this would silently break playback wherever else it's used.
+  if (url && !(await mediaUrlStillInUse(url, { courseLessonId: req.params.lessonId }))) {
+    fs.unlink(path.join(COURSE_MEDIA_DIR, path.basename(url))).catch(() => {});
+  }
 
   const course = await setLessonMedia(req.params.courseId, req.params.lessonId, kind.data, null);
   res.json({ course });
 });
 
+// Points this lesson at a file *already* attached to some other lesson,
+// instead of uploading a new one — see listMediaLibrary. Only ever accepts
+// a URL this lookup itself returned, so a request can't point a lesson at
+// an arbitrary path on disk.
+builderRouter.put("/courses/:courseId/lessons/:lessonId/media/reuse", async (req, res) => {
+  const kind = mediaKindSchema.safeParse(req.body?.kind);
+  if (!kind.success) return res.status(400).json({ error: "Укажите тип файла: video или audio" });
+  const url = String(req.body?.url ?? "");
+
+  const library = await listMediaLibrary(kind.data);
+  if (!library.some((entry) => entry.url === url)) {
+    return res.status(400).json({ error: "Файл не найден в библиотеке" });
+  }
+
+  const course = await setLessonMedia(req.params.courseId, req.params.lessonId, kind.data, url);
+  if (!course) return res.status(404).json({ error: "Урок не найден" });
+  res.json({ course });
+});
+
 // ---------------------------------------------------------------------------
-// Lesson vocabulary and questions
+// Content library — search/list existing content so it can be reused
+// elsewhere instead of retyped or re-uploaded from scratch.
 // ---------------------------------------------------------------------------
+
+// Not scoped to a course/lesson — searches every word entered anywhere on
+// the platform, so an admin can reuse a word (and its transcription) from a
+// different course instead of retyping it. See searchWordLibrary's comment.
+builderRouter.get("/words/search", async (req, res) => {
+  const words = await searchWordLibrary(String(req.query.q ?? ""));
+  res.json({ words });
+});
+
+builderRouter.get("/media/library", async (req, res) => {
+  const kind = mediaKindSchema.safeParse(req.query.kind);
+  if (!kind.success) return res.status(400).json({ error: "Укажите тип файла: video или audio" });
+  res.json({ items: await listMediaLibrary(kind.data) });
+});
+
+// Not scoped to a course/lesson — searches every question's prompt across
+// every block in every course, so an admin can reuse an exercise instead of
+// writing an equivalent one from scratch. See searchQuestionLibrary.
+builderRouter.get("/questions/search", async (req, res) => {
+  const questions = await searchQuestionLibrary(String(req.query.q ?? ""));
+  res.json({ questions });
+});
+
+// Not scoped to a course/lesson — searches lesson material text across
+// every builder course. See searchMaterialLibrary's comment for why legacy
+// lessons aren't included.
+builderRouter.get("/materials/search", async (req, res) => {
+  const materials = await searchMaterialLibrary(String(req.query.q ?? ""));
+  res.json({ materials });
+});
 
 builderRouter.post("/courses/:courseId/lessons/:lessonId/vocabulary", async (req, res) => {
   const parsed = vocabularyWordInputSchema.safeParse(req.body);
