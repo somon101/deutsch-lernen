@@ -1,9 +1,29 @@
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { api, ApiError, assetUrl } from "../auth/api";
+import { api, ApiError } from "../auth/api";
 import { StoredAuthUser } from "../auth/tokenStore";
 import { listLessonIds, loadLesson } from "../content/loader";
+import { useTheme } from "../theme/ThemeContext";
+import ProfileHeader from "./profile/ProfileHeader";
+import StatsGrid from "./profile/StatsGrid";
+import LevelProgress from "./profile/LevelProgress";
+import AchievementsSection from "./profile/AchievementsSection";
+import RankingCard from "./profile/RankingCard";
+import WeeklyActivity from "./profile/WeeklyActivity";
+import ProfileNavList from "./profile/ProfileNavList";
+import BottomNav from "./profile/BottomNav";
+import { ProfileStats } from "./profile/types";
+import {
+  DEMO_ACHIEVEMENTS,
+  DEMO_AVG_MINUTES_PER_DAY,
+  DEMO_LEVEL,
+  DEMO_RANKING,
+  DEMO_SOCIAL,
+  DEMO_STREAK_DAYS,
+  DEMO_STUDY_MINUTES,
+  DEMO_WEEKLY_ACTIVITY,
+} from "./profile/demoData";
 
 interface LessonProgressSummary {
   lessonId: string;
@@ -19,8 +39,16 @@ interface LessonRow {
   summary: LessonProgressSummary | null;
 }
 
+// TEMPORARY: filled with src/pages/profile/demoData.ts for a visual design
+// review. None of this is computed from anything real yet — no follower/
+// streak/rating/study-time/achievement system exists (see
+// pages/profile/types.ts). Swap these back to null placeholders (or real
+// values, once each system exists) once the review is done.
+const DEMO_BIO = "Изучаю немецкий с целью свободного общения и путешествий ✈️";
+
 export default function ProfilePage() {
   const { user, logout, updateLocalUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [form, setForm] = useState({
     firstName: user?.firstName ?? "",
     lastName: user?.lastName ?? "",
@@ -57,6 +85,24 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, []);
+
+  // The one real, already-computable number in the stats grid: how far the
+  // learner has gotten weighted by score, treating an unattempted lesson as
+  // 0% rather than leaving it out of the average.
+  const overallProgressPercent = useMemo(() => {
+    if (!rows || rows.length === 0) return null;
+    const earned = rows.reduce((sum, r) => sum + (r.summary?.bestScore ?? 0), 0);
+    return Math.round(earned / rows.length);
+  }, [rows]);
+
+  const stats: ProfileStats = {
+    followers: DEMO_SOCIAL.followers,
+    mutualFollowers: DEMO_SOCIAL.mutualFollowers,
+    following: DEMO_SOCIAL.following,
+    streakDays: DEMO_STREAK_DAYS,
+    overallProgressPercent,
+    studyMinutes: DEMO_STUDY_MINUTES,
+  };
 
   if (!user) return null;
 
@@ -124,59 +170,93 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="app-shell">
-      <nav className="top-nav">
-        <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
+    <div className="app-shell profile-app-shell">
+      <header className="profile-topbar">
+        <Link to="/courses" className="profile-topbar__back" aria-label="Назад к курсам">
+          ←
         </Link>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <Link to="/courses" className="btn btn-secondary">
-            ← К курсам
-          </Link>
-          {(user.role === "ADMIN" || user.role === "TEACHER") && (
-            <Link to="/admin/courses" className="btn btn-ghost">
-              Курсы (админ)
-            </Link>
-          )}
-          {user.role === "ADMIN" && (
-            <Link to="/admin" className="btn btn-ghost">
-              Пользователи
-            </Link>
-          )}
-          <button className="btn btn-ghost" onClick={logout}>
-            Выйти
-          </button>
-        </div>
-      </nav>
-      <main className="home-main">
+        <span className="profile-topbar__title">Профиль</span>
+        <button
+          type="button"
+          className="profile-topbar__theme"
+          onClick={toggleTheme}
+          aria-label={theme === "light" ? "Включить тёмную тему" : "Включить светлую тему"}
+          title={theme === "light" ? "Тёмная тема" : "Светлая тема"}
+        >
+          {theme === "light" ? "🌙" : "☀️"}
+        </button>
+      </header>
+
+      <main className="home-main profile-main">
         <div className="profile-layout">
-          <section className="profile-card">
-            <div className="profile-avatar-row">
-              {user.avatarUrl ? (
-                <img className="profile-avatar" src={assetUrl(user.avatarUrl)} alt="" />
-              ) : (
-                <div className="profile-avatar profile-avatar--placeholder">
-                  {user.firstName[0]}
-                  {user.lastName[0]}
-                </div>
-              )}
-              <div className="profile-avatar-actions">
-                <button className="btn btn-secondary" disabled={avatarBusy} onClick={() => fileInputRef.current?.click()}>
-                  {user.avatarUrl ? "Заменить фото" : "Загрузить фото"}
-                </button>
-                {user.avatarUrl && (
-                  <button className="btn btn-ghost" disabled={avatarBusy} onClick={handleAvatarDelete}>
-                    Удалить фото
-                  </button>
-                )}
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={handleAvatarChange} />
+          <ProfileHeader
+            user={user}
+            bio={DEMO_BIO}
+            stats={stats}
+            avatarBusy={avatarBusy}
+            fileInputRef={fileInputRef}
+            onAvatarChange={handleAvatarChange}
+            onAvatarDelete={handleAvatarDelete}
+          />
+
+          <StatsGrid stats={stats} level={DEMO_LEVEL} />
+
+          <LevelProgress level={DEMO_LEVEL} />
+
+          <AchievementsSection achievements={DEMO_ACHIEVEMENTS} />
+
+          <RankingCard ranking={DEMO_RANKING} />
+
+          <WeeklyActivity days={DEMO_WEEKLY_ACTIVITY} avgMinutesPerDay={DEMO_AVG_MINUTES_PER_DAY} />
+
+          <ProfileNavList />
+
+          <section className="profile-card" id="history">
+            <div className="profile-section-head">
+              <h2 className="profile-section-head__title">История занятий</h2>
+            </div>
+            {rows === null && <p className="stage-subtitle">Загрузка…</p>}
+            {rows !== null && (
+              <div className="progress-lesson-list">
+                {rows.map((row, i) => (
+                  <div className="progress-lesson-row" key={row.lessonId}>
+                    <span className="progress-lesson-row__title">
+                      Урок {i + 1}. {row.title}
+                    </span>
+                    {row.summary ? (
+                      <span className="progress-lesson-row__stats">
+                        Лучший результат: <strong>{row.summary.bestScore}%</strong> · попыток: {row.summary.attempts} ·
+                        последняя: {row.summary.lastScore}%
+                      </span>
+                    ) : (
+                      <span className="progress-lesson-row__stats progress-lesson-row__stats--muted">Не начат</span>
+                    )}
+                  </div>
+                ))}
               </div>
+            )}
+          </section>
+
+          <section className="profile-card" id="settings">
+            <div className="profile-section-head">
+              <h2 className="profile-section-head__title">Настройки</h2>
             </div>
 
-            <h1 className="stage-title">
-              {user.firstName} {user.lastName}
-            </h1>
-            <p className="stage-subtitle">@{user.username}</p>
+            <div className="profile-quick-links">
+              {(user.role === "ADMIN" || user.role === "TEACHER") && (
+                <Link to="/admin/courses" className="btn btn-secondary">
+                  Курсы (админ)
+                </Link>
+              )}
+              {user.role === "ADMIN" && (
+                <Link to="/admin" className="btn btn-secondary">
+                  Пользователи
+                </Link>
+              )}
+              <button type="button" className="btn btn-ghost" onClick={logout}>
+                Выйти
+              </button>
+            </div>
 
             <div className="user-id-row">
               <span className="user-id-row__label">ID пользователя</span>
@@ -237,34 +317,10 @@ export default function ProfilePage() {
               )}
             </form>
           </section>
-
-          <section className="profile-card">
-            <h2 className="stage-title" style={{ fontSize: 20 }}>
-              Мой прогресс
-            </h2>
-            {rows === null && <p className="stage-subtitle">Загрузка…</p>}
-            {rows !== null && (
-              <div className="progress-lesson-list">
-                {rows.map((row, i) => (
-                  <div className="progress-lesson-row" key={row.lessonId}>
-                    <span className="progress-lesson-row__title">
-                      Урок {i + 1}. {row.title}
-                    </span>
-                    {row.summary ? (
-                      <span className="progress-lesson-row__stats">
-                        Лучший результат: <strong>{row.summary.bestScore}%</strong> · попыток: {row.summary.attempts} ·
-                        последняя: {row.summary.lastScore}%
-                      </span>
-                    ) : (
-                      <span className="progress-lesson-row__stats progress-lesson-row__stats--muted">Не начат</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
         </div>
       </main>
+
+      <BottomNav />
     </div>
   );
 }
