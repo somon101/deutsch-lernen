@@ -90,5 +90,20 @@
 
   "avatarTakePhoto": "Сделать фото",
   "avatarChooseFromGallery": "Выбрать из галереи",
-  "avatarRemovePhoto": "Удалить фото"
+  "avatarRemovePhoto": "Удалить фото",
+
+  "qrCardTitle": "Моя карточка",
+  "qrCardLevel": "Уровень",
+  "qrCardGoal": "до {level} — {percent}%",
+  "@qrCardGoal": {"placeholders": {"level": {"type": "String"}, "percent": {"type": "int"}}},
+  "qrCardMaxLevel": "Максимальный уровень",
+  "qrCardStreakLabel": "дней подряд",
+  "qrCardRankLabel": "в мире",
+  "qrCardFollowersLabel": "подписчиков",
+  "qrCardSlogan": "Your language · Your path · Your future",
+  "qrCardShare": "Поделиться",
+  "qrCardCopyId": "Скопировать ID",
+  "qrCardIdCopied": "ID скопирован",
+  "qrCardGenerating": "Создаём карточку…",
+  "qrCardShareFailed": "Не удалось поделиться карточкой"
 }

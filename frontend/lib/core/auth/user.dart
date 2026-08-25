@@ -18,6 +18,7 @@ String _roleToJson(UserRole role) => switch (role) {
 class AppUser {
   const AppUser({
     required this.id,
+    required this.publicId,
     required this.firstName,
     required this.lastName,
     required this.email,
@@ -35,6 +36,10 @@ class AppUser {
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
         id: json['id'] as String,
+        // Falls back to '' rather than throwing if an older backend
+        // deploy hasn't rolled out the publicId migration yet — the UI
+        // must never fall back to showing `id` (the raw UUID) instead.
+        publicId: json['publicId'] as String? ?? '',
         firstName: json['firstName'] as String,
         lastName: json['lastName'] as String,
         email: json['email'] as String,
@@ -51,6 +56,7 @@ class AppUser {
       );
 
   final String id;
+  final String publicId;
   final String firstName;
   final String lastName;
   final String email;
@@ -70,6 +76,7 @@ class AppUser {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+        'publicId': publicId,
         'firstName': firstName,
         'lastName': lastName,
         'email': email,

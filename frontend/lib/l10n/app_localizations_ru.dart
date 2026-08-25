@@ -246,4 +246,45 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get avatarRemovePhoto => 'Удалить фото';
+
+  @override
+  String get qrCardTitle => 'Моя карточка';
+
+  @override
+  String get qrCardLevel => 'Уровень';
+
+  @override
+  String qrCardGoal(String level, int percent) {
+    return 'до $level — $percent%';
+  }
+
+  @override
+  String get qrCardMaxLevel => 'Максимальный уровень';
+
+  @override
+  String get qrCardStreakLabel => 'дней подряд';
+
+  @override
+  String get qrCardRankLabel => 'в мире';
+
+  @override
+  String get qrCardFollowersLabel => 'подписчиков';
+
+  @override
+  String get qrCardSlogan => 'Your language · Your path · Your future';
+
+  @override
+  String get qrCardShare => 'Поделиться';
+
+  @override
+  String get qrCardCopyId => 'Скопировать ID';
+
+  @override
+  String get qrCardIdCopied => 'ID скопирован';
+
+  @override
+  String get qrCardGenerating => 'Создаём карточку…';
+
+  @override
+  String get qrCardShareFailed => 'Не удалось поделиться карточкой';
 }

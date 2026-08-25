@@ -16,6 +16,7 @@ from app.schemas.user import CreateUserRequest, ResetPasswordRequest, UpdateUser
 from app.services import courses as courses_svc
 from app.services.content import DuplicateWordError, get_lesson_content, normalize_word, save_lesson_content, set_legacy_lesson_media
 from app.services.progress import get_progress_summary_for_user
+from app.services.public_id import generate_public_id
 from app.services.serialize import with_online_status
 from app.services.username import conflict_message, normalize_username
 from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, delete_file, save_course_media, save_word_audio
@@ -37,6 +38,7 @@ async def create_user(
 ):
     username_lower = normalize_username(body.username)
     new_user = User(
+        publicId=await generate_public_id(db),
         firstName=body.firstName,
         lastName=body.lastName,
         email=body.email,

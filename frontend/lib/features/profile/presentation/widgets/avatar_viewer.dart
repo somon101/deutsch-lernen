@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/auth/online_status_provider.dart';
@@ -9,7 +10,6 @@ import '../../../../core/auth/user.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/image_crop.dart';
 import '../profile_tokens.dart';
-import 'qr_modal.dart';
 
 enum _AvatarViewMode { normal, expanded }
 
@@ -424,7 +424,7 @@ class _ExpandedBanner extends ConsumerWidget {
                           onTap: () => ref.read(themeModeProvider.notifier).toggle(),
                         ),
                         const SizedBox(width: 8),
-                        _CircleIconButton(icon: Icons.qr_code_2, onTap: () => showQrModal(context, handle: user.id)),
+                        _CircleIconButton(icon: Icons.qr_code_2, onTap: () => context.push('/profile/qr')),
                       ],
                     ),
                   ],

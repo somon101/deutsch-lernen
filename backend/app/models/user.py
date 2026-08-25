@@ -17,6 +17,10 @@ class User(Base):
     __tablename__ = "User"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    # 9-digit public-facing identifier — see schema.prisma's User.publicId
+    # comment. `id` above stays the real primary key everywhere internally;
+    # this is only ever shown to/used by end users (profile, QR card).
+    publicId: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     firstName: Mapped[str] = mapped_column(String, nullable=False)
     lastName: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)

@@ -183,9 +183,9 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
                           Text('ID', style: ProfileTypography.body(context)),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(user.id, overflow: TextOverflow.ellipsis, style: ProfileTypography.caption(context).copyWith(fontFamily: 'monospace')),
+                            child: Text(user.publicId, overflow: TextOverflow.ellipsis, style: ProfileTypography.caption(context).copyWith(fontFamily: 'monospace')),
                           ),
-                          TextButton(onPressed: () => _copyUserId(user.id), child: Text(_idCopied ? l10n.copied : l10n.copy)),
+                          TextButton(onPressed: () => _copyUserId(user.publicId), child: Text(_idCopied ? l10n.copied : l10n.copy)),
                         ],
                       ),
                     ),

@@ -23,6 +23,14 @@ enum UserStatus {
 // ever references a lessonId string, never the material itself.
 model User {
   id             String   @id @default(uuid())
+  // 9-digit public-facing identifier shown in the UI (profile, personal
+  // details, QR card) instead of the internal `id` above. `id` stays the
+  // primary key — every relation/route already depends on it — this is
+  // purely a second, cosmetic identifier. Added nullable, backfilled onto
+  // every existing row, then set NOT NULL — see the two
+  // add_public_id_nullable / public_id_not_null migrations. Every code
+  // path that creates a User must set it explicitly.
+  publicId       String   @unique
   firstName      String
   lastName       String
   email          String   @unique

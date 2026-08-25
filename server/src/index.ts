@@ -23,6 +23,11 @@ app.use(
       // Any localhost port is allowed for local dev, since Vite may pick a
       // different port if its default one is already in use.
       if (/^http:\/\/localhost:\d+$/.test(origin)) return callback(null, true);
+      // Cloudflare's free "quick tunnel" hostnames — used to expose this
+      // local dev server to a phone on a different network for ad-hoc
+      // testing. A new random subdomain each time a tunnel starts, always
+      // under this fixed, Cloudflare-owned domain.
+      if (/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(origin)) return callback(null, true);
       // The Capacitor mobile app's bundled web content is served from these
       // fixed origins (Android's default "https" scheme, iOS's "capacitor"
       // scheme) — not a real internet host, so allowing them doesn't open

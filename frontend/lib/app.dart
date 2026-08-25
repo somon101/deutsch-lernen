@@ -23,6 +23,7 @@ import 'features/courses/presentation/course_lessons_screen.dart';
 import 'features/courses/presentation/courses_screen.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/lesson_runner/presentation/lesson_runner_screen.dart';
+import 'features/profile/presentation/profile_qr_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/settings/presentation/personal_details_screen.dart';
 import 'features/settings/presentation/security_privacy_screen.dart';
@@ -127,6 +128,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/admin/users/:id',
         builder: (context, state) => AdminUserDetailScreen(userId: state.pathParameters['id']!),
       ),
+      GoRoute(path: '/profile/qr', builder: (context, state) => const ProfileQrScreen()),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/settings/personal', builder: (context, state) => const PersonalDetailsScreen()),
       GoRoute(path: '/settings/security', builder: (context, state) => const SecurityPrivacyScreen()),

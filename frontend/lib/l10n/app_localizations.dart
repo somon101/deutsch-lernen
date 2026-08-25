@@ -553,6 +553,84 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Удалить фото'**
   String get avatarRemovePhoto;
+
+  /// No description provided for @qrCardTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Моя карточка'**
+  String get qrCardTitle;
+
+  /// No description provided for @qrCardLevel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Уровень'**
+  String get qrCardLevel;
+
+  /// No description provided for @qrCardGoal.
+  ///
+  /// In ru, this message translates to:
+  /// **'до {level} — {percent}%'**
+  String qrCardGoal(String level, int percent);
+
+  /// No description provided for @qrCardMaxLevel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Максимальный уровень'**
+  String get qrCardMaxLevel;
+
+  /// No description provided for @qrCardStreakLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'дней подряд'**
+  String get qrCardStreakLabel;
+
+  /// No description provided for @qrCardRankLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'в мире'**
+  String get qrCardRankLabel;
+
+  /// No description provided for @qrCardFollowersLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'подписчиков'**
+  String get qrCardFollowersLabel;
+
+  /// No description provided for @qrCardSlogan.
+  ///
+  /// In ru, this message translates to:
+  /// **'Your language · Your path · Your future'**
+  String get qrCardSlogan;
+
+  /// No description provided for @qrCardShare.
+  ///
+  /// In ru, this message translates to:
+  /// **'Поделиться'**
+  String get qrCardShare;
+
+  /// No description provided for @qrCardCopyId.
+  ///
+  /// In ru, this message translates to:
+  /// **'Скопировать ID'**
+  String get qrCardCopyId;
+
+  /// No description provided for @qrCardIdCopied.
+  ///
+  /// In ru, this message translates to:
+  /// **'ID скопирован'**
+  String get qrCardIdCopied;
+
+  /// No description provided for @qrCardGenerating.
+  ///
+  /// In ru, this message translates to:
+  /// **'Создаём карточку…'**
+  String get qrCardGenerating;
+
+  /// No description provided for @qrCardShareFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось поделиться карточкой'**
+  String get qrCardShareFailed;
 }
 
 class _AppLocalizationsDelegate

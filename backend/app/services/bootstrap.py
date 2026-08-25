@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.hash import hash_password
 from app.models.enums import Role, UserStatus
 from app.models.user import User
+from app.services.public_id import generate_public_id
 from app.services.username import normalize_username
 
 
@@ -26,6 +27,7 @@ async def ensure_admin_exists(db: AsyncSession) -> None:
         return
 
     user = User(
+        publicId=await generate_public_id(db),
         firstName=os.environ.get("ADMIN_FIRST_NAME") or "Admin",
         lastName=os.environ.get("ADMIN_LAST_NAME") or "Admin",
         email=email,

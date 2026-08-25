@@ -72,6 +72,7 @@ class ProfileGamificationOverview {
     required this.achievements,
     required this.rank,
     required this.weeklyActivity,
+    required this.learningLanguage,
   });
 
   final SocialStats social;
@@ -81,6 +82,11 @@ class ProfileGamificationOverview {
   final List<Achievement> achievements;
   final RankInfo rank;
   final WeeklyActivity weeklyActivity;
+
+  /// Which language the user is learning — shown on the profile QR card
+  /// header ("@username · английский"). No such field exists on the
+  /// backend yet, so this lives here with the rest of the mock data.
+  final String learningLanguage;
 }
 
 class ProfileGamificationRepository {
@@ -104,6 +110,8 @@ class ProfileGamificationRepository {
           avgHoursPerDay: 4.2,
           trendPercent: 12,
         ),
+        // TODO: подключить API — учебный язык пользователя не хранится на бэкенде.
+        learningLanguage: 'английский',
       );
 }
 

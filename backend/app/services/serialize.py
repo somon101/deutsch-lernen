@@ -14,6 +14,7 @@ def public_user(user: User) -> dict:
     server/src/serialize.ts."""
     return {
         "id": user.id,
+        "publicId": user.publicId,
         "firstName": user.firstName,
         "lastName": user.lastName,
         "email": user.email,
