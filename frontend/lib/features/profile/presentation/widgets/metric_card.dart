@@ -26,15 +26,24 @@ class MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ProfileCard(
+      // Tighter than ProfileCard's 20px default — four of these need to fit
+      // across a 360px phone with room for two lines of label underneath.
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (emoji != null) Text(emoji!, style: const TextStyle(fontSize: 22)),
-          if (icon != null) Icon(icon, size: 22, color: accentColor ?? context.profileColors.accent),
-          const SizedBox(height: 8),
-          Text(value, style: ProfileTypography.bigNumber(context)),
+          if (emoji != null) Text(emoji!, style: const TextStyle(fontSize: 20)),
+          if (icon != null) Icon(icon, size: 20, color: accentColor ?? context.profileColors.accent),
+          const SizedBox(height: 6),
+          // FittedBox rather than a fixed font size: shrinks "24ч 30м"-style
+          // values that would otherwise wrap or clip in a narrow column,
+          // instead of losing characters.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, maxLines: 1, style: ProfileTypography.bigNumber(context)),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: ProfileTypography.caption(context), textAlign: TextAlign.center),
+          Text(label, style: ProfileTypography.caption(context), textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
         ],
       ),
     );

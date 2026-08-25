@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,7 @@ import '../data/profile_repository.dart';
 import 'profile_history.dart';
 import 'profile_tokens.dart';
 import 'widgets/achievement_badge.dart';
+import 'widgets/avatar_viewer.dart';
 import 'widgets/level_card.dart';
 import 'widgets/menu_list.dart';
 import 'widgets/metric_card.dart';
@@ -70,6 +72,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  /// AvatarViewer's "Изменить фото" tile — already-cropped bytes from a
+  /// direct gallery pick, no bottom-sheet choice of source.
+  Future<void> _uploadAvatarBytes(Uint8List bytes, String filename) async {
+    setState(() => _avatarBusy = true);
+    try {
+      final user = await ref.read(profileRepositoryProvider).uploadAvatar(bytes: bytes, filename: filename);
+      await ref.read(authProvider.notifier).updateLocalUser(user);
+    } catch (_) {
+      // Avatar upload failing is non-critical to the rest of the page.
+    } finally {
+      if (mounted) setState(() => _avatarBusy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).value;
@@ -83,20 +99,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: isWide ? ProfileMetrics.desktopContentMaxWidth : double.infinity),
             child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: isWide ? ProfileMetrics.pageMarginDesktop : ProfileMetrics.pageMarginMobile,
-                vertical: ProfileMetrics.pageMarginMobile,
+              padding: EdgeInsets.fromLTRB(
+                isWide ? ProfileMetrics.pageMarginDesktop : ProfileMetrics.pageMarginMobile,
+                ProfileMetrics.pageMarginMobile,
+                isWide ? ProfileMetrics.pageMarginDesktop : ProfileMetrics.pageMarginMobile,
+                ProfileMetrics.pageMarginMobile + bottomBarClearance(context),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _Header(user: user),
                   const SizedBox(height: 20),
-                  _AvatarHeader(user: user, bio: overview.bio, busy: _avatarBusy, onPick: _pickAvatar, onDelete: _deleteAvatar, isWide: isWide),
+                  AvatarViewer(
+                    user: user,
+                    avatarUrl: ref.read(apiClientProvider).assetUrl(user.avatarUrl),
+                    busy: _avatarBusy,
+                    onPick: _pickAvatar,
+                    onPicked: _uploadAvatarBytes,
+                    onDelete: _deleteAvatar,
+                    isWide: isWide,
+                  ),
                   const SizedBox(height: 20),
                   StatRow(items: [
                     StatRowItem(value: '${overview.social.followers}', label: 'Подписчики'),
@@ -164,113 +191,43 @@ class _Header extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final canPop = Navigator.of(context).canPop();
 
-    return Row(
-      children: [
-        SizedBox(
-          width: 40,
-          child: canPop
-              ? IconButton(icon: Icon(Icons.arrow_back, color: c.text), onPressed: () => Navigator.of(context).pop())
-              : null,
-        ),
-        Expanded(child: Text('Профиль', textAlign: TextAlign.center, style: ProfileTypography.sectionTitle(context))),
-        IconButton(
-          tooltip: themeMode == ThemeMode.dark ? 'Светлая тема' : 'Тёмная тема',
-          icon: Icon(themeMode == ThemeMode.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: c.text),
-          onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
-        ),
-        IconButton(
-          tooltip: 'Поделиться профилем',
-          icon: Icon(Icons.qr_code_2, color: c.text),
-          onPressed: () => showQrModal(context, handle: '@${user.username}'),
-        ),
-      ],
-    );
-  }
-}
-
-bool _isOnline(AppUser user) {
-  final raw = user.lastActiveAt;
-  if (raw == null) return false;
-  final at = DateTime.tryParse(raw);
-  if (at == null) return false;
-  return DateTime.now().toUtc().difference(at.toUtc()) < const Duration(minutes: 5);
-}
-
-class _AvatarHeader extends ConsumerWidget {
-  const _AvatarHeader({required this.user, required this.bio, required this.busy, required this.onPick, required this.onDelete, required this.isWide});
-
-  final AppUser user;
-  final String bio;
-  final bool busy;
-  final VoidCallback onPick;
-  final VoidCallback onDelete;
-  final bool isWide;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.profileColors;
-    final avatarUrl = ref.read(apiClientProvider).assetUrl(user.avatarUrl);
-    final size = isWide ? ProfileMetrics.avatarDesktop : ProfileMetrics.avatarMobile;
-    final online = _isOnline(user);
-
-    return Column(
-      children: [
-        Stack(
-          children: [
-            SizedBox(
-              width: size,
-              height: size,
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: size / 2,
-                    backgroundColor: c.card,
-                    backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                    child: avatarUrl.isEmpty
-                        ? Text(user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : '?', style: ProfileTypography.username(context))
-                        : null,
-                  ),
-                  if (busy) const Positioned.fill(child: Center(child: CircularProgressIndicator())),
-                  if (online)
-                    Positioned(
-                      right: 4,
-                      bottom: 4,
-                      child: Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(color: c.success, shape: BoxShape.circle, border: Border.all(color: c.bg, width: 2)),
-                      ),
-                    ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: GestureDetector(
-                      onTap: busy ? null : onPick,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(color: c.accent, shape: BoxShape.circle, border: Border.all(color: c.bg, width: 2)),
-                        child: const Icon(Icons.camera_alt, size: 15, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    // A Row with an empty 40px slot on the left (for a back button that
+    // usually isn't there — this is the bottom-tab root) and two full-size
+    // IconButtons on the right centers the Expanded title against
+    // mismatched side widths, visibly shifting it left. A Stack with the
+    // title truly centered — independent of what's in the side slots —
+    // fixes that regardless of which icons end up on either side.
+    return SizedBox(
+      height: 40,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Text('Профиль', style: ProfileTypography.sectionTitle(context)),
+          if (canPop)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(icon: Icon(Icons.arrow_back, color: c.text), onPressed: () => Navigator.of(context).pop()),
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text('${user.firstName} ${user.lastName}'.trim(), style: ProfileTypography.username(context)),
-        const SizedBox(height: 2),
-        Text('@${user.username}', style: ProfileTypography.body(context).copyWith(color: c.accent)),
-        const SizedBox(height: 8),
-        Text(bio, textAlign: TextAlign.center, style: ProfileTypography.body(context).copyWith(color: c.textMuted)),
-        if (user.avatarUrl != null)
-          TextButton(
-            onPressed: busy ? null : onDelete,
-            child: Text('Удалить фото', style: ProfileTypography.caption(context).copyWith(color: c.danger)),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: themeMode == ThemeMode.dark ? 'Светлая тема' : 'Тёмная тема',
+                  icon: Icon(themeMode == ThemeMode.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: c.text),
+                  onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+                ),
+                IconButton(
+                  tooltip: 'Поделиться профилем',
+                  icon: Icon(Icons.qr_code_2, color: c.text),
+                  onPressed: () => showQrModal(context, handle: '@${user.username}'),
+                ),
+              ],
+            ),
           ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -292,14 +249,29 @@ class _MetricsRow extends StatelessWidget {
       MetricCard(icon: Icons.schedule, value: '$hoursч $minutesм', label: 'Время обучения'),
       MetricCard(icon: Icons.star, accentColor: c.warning, value: overview.level.score.toStringAsFixed(1), label: 'Уровень (${overview.level.code})'),
     ];
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: ProfileMetrics.cardGap,
-      mainAxisSpacing: ProfileMetrics.cardGap,
-      childAspectRatio: 0.85,
-      children: cards,
+
+    // Row + IntrinsicHeight sizes every cell to the tallest card's actual
+    // content, unlike GridView's childAspectRatio (a guessed number that
+    // caused the original overflow — content taller than the guess just
+    // spilled past the grid's own bounds). Two columns under 480px so each
+    // card has enough width for its two-line label; four in one row above
+    // that.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = SizedBox(width: ProfileMetrics.cardGap, height: ProfileMetrics.cardGap);
+        if (constraints.maxWidth < 480) {
+          return Column(
+            children: [
+              IntrinsicHeight(child: Row(children: [Expanded(child: cards[0]), gap, Expanded(child: cards[1])])),
+              gap,
+              IntrinsicHeight(child: Row(children: [Expanded(child: cards[2]), gap, Expanded(child: cards[3])])),
+            ],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(children: [Expanded(child: cards[0]), gap, Expanded(child: cards[1]), gap, Expanded(child: cards[2]), gap, Expanded(child: cards[3])]),
+        );
+      },
     );
   }
 }

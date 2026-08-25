@@ -123,6 +123,27 @@ class ProfileMetrics {
   /// split itself matches AppShell's own rail breakpoint.
   static const desktopContentMaxWidth = 900.0;
   static const wideBreakpoint = 768.0;
+
+  /// Height of AppShell's mobile bottom tab bar (_BottomBar), not counting
+  /// the safe-area inset it adds on top via its own SafeArea. Shared here
+  /// so screens hosted inside the shell can size their own scroll padding
+  /// to it — see [bottomBarClearance].
+  static const bottomBarHeight = 60.0;
+}
+
+/// Extra bottom padding a shell-hosted scrollable screen needs so its last
+/// item isn't hidden behind AppShell's mobile bottom tab bar. Each routed
+/// screen builds its own nested Scaffold inside AppShell's `child`, and a
+/// nested Scaffold has no way to know about an ancestor Scaffold's
+/// `bottomNavigationBar` height — so this has to be added explicitly to
+/// each screen's own scroll padding, rather than relying on Flutter to
+/// account for it automatically. Just the bar's own height — the system
+/// gesture-bar/home-indicator inset underneath it is a separate concern
+/// each screen's own SafeArea already handles. Zero on wide layouts, where
+/// the bottom bar doesn't exist (AppShell shows the side rail instead).
+double bottomBarClearance(BuildContext context) {
+  final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
+  return isWide ? 0 : ProfileMetrics.bottomBarHeight;
 }
 
 /// Font is Inter per the design spec, with a system-ui fallback for when

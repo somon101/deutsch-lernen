@@ -42,6 +42,15 @@ class ResetPasswordRequest(BaseModel):
     newPassword: str = Field(min_length=6)
 
 
+class ChangePasswordRequest(BaseModel):
+    """Self-service password change — unlike ResetPasswordRequest (admin
+    resetting someone else's password, no proof of identity needed beyond
+    being an admin), this requires the caller's current password."""
+
+    currentPassword: str
+    newPassword: str = Field(min_length=6)
+
+
 class UpdateProfileRequest(BaseModel):
     firstName: str | None = Field(default=None, min_length=1)
     lastName: str | None = Field(default=None, min_length=1)

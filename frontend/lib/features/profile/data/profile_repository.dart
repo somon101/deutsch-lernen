@@ -88,6 +88,10 @@ class ProfileRepository {
     final res = await _api.deleteExpectingBody('/api/me/avatar');
     return AppUser.fromJson(res['user'] as Map<String, dynamic>);
   }
+
+  Future<void> changePassword({required String currentPassword, required String newPassword}) {
+    return _api.patch('/api/me/password', body: {'currentPassword': currentPassword, 'newPassword': newPassword});
+  }
 }
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) => ProfileRepository(ref.watch(apiClientProvider)));

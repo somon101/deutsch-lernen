@@ -65,7 +65,6 @@ class WeeklyActivity {
 
 class ProfileGamificationOverview {
   const ProfileGamificationOverview({
-    required this.bio,
     required this.social,
     required this.streakDays,
     required this.studyMinutes,
@@ -75,7 +74,6 @@ class ProfileGamificationOverview {
     required this.weeklyActivity,
   });
 
-  final String bio;
   final SocialStats social;
   final int streakDays;
   final int studyMinutes;
@@ -89,7 +87,6 @@ class ProfileGamificationRepository {
   const ProfileGamificationRepository();
 
   ProfileGamificationOverview fetchOverview() => const ProfileGamificationOverview(
-        bio: 'Изучаю язык с целью свободного общения и путешествий ✈️',
         social: SocialStats(followers: 128, mutual: 42, following: 67),
         streakDays: 17,
         studyMinutes: 24 * 60 + 30,

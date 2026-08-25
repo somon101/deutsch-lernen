@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/user.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/status_pill.dart';
+import '../../../profile/presentation/profile_tokens.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/admin_users_repository.dart';
 
@@ -41,7 +42,7 @@ class AdminUsersScreen extends ConsumerWidget {
         data: (list) => RefreshIndicator(
           onRefresh: () async => ref.invalidate(adminUsersListProvider),
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
             children: [
               Center(
                 child: ConstrainedBox(
@@ -288,7 +289,9 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
                 children: [
                   Checkbox(value: _canEditProfile, onChanged: (v) => setState(() => _canEditProfile = v ?? true)),
                   const SizedBox(width: 4),
-                  Text('Пользователь может редактировать свой профиль', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
+                  Expanded(
+                    child: Text('Пользователь может редактировать свой профиль', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
+                  ),
                 ],
               ),
             ),
@@ -313,20 +316,33 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
   }
 }
 
-/// Mirrors .auth-form-grid — 2 equal columns, 14px gap.
+/// Mirrors .auth-form-grid — 2 equal columns, 14px gap on wide layouts.
+/// Below 480px a column this narrow (plus the card's 28px padding) doesn't
+/// leave enough room for a label + input + hint without clipping, so it
+/// stacks to one column instead of forcing the 2-column grid everywhere.
 class _FieldRow extends StatelessWidget {
   const _FieldRow({required this.children});
   final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: children[0]),
-        const SizedBox(width: 14),
-        Expanded(child: children[1]),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 480) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [children[0], const SizedBox(height: 14), children[1]],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: children[0]),
+            const SizedBox(width: 14),
+            Expanded(child: children[1]),
+          ],
+        );
+      },
     );
   }
 }
@@ -372,6 +388,7 @@ class _RoleField extends StatelessWidget {
         const SizedBox(height: 6),
         DropdownButtonFormField<UserRole>(
           initialValue: value,
+          isExpanded: true,
           decoration: const InputDecoration(),
           style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.text),
           items: const [

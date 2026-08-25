@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/back_guard.dart';
 import 'courses_overview.dart';
 import 'widgets/lesson_grid_card.dart';
 
@@ -16,8 +17,13 @@ class CourseLessonsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(courseLessonsProvider(courseId));
 
-    return Scaffold(
-      appBar: AppBar(title: Text(data.value?.title ?? 'Курс')),
+    return BackGuard(
+      fallbackPath: '/courses',
+      child: Scaffold(
+      appBar: AppBar(
+        title: Text(data.value?.title ?? 'Курс'),
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/courses')),
+      ),
       body: data.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, st) => Center(child: Text('Курс не найден')),
@@ -44,6 +50,7 @@ class CourseLessonsScreen extends ConsumerWidget {
             ],
           );
         },
+      ),
       ),
     );
   }

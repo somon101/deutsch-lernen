@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
+import '../../../core/widgets/back_guard.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
@@ -32,7 +33,6 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
 
   bool _saving = false;
   String? _saveError;
-  bool _saved = false;
   bool _idCopied = false;
 
   late String _initialFirstName;
@@ -99,7 +99,6 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
     setState(() {
       _saving = true;
       _saveError = null;
-      _saved = false;
     });
     try {
       final updated = await ref.read(profileRepositoryProvider).updateProfile(
@@ -119,10 +118,12 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
         _initialUsername = _username.text;
         _initialBio = _bio.text;
         _initialBirthDate = _birthDate;
-        _saved = true;
       });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).saved)));
     } on ApiException catch (e) {
       if (mounted) setState(() => _saveError = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _saveError = e.toString());
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -138,10 +139,17 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
     final c = context.profileColors;
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/settings',
+      child: Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
-        child: Center(
+        // Align(topCenter), not Center — Center also centers vertically,
+        // which floats a short form (like this one) in the middle of the
+        // screen instead of starting it at the top. Only matters on
+        // screens whose content doesn't already fill the viewport.
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: isWide ? ProfileMetrics.desktopContentMaxWidth : double.infinity),
             child: SingleChildScrollView(
@@ -204,7 +212,12 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
                     TextFormField(
                       controller: _username,
                       enabled: user.canEditProfile,
-                      decoration: InputDecoration(labelText: l10n.personalDetailsUsername, helperText: l10n.personalDetailsUsernameHint, prefixText: '@'),
+                      decoration: InputDecoration(
+                        labelText: l10n.personalDetailsUsername,
+                        helperText: l10n.personalDetailsUsernameHint,
+                        helperMaxLines: 2,
+                        prefixText: '@',
+                      ),
                       validator: (v) => (v == null || !RegExp(_usernamePattern).hasMatch(v.trim())) ? l10n.personalDetailsUsernameInvalid : null,
                     ),
                     const SizedBox(height: 12),
@@ -230,7 +243,6 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
                     ),
                     const SizedBox(height: 8),
                     if (_saveError != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_saveError!, style: TextStyle(color: c.danger))),
-                    if (_saved) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(l10n.saved, style: TextStyle(color: c.success))),
                     if (user.canEditProfile)
                       FilledButton(
                         style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
@@ -246,6 +258,7 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

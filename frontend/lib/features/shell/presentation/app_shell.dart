@@ -186,7 +186,7 @@ class _BottomBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 60,
+          height: ProfileMetrics.bottomBarHeight,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [

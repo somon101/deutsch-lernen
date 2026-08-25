@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
+import '../../../core/widgets/back_guard.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
@@ -50,9 +51,7 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
   bool _passwordSaving = false;
 
   final _newEmail = TextEditingController();
-  final _emailCode = TextEditingController();
-  bool _emailCodeSent = false;
-  bool _emailBusy = false;
+  bool _emailSaving = false;
 
   final _newPhone = TextEditingController();
   bool _phoneSaving = false;
@@ -60,6 +59,7 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
   @override
   void initState() {
     super.initState();
+    _newEmail.addListener(() => setState(() {}));
     _newPhone.addListener(() => setState(() {}));
   }
 
@@ -69,7 +69,6 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
     _newPassword.dispose();
     _repeatPassword.dispose();
     _newEmail.dispose();
-    _emailCode.dispose();
     _newPhone.dispose();
     super.dispose();
   }
@@ -84,40 +83,38 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
     }
     setState(() => _passwordSaving = true);
     try {
-      await ref.read(securityRepositoryProvider).changePassword(currentPassword: _currentPassword.text, newPassword: _newPassword.text);
+      await ref.read(profileRepositoryProvider).changePassword(currentPassword: _currentPassword.text, newPassword: _newPassword.text);
       if (!mounted) return;
       _currentPassword.clear();
       _newPassword.clear();
       _repeatPassword.clear();
       _snack(l10n.securityPasswordChanged);
+    } catch (e) {
+      if (mounted) _snack(e.toString());
     } finally {
       if (mounted) setState(() => _passwordSaving = false);
     }
   }
 
-  Future<void> _requestEmailCode() async {
-    setState(() => _emailBusy = true);
+  Future<void> _changeEmail() async {
+    final user = ref.read(authProvider).value;
+    if (user == null) return;
+    setState(() => _emailSaving = true);
     try {
-      await ref.read(securityRepositoryProvider).requestEmailChange(_newEmail.text.trim());
-      if (mounted) setState(() => _emailCodeSent = true);
-    } finally {
-      if (mounted) setState(() => _emailBusy = false);
-    }
-  }
-
-  Future<void> _confirmEmailCode() async {
-    setState(() => _emailBusy = true);
-    try {
-      await ref.read(securityRepositoryProvider).confirmEmailChange(_emailCode.text.trim());
+      final updated = await ref.read(profileRepositoryProvider).updateProfile(
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: _newEmail.text.trim(),
+            phone: user.phone,
+          );
+      await ref.read(authProvider.notifier).updateLocalUser(updated);
       if (!mounted) return;
-      setState(() {
-        _emailCodeSent = false;
-        _newEmail.clear();
-        _emailCode.clear();
-      });
+      _newEmail.clear();
       _snack(AppLocalizations.of(context).saved);
+    } catch (e) {
+      if (mounted) _snack(e.toString());
     } finally {
-      if (mounted) setState(() => _emailBusy = false);
+      if (mounted) setState(() => _emailSaving = false);
     }
   }
 
@@ -136,6 +133,8 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
       if (!mounted) return;
       _newPhone.clear();
       _snack(AppLocalizations.of(context).saved);
+    } catch (e) {
+      if (mounted) _snack(e.toString());
     } finally {
       if (mounted) setState(() => _phoneSaving = false);
     }
@@ -188,10 +187,13 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
     final linked = ref.watch(linkedAccountsProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/settings',
+      child: Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: isWide ? ProfileMetrics.desktopContentMaxWidth : double.infinity),
             child: SingleChildScrollView(
@@ -267,17 +269,13 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
                         child: Column(
                           children: [
                             TextField(controller: _newEmail, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: l10n.securityNewEmail)),
-                            if (_emailCodeSent) ...[
-                              const SizedBox(height: 12),
-                              TextField(controller: _emailCode, decoration: InputDecoration(labelText: l10n.securityVerificationCode)),
-                            ],
                             const SizedBox(height: 16),
                             SizedBox(
                               width: double.infinity,
                               child: FilledButton(
                                 style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
-                                onPressed: _emailBusy ? null : (_emailCodeSent ? _confirmEmailCode : _requestEmailCode),
-                                child: Text(_emailCodeSent ? l10n.securityVerificationCode : l10n.securityChangeEmail),
+                                onPressed: (_emailSaving || _newEmail.text.trim().isEmpty) ? null : _changeEmail,
+                                child: Text(l10n.save),
                               ),
                             ),
                           ],
@@ -345,6 +343,7 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

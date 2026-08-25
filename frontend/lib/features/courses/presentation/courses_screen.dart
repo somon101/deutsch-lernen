@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../profile/presentation/profile_tokens.dart';
 import '../data/courses_repository.dart';
 import 'courses_overview.dart';
 import 'widgets/lesson_grid_card.dart';
@@ -24,7 +25,7 @@ class CoursesScreen extends ConsumerWidget {
         data: (data) => RefreshIndicator(
           onRefresh: () async => ref.invalidate(coursesOverviewProvider),
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
             children: [
               if (data.legacyLessons.isNotEmpty) ...[
                 Text('Немецкий с нуля', style: Theme.of(context).textTheme.titleLarge),
@@ -78,7 +79,18 @@ class _BuilderCourseCard extends ConsumerWidget {
               if (coverUrl.isNotEmpty) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(coverUrl, width: 56, height: 56, fit: BoxFit.cover),
+                  child: Image.network(
+                    coverUrl,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 56,
+                      height: 56,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: const Icon(Icons.image_not_supported_outlined, size: 20),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
               ],

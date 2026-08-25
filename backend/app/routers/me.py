@@ -4,12 +4,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require_auth
+from app.auth.hash import hash_password, verify_password
 from app.db import get_db
 from app.errors import ApiError
 from app.models.lesson_state import LessonAttempt, LessonState
 from app.models.user import User
 from app.schemas.lesson_state import AttemptRequest, LessonStateRequest
-from app.schemas.user import UpdateProfileRequest
+from app.schemas.user import ChangePasswordRequest, UpdateProfileRequest
 from app.services.lesson_state import to_dto
 from app.services.progress import AttemptInput, compute_score, get_progress_summary_for_user
 from app.services.serialize import public_user
@@ -50,6 +51,19 @@ async def update_me(
         raise ApiError(409, await conflict_message(db, changes.get("email"), username_lower, user.id))
     await db.refresh(user)
     return {"user": public_user(user)}
+
+
+@router.patch("/password")
+async def change_password(
+    body: ChangePasswordRequest,
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(body.currentPassword, user.passwordHash):
+        raise ApiError(400, "Неверный текущий пароль")
+    user.passwordHash = hash_password(body.newPassword)
+    await db.commit()
+    return {"ok": True}
 
 
 @router.post("/avatar")

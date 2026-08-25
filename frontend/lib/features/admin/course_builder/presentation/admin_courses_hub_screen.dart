@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../profile/data/profile_repository.dart';
+import '../../../profile/presentation/profile_tokens.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
 import '../domain/builder_domain.dart';
@@ -28,7 +29,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
         children: [
           Card(
             child: ListTile(
@@ -95,42 +96,67 @@ class _CourseRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final coverUrl = ref.read(apiClientProvider).assetUrl(course.coverUrl);
+    final placeholder = Container(
+      width: 48,
+      height: 48,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6)),
+      child: const Icon(Icons.image_not_supported_outlined, size: 18),
+    );
+    // Reorder/open/delete used to share one Row with the thumbnail and text
+    // — six elements wide enough that on a narrow phone the title/subtitle
+    // got squeezed. Splitting into a content row (thumbnail + text) and a
+    // separate actions row below gives each its own full-width line
+    // regardless of screen size, rather than a breakpoint hack.
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(icon: const Icon(Icons.arrow_upward), onPressed: index > 0 ? () => _reorder(ref, context, -1) : null),
-                IconButton(icon: const Icon(Icons.arrow_downward), onPressed: index < total - 1 ? () => _reorder(ref, context, 1) : null),
+                if (coverUrl.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(coverUrl, width: 48, height: 48, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => placeholder),
+                  )
+                else
+                  placeholder,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(course.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+                      if (course.description.isNotEmpty) Text(course.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      Text('${course.lessonCount} уроков · ${course.wordCount} слов · ${course.questionCount} вопросов', style: Theme.of(context).textTheme.bodySmall),
+                      Text(course.status == 'PUBLISHED' ? 'Опубликован' : 'Черновик', style: TextStyle(color: course.status == 'PUBLISHED' ? Colors.green : Colors.orange, fontSize: 12)),
+                    ],
+                  ),
+                ),
               ],
             ),
-            if (coverUrl.isNotEmpty)
-              ClipRRect(borderRadius: BorderRadius.circular(6), child: Image.network(coverUrl, width: 48, height: 48, fit: BoxFit.cover))
-            else
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6)),
-                child: const Icon(Icons.image_not_supported_outlined, size: 18),
-              ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(course.title, style: Theme.of(context).textTheme.titleMedium),
-                  if (course.description.isNotEmpty) Text(course.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  Text('${course.lessonCount} уроков · ${course.wordCount} слов · ${course.questionCount} вопросов', style: Theme.of(context).textTheme.bodySmall),
-                  Text(course.status == 'PUBLISHED' ? 'Опубликован' : 'Черновик', style: TextStyle(color: course.status == 'PUBLISHED' ? Colors.green : Colors.orange, fontSize: 12)),
-                ],
-              ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_upward),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: index > 0 ? () => _reorder(ref, context, -1) : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_downward),
+                  visualDensity: VisualDensity.compact,
+                  onPressed: index < total - 1 ? () => _reorder(ref, context, 1) : null,
+                ),
+                const Spacer(),
+                TextButton(onPressed: () => context.go('/admin/builder/${course.id}'), child: const Text('Открыть')),
+                IconButton(icon: const Icon(Icons.delete_outline), visualDensity: VisualDensity.compact, onPressed: () => _delete(ref, context)),
+              ],
             ),
-            TextButton(onPressed: () => context.go('/admin/builder/${course.id}'), child: const Text('Открыть')),
-            IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _delete(ref, context)),
           ],
         ),
       ),

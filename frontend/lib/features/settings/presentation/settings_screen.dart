@@ -7,6 +7,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/locale/locale_provider.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/widgets/back_guard.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
@@ -104,10 +105,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           onRemove: _removeAvatar,
         );
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/profile',
+      child: Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: isWide ? ProfileMetrics.desktopContentMaxWidth : double.infinity),
             child: SingleChildScrollView(
@@ -248,6 +252,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
