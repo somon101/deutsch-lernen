@@ -14,8 +14,13 @@ def _to_asyncpg_url(url: str) -> str:
     # (search_path selection) — asyncpg's connect() doesn't accept a
     # "schema" kwarg at all, so it must be stripped; the default schema is
     # already "public" on both sides, so dropping it changes nothing.
+    # Some hosts (Render among them) hand out the older "postgres://"
+    # scheme rather than "postgresql://" — SQLAlchemy only registers the
+    # asyncpg dialect under "postgresql+asyncpg", so "postgres+asyncpg"
+    # would fail to resolve at all. Normalize before appending the driver.
     parts = urlsplit(url)
-    return urlunsplit((f"{parts.scheme}+asyncpg", parts.netloc, parts.path, "", parts.fragment))
+    scheme = "postgresql" if parts.scheme == "postgres" else parts.scheme
+    return urlunsplit((f"{scheme}+asyncpg", parts.netloc, parts.path, "", parts.fragment))
 
 
 _async_url = _to_asyncpg_url(settings.database_url)

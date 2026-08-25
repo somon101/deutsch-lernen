@@ -17,6 +17,14 @@ databases:
   - name: deutsch-lernen-db
     databaseName: deutsch_lernen
     plan: free
+  # Separate database for the new Flutter/FastAPI stack below — kept apart
+  # from the React/Express service's own DB so neither deploy can disturb
+  # the other's data. Its actual content is a pg_dump/restore of the local
+  # dev database used throughout the Flutter migration (same schema, same
+  # rows — admin account, imported legacy lessons, etc.), not a fresh start.
+  - name: deutsch-lernen-fastapi-db
+    databaseName: deutsch_lernen_fastapi
+    plan: free
 
 services:
   - type: web
@@ -49,3 +57,28 @@ services:
         value: admin
       - key: ADMIN_PASSWORD
         sync: false
+
+  # New Flutter-facing backend (Python/FastAPI) — the Windows/Android app
+  # built during the migration talks to this, not the Node service above.
+  # Same free-tier caveats apply: sleeps after ~15 min idle (first request
+  # then takes ~30-50s to wake), no persistent disk (uploaded avatars/media
+  # are lost on redeploy — same limitation the old service already has).
+  - type: web
+    name: deutsch-lernen-fastapi
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: deutsch-lernen-fastapi-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://somon101.github.io
+      - key: PYTHON_VERSION
+        value: 3.12.7
