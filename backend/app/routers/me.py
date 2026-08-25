@@ -39,6 +39,8 @@ async def update_me(
 
     changes = body.model_dump(exclude_unset=True)
     username_lower = normalize_username(changes["username"]) if "username" in changes else None
+    if "birthDate" in changes:
+        changes["birthDate"] = from_iso(changes["birthDate"])
     for field, value in changes.items():
         setattr(user, field, value)
     if username_lower is not None:

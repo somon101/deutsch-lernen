@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.enums import Role, UserStatus
@@ -58,7 +56,13 @@ class UpdateProfileRequest(BaseModel):
     phone: str | None = None
     username: str | None = None
     bio: str | None = Field(default=None, max_length=150)
-    birthDate: datetime | None = None
+    # Raw ISO string, not Pydantic's `datetime` — the latter parses "...Z"
+    # into a tz-AWARE datetime, which asyncpg refuses to bind to this
+    # column's actual Postgres type ("timestamp without time zone"),
+    # raising a DataError that surfaced to users as a bare 500. Parsed with
+    # the same from_iso() every other tz-naive timestamp field in this API
+    # already goes through (see app/utils.py) — not a special case.
+    birthDate: str | None = None
 
     @field_validator("username")
     @classmethod
