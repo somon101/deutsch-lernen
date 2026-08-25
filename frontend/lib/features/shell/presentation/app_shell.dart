@@ -57,6 +57,7 @@ const _navItems = [
   _NavItem(icon: Icons.edit_note_outlined, activeIcon: Icons.edit_note, label: 'Конструктор курсов', path: '/admin/courses'),
   _NavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Пользователи', path: '/admin'),
   _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Профиль', path: '/profile'),
+  _NavItem(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Настройки', path: '/settings'),
 ];
 
 bool _visibleFor(_NavItem item, AppUser? user) {

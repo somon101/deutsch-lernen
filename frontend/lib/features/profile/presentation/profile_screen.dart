@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
@@ -15,8 +14,6 @@ import 'profile_tokens.dart';
 import 'widgets/achievement_badge.dart';
 import 'widgets/avatar_viewer.dart';
 import 'widgets/level_card.dart';
-import 'widgets/menu_list.dart';
-import 'widgets/metric_card.dart';
 import 'widgets/profile_card.dart';
 import 'widgets/qr_modal.dart';
 import 'widgets/rank_card.dart';
@@ -29,9 +26,9 @@ import 'widgets/week_activity.dart';
 /// weekly-activity sections. None of the latter has a backing system yet —
 /// see profile_gamification_repository.dart, which isolates every mock
 /// value to one file so it's a single spot to swap once real endpoints
-/// exist. Editing name/email/phone/username/bio/birth date lives in
-/// features/settings/presentation/personal_details_screen.dart, reached via
-/// the "Настройки" menu item below.
+/// exist. Editing name/email/phone/username/bio/birth date and logout both
+/// live in features/settings/presentation — this screen is read-only plus
+/// the avatar.
 ///
 /// Responsive per the design spec: <768px is one column with the app's
 /// bottom tab bar (AppShell); >=768px centers content at max 900px next to
@@ -45,7 +42,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _avatarBusy = false;
-  bool _showHistory = false;
+  bool _avatarExpanded = false;
 
   Future<void> _pickAvatar() async {
     final file = await FilePicker.pickFile(type: FileType.image);
@@ -113,8 +110,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _Header(user: user),
-                  const SizedBox(height: 20),
+                  if (!_avatarExpanded) ...[
+                    _Header(user: user),
+                    const SizedBox(height: 20),
+                  ],
                   AvatarViewer(
                     user: user,
                     avatarUrl: ref.read(apiClientProvider).assetUrl(user.avatarUrl),
@@ -123,6 +122,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     onPicked: _uploadAvatarBytes,
                     onDelete: _deleteAvatar,
                     isWide: isWide,
+                    onExpandedChanged: (expanded) => setState(() => _avatarExpanded = expanded),
                   ),
                   const SizedBox(height: 20),
                   StatRow(items: [
@@ -154,22 +154,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   RankCard(rank: overview.rank),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   WeekActivityCard(activity: overview.weeklyActivity),
-                  const SizedBox(height: 24),
-                  Text('Разделы', style: ProfileTypography.sectionTitle(context)),
-                  const SizedBox(height: 12),
-                  MenuList(items: [
-                    MenuListItem(icon: Icons.menu_book_outlined, label: 'Мои курсы', onTap: () => context.go('/courses')),
-                    MenuListItem(icon: Icons.bookmark_border, label: 'Словарь', onTap: () {}),
-                    MenuListItem(icon: Icons.star_border, label: 'Избранное', onTap: () {}),
-                    MenuListItem(icon: Icons.history, label: 'История занятий', onTap: () => setState(() => _showHistory = !_showHistory)),
-                    MenuListItem(icon: Icons.settings_outlined, label: 'Настройки', onTap: () => context.go('/settings')),
-                  ]),
-                  if (_showHistory) ...[
-                    const SizedBox(height: 24),
-                    _HistorySection(history: history),
-                  ],
-                  const SizedBox(height: 24),
-                  _LogoutRow(),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -221,7 +205,7 @@ class _Header extends ConsumerWidget {
                 IconButton(
                   tooltip: 'Поделиться профилем',
                   icon: Icon(Icons.qr_code_2, color: c.text),
-                  onPressed: () => showQrModal(context, handle: '@${user.username}'),
+                  onPressed: () => showQrModal(context, handle: user.id),
                 ),
               ],
             ),
@@ -232,6 +216,10 @@ class _Header extends ConsumerWidget {
   }
 }
 
+/// One compact card, 4 columns in a single row always (not 2x2) — icon,
+/// then value, then a short one-line label. FittedBox on both value and
+/// label (not maxLines/ellipsis) so a long value like "24ч 30м" shrinks to
+/// fit a narrow column instead of wrapping or clipping, down to 360px.
 class _MetricsRow extends StatelessWidget {
   const _MetricsRow({required this.overview, required this.progressPercent});
 
@@ -243,35 +231,64 @@ class _MetricsRow extends StatelessWidget {
     final c = context.profileColors;
     final hours = overview.studyMinutes ~/ 60;
     final minutes = overview.studyMinutes % 60;
-    final cards = [
-      MetricCard(emoji: '🔥', value: '${overview.streakDays}', label: 'дней подряд\nСерия'),
-      MetricCard(icon: Icons.trending_up, accentColor: c.success, value: progressPercent == null ? '—' : '$progressPercent%', label: 'Общий прогресс'),
-      MetricCard(icon: Icons.schedule, value: '$hoursч $minutesм', label: 'Время обучения'),
-      MetricCard(icon: Icons.star, accentColor: c.warning, value: overview.level.score.toStringAsFixed(1), label: 'Уровень (${overview.level.code})'),
+    final items = [
+      (emoji: '🔥', icon: null, color: null, value: '${overview.streakDays}', label: 'Серия'),
+      (
+        emoji: null,
+        icon: Icons.trending_up,
+        color: c.success,
+        value: progressPercent == null ? '—' : '$progressPercent%',
+        label: 'Прогресс',
+      ),
+      (emoji: null, icon: Icons.schedule, color: c.accent, value: '$hoursч $minutesм', label: 'Время'),
+      (emoji: null, icon: Icons.star, color: c.warning, value: overview.level.score.toStringAsFixed(1), label: 'Уровень'),
     ];
 
-    // Row + IntrinsicHeight sizes every cell to the tallest card's actual
-    // content, unlike GridView's childAspectRatio (a guessed number that
-    // caused the original overflow — content taller than the guess just
-    // spilled past the grid's own bounds). Two columns under 480px so each
-    // card has enough width for its two-line label; four in one row above
-    // that.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = SizedBox(width: ProfileMetrics.cardGap, height: ProfileMetrics.cardGap);
-        if (constraints.maxWidth < 480) {
-          return Column(
-            children: [
-              IntrinsicHeight(child: Row(children: [Expanded(child: cards[0]), gap, Expanded(child: cards[1])])),
-              gap,
-              IntrinsicHeight(child: Row(children: [Expanded(child: cards[2]), gap, Expanded(child: cards[3])])),
+    return ProfileCard(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              if (i > 0) VerticalDivider(width: 1, color: c.border, indent: 4, endIndent: 4),
+              Expanded(
+                child: _MetricColumn(
+                  emoji: items[i].emoji,
+                  icon: items[i].icon,
+                  color: items[i].color,
+                  value: items[i].value,
+                  label: items[i].label,
+                ),
+              ),
             ],
-          );
-        }
-        return IntrinsicHeight(
-          child: Row(children: [Expanded(child: cards[0]), gap, Expanded(child: cards[1]), gap, Expanded(child: cards[2]), gap, Expanded(child: cards[3])]),
-        );
-      },
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricColumn extends StatelessWidget {
+  const _MetricColumn({this.emoji, this.icon, this.color, required this.value, required this.label});
+
+  final String? emoji;
+  final IconData? icon;
+  final Color? color;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (emoji != null) Text(emoji!, style: const TextStyle(fontSize: 18)),
+        if (icon != null) Icon(icon, size: 18, color: color ?? context.profileColors.accent),
+        const SizedBox(height: 4),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(value, maxLines: 1, style: ProfileTypography.bigNumber(context))),
+        const SizedBox(height: 2),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(label, maxLines: 1, style: ProfileTypography.caption(context))),
+      ],
     );
   }
 }
@@ -303,72 +320,3 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _HistorySection extends StatelessWidget {
-  const _HistorySection({required this.history});
-
-  final AsyncValue<ProfileHistoryData> history;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.profileColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('История занятий', style: ProfileTypography.sectionTitle(context)),
-        const SizedBox(height: 8),
-        history.when(
-          loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-          error: (err, st) => Text('Не удалось загрузить: $err', style: ProfileTypography.body(context)),
-          data: (data) => data.rows.isEmpty
-              ? Text('Пока нет уроков.', style: ProfileTypography.body(context))
-              : ProfileCard(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < data.rows.length; i++) ...[
-                        if (i > 0) Divider(height: 1, color: c.border),
-                        _LessonHistoryTile(index: i, row: data.rows[i]),
-                      ],
-                    ],
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LessonHistoryTile extends StatelessWidget {
-  const _LessonHistoryTile({required this.index, required this.row});
-
-  final int index;
-  final LessonHistoryRow row;
-
-  @override
-  Widget build(BuildContext context) {
-    final summary = row.summary;
-    return ListTile(
-      title: Text('Урок ${index + 1}. ${row.title}', style: ProfileTypography.body(context)),
-      subtitle: Text(
-        summary == null
-            ? 'Не начат'
-            : 'Лучший результат: ${summary.bestScore}% · попыток: ${summary.attempts} · последняя: ${summary.lastScore}%',
-        style: ProfileTypography.caption(context),
-      ),
-    );
-  }
-}
-
-class _LogoutRow extends ConsumerWidget {
-  const _LogoutRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final c = context.profileColors;
-    return OutlinedButton(
-      style: OutlinedButton.styleFrom(foregroundColor: c.danger, side: BorderSide(color: c.border)),
-      onPressed: () => ref.read(authProvider.notifier).logout(),
-      child: const Text('Выйти'),
-    );
-  }
-}

@@ -9,6 +9,7 @@ import 'core/auth/user.dart';
 import 'core/locale/locale_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
+import 'core/widgets/app_lifecycle_heartbeat.dart';
 import 'l10n/app_localizations.dart';
 import 'features/admin/course_builder/presentation/admin_courses_hub_screen.dart';
 import 'features/admin/course_builder/presentation/builder_course_edit_screen.dart';
@@ -156,6 +157,7 @@ class DeutschLernenApp extends ConsumerWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => AppLifecycleHeartbeat(child: child!),
       routerConfig: router,
     );
   }

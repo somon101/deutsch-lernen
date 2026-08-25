@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/auth/online_status_provider.dart';
 import '../../../../core/auth/user.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/image_crop.dart';
@@ -12,13 +13,58 @@ import 'qr_modal.dart';
 
 enum _AvatarViewMode { normal, expanded }
 
+/// Tap + vertical-swipe detection for a widget that lives inside a
+/// SingleChildScrollView. A plain GestureDetector's onVerticalDragEnd would
+/// almost never fire here — the ancestor Scrollable wins the gesture arena
+/// for vertical drags before this widget's own pan recognizer gets a
+/// chance. Listener sidesteps that: it receives every raw pointer event
+/// that hits it regardless of which higher-level gesture recognizer "wins"
+/// the arena, so a manual start/end position comparison reliably detects
+/// the swipe. Tap keeps using GestureDetector, which negotiates fine on
+/// its own (a tap has no ancestor competing for it).
+class _SwipeArea extends StatefulWidget {
+  const _SwipeArea({required this.onTap, required this.onVerticalSwipe, required this.child});
+
+  final VoidCallback onTap;
+
+  /// Positive = swiped down, negative = swiped up.
+  final ValueChanged<double> onVerticalSwipe;
+  final Widget child;
+
+  @override
+  State<_SwipeArea> createState() => _SwipeAreaState();
+}
+
+class _SwipeAreaState extends State<_SwipeArea> {
+  double? _startY;
+  static const _threshold = 40.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (event) => _startY = event.position.dy,
+      onPointerUp: (event) {
+        final start = _startY;
+        _startY = null;
+        if (start == null) return;
+        final dy = event.position.dy - start;
+        if (dy.abs() > _threshold) widget.onVerticalSwipe(dy);
+      },
+      child: GestureDetector(onTap: widget.onTap, child: widget.child),
+    );
+  }
+}
+
 /// The Telegram-style avatar area at the top of the profile screen: a small
-/// circular photo by default (state 1), a full-width banner with overlaid
-/// controls on tap or swipe-down (state 2), and — one more tap/swipe — a
-/// true full-screen pinch-zoomable viewer pushed via [_FullscreenAvatarRoute]
-/// (state 3, Hero-linked back to state 2's photo). Only reachable when the
-/// user actually has a photo; with none, tapping just uploads one, same as
-/// before this existed.
+/// circular photo by default (state 1), a full-width banner with controls
+/// overlaid *on* the photo on tap or swipe-down (state 2, swipe-up to
+/// collapse back), and — one more tap on the photo — a true full-screen
+/// pinch-zoomable viewer (state 3, Hero-linked back to state 2's photo).
+///
+/// [onExpandedChanged] lets the parent screen hide its own header while
+/// state 2 is showing — that header has its own theme/QR icons, which
+/// would otherwise be duplicated by this widget's overlay controls.
 class AvatarViewer extends ConsumerStatefulWidget {
   const AvatarViewer({
     super.key,
@@ -29,6 +75,7 @@ class AvatarViewer extends ConsumerStatefulWidget {
     required this.onPicked,
     required this.onDelete,
     required this.isWide,
+    required this.onExpandedChanged,
   });
 
   final AppUser user;
@@ -39,12 +86,13 @@ class AvatarViewer extends ConsumerStatefulWidget {
   /// its own bottom-sheet choice of source).
   final VoidCallback onPick;
 
-  /// Has-photo state, "Изменить фото" tile: picks straight from the
-  /// gallery, no intermediate sheet, and hands the cropped bytes back.
+  /// Has-photo state, the change-photo overlay icon: picks straight from
+  /// the gallery, no intermediate sheet, and hands the cropped bytes back.
   final Future<void> Function(Uint8List bytes, String filename) onPicked;
 
   final VoidCallback onDelete;
   final bool isWide;
+  final ValueChanged<bool> onExpandedChanged;
 
   @override
   ConsumerState<AvatarViewer> createState() => _AvatarViewerState();
@@ -53,11 +101,29 @@ class AvatarViewer extends ConsumerStatefulWidget {
 class _AvatarViewerState extends ConsumerState<AvatarViewer> {
   _AvatarViewMode _mode = _AvatarViewMode.normal;
 
-  bool get _hasPhoto => widget.avatarUrl.isNotEmpty;
+  // Render.com's free tier has no persistent disk — uploaded avatars can
+  // vanish from the filesystem on a redeploy while the DB still has the old
+  // URL. Rather than let that show as a blank/broken image, a load failure
+  // here demotes straight to "no photo" (initials circle, states 2/3
+  // unreachable) exactly like a genuinely missing avatarUrl would.
+  bool _loadFailed = false;
+
+  bool get _hasPhoto => widget.avatarUrl.isNotEmpty && !_loadFailed;
   String get _heroTag => 'avatar-${widget.user.id}';
 
-  void _expand() => setState(() => _mode = _AvatarViewMode.expanded);
-  void _collapse() => setState(() => _mode = _AvatarViewMode.normal);
+  void _setMode(_AvatarViewMode mode) {
+    setState(() => _mode = mode);
+    widget.onExpandedChanged(mode == _AvatarViewMode.expanded);
+  }
+
+  void _expand() => _setMode(_AvatarViewMode.expanded);
+  void _collapse() => _setMode(_AvatarViewMode.normal);
+
+  void _onImageError() {
+    if (_loadFailed) return;
+    setState(() => _loadFailed = true);
+    widget.onExpandedChanged(false);
+  }
 
   Future<void> _openFullscreen() async {
     await Navigator.of(context).push(_FullscreenAvatarRoute(imageUrl: widget.avatarUrl, heroTag: _heroTag));
@@ -75,14 +141,16 @@ class _AvatarViewerState extends ConsumerState<AvatarViewer> {
     }
   }
 
-  void _handleVerticalDragEnd(DragEndDetails details) {
-    if (!_hasPhoto) return;
-    final velocity = details.primaryVelocity ?? 0;
-    if (velocity <= 200) return; // downward drag only
+  /// Positive [dy] = swiped down, negative = swiped up (see _SwipeArea —
+  /// raw pointer tracking, not GestureDetector's onVerticalDragEnd, which
+  /// this widget sits nested inside a SingleChildScrollView and would
+  /// almost never actually receive: a Scrollable ancestor wins the gesture
+  /// arena for vertical drags before a child pan recognizer gets a look.
+  void _handleVerticalSwipe(double dy) {
     if (_mode == _AvatarViewMode.normal) {
-      _expand();
+      if (_hasPhoto && dy > 0) _expand(); // swipe down
     } else {
-      _openFullscreen();
+      if (dy < 0) _collapse(); // swipe up
     }
   }
 
@@ -98,12 +166,14 @@ class _AvatarViewerState extends ConsumerState<AvatarViewer> {
       if (file == null) return;
       bytes = await file.readAsBytes();
     }
+    setState(() => _loadFailed = false);
     await widget.onPicked(cropToSquareCenter(bytes), 'avatar.jpg');
     if (mounted) _collapse();
   }
 
   @override
   Widget build(BuildContext context) {
+    final online = ref.watch(isAppForegroundProvider);
     return AnimatedSize(
       duration: ProfileMetrics.transition * 2,
       curve: ProfileMetrics.transitionCurve,
@@ -114,10 +184,12 @@ class _AvatarViewerState extends ConsumerState<AvatarViewer> {
               user: widget.user,
               avatarUrl: widget.avatarUrl,
               heroTag: _heroTag,
+              online: online,
               onBack: _collapse,
               onTapPhoto: _handleTap,
-              onVerticalDragEnd: _handleVerticalDragEnd,
+              onVerticalSwipe: _handleVerticalSwipe,
               onChangePhoto: _changePhotoFromGallery,
+              onImageError: _onImageError,
             )
           : _NormalAvatar(
               key: const ValueKey('normal'),
@@ -127,20 +199,54 @@ class _AvatarViewerState extends ConsumerState<AvatarViewer> {
               isWide: widget.isWide,
               heroTag: _heroTag,
               hasPhoto: _hasPhoto,
+              online: online,
               onTap: _handleTap,
-              onVerticalDragEnd: _handleVerticalDragEnd,
+              onVerticalSwipe: _handleVerticalSwipe,
               onDelete: widget.onDelete,
+              onImageError: _onImageError,
             ),
     );
   }
 }
 
-bool _isOnline(AppUser user) {
-  final raw = user.lastActiveAt;
-  if (raw == null) return false;
-  final at = DateTime.tryParse(raw);
-  if (at == null) return false;
-  return DateTime.now().toUtc().difference(at.toUtc()) < const Duration(minutes: 5);
+/// Circle avatar that falls back to initials on a failed image load
+/// (instead of Flutter's default red error box / a blank circle) and
+/// reports the failure upward via [onError].
+class _AvatarCircle extends StatelessWidget {
+  const _AvatarCircle({required this.avatarUrl, required this.initials, required this.size, required this.onError});
+
+  final String avatarUrl;
+  final String initials;
+  final double size;
+  final VoidCallback onError;
+
+  Widget _placeholder(BuildContext context) {
+    final c = context.profileColors;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: c.card, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Text(initials, style: ProfileTypography.username(context)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (avatarUrl.isEmpty) return _placeholder(context);
+    return ClipOval(
+      child: Image.network(
+        avatarUrl,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => onError());
+          return _placeholder(context);
+        },
+      ),
+    );
+  }
 }
 
 class _NormalAvatar extends StatelessWidget {
@@ -152,9 +258,11 @@ class _NormalAvatar extends StatelessWidget {
     required this.isWide,
     required this.heroTag,
     required this.hasPhoto,
+    required this.online,
     required this.onTap,
-    required this.onVerticalDragEnd,
+    required this.onVerticalSwipe,
     required this.onDelete,
+    required this.onImageError,
   });
 
   final AppUser user;
@@ -163,37 +271,29 @@ class _NormalAvatar extends StatelessWidget {
   final bool isWide;
   final String heroTag;
   final bool hasPhoto;
+  final bool online;
   final VoidCallback onTap;
-  final GestureDragEndCallback onVerticalDragEnd;
+  final ValueChanged<double> onVerticalSwipe;
   final VoidCallback onDelete;
+  final VoidCallback onImageError;
 
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
     final size = isWide ? ProfileMetrics.avatarDesktop : ProfileMetrics.avatarMobile;
-    final online = _isOnline(user);
+    final initials = user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : '?';
 
     return Column(
       children: [
-        GestureDetector(
+        _SwipeArea(
           onTap: onTap,
-          onVerticalDragEnd: onVerticalDragEnd,
+          onVerticalSwipe: onVerticalSwipe,
           child: SizedBox(
             width: size,
             height: size,
             child: Stack(
               children: [
-                Hero(
-                  tag: heroTag,
-                  child: CircleAvatar(
-                    radius: size / 2,
-                    backgroundColor: c.card,
-                    backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                    child: avatarUrl.isEmpty
-                        ? Text(user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : '?', style: ProfileTypography.username(context))
-                        : null,
-                  ),
-                ),
+                Hero(tag: heroTag, child: _AvatarCircle(avatarUrl: avatarUrl, initials: initials, size: size, onError: onImageError)),
                 if (busy) const Positioned.fill(child: Center(child: CircularProgressIndicator())),
                 if (online)
                   Positioned(
@@ -244,141 +344,136 @@ class _ExpandedBanner extends ConsumerWidget {
     required this.user,
     required this.avatarUrl,
     required this.heroTag,
+    required this.online,
     required this.onBack,
     required this.onTapPhoto,
-    required this.onVerticalDragEnd,
+    required this.onVerticalSwipe,
     required this.onChangePhoto,
+    required this.onImageError,
   });
 
   final AppUser user;
   final String avatarUrl;
   final String heroTag;
+  final bool online;
   final VoidCallback onBack;
   final VoidCallback onTapPhoto;
-  final GestureDragEndCallback onVerticalDragEnd;
+  final ValueChanged<double> onVerticalSwipe;
   final VoidCallback onChangePhoto;
+  final VoidCallback onImageError;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.profileColors;
-    final online = _isOnline(user);
+    final themeMode = ref.watch(themeModeProvider);
     final bannerHeight = MediaQuery.sizeOf(context).height * 0.42;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(ProfileMetrics.cardRadius),
-          child: SizedBox(
-            height: bannerHeight,
-            child: GestureDetector(
-              onTap: onTapPhoto,
-              onVerticalDragEnd: onVerticalDragEnd,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Hero(tag: heroTag, child: Image.network(avatarUrl, fit: BoxFit.cover)),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: bannerHeight * 0.5,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.black.withValues(alpha: 0), Colors.black.withValues(alpha: 0.75)],
-                        ),
-                      ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(ProfileMetrics.cardRadius),
+      child: SizedBox(
+        height: bannerHeight,
+        child: _SwipeArea(
+          onTap: onTapPhoto,
+          onVerticalSwipe: onVerticalSwipe,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Hero(
+                tag: heroTag,
+                child: Image.network(
+                  avatarUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) => onImageError());
+                    return ColoredBox(color: c.card);
+                  },
+                ),
+              ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: bannerHeight * 0.5,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.black.withValues(alpha: 0), Colors.black.withValues(alpha: 0.75)],
                     ),
                   ),
-                  Positioned(
-                    top: 8,
-                    left: 4,
-                    right: 4,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                ),
+              ),
+              // Every control lives inside the photo itself — icon-only, no
+              // labels — so the screen's own header (title + theme/QR) can
+              // just disappear in this state instead of duplicating them.
+              Positioned(
+                top: 8,
+                left: 8,
+                right: 8,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _CircleIconButton(icon: Icons.arrow_back, onTap: onBack),
+                    Row(
                       children: [
-                        IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: onBack),
-                        IconButton(
-                          icon: const Icon(Icons.qr_code_2, color: Colors.white),
-                          onPressed: () => showQrModal(context, handle: user.id),
+                        _CircleIconButton(icon: Icons.camera_alt_outlined, onTap: onChangePhoto),
+                        const SizedBox(width: 8),
+                        _CircleIconButton(
+                          icon: themeMode == ThemeMode.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                          onTap: () => ref.read(themeModeProvider.notifier).toggle(),
                         ),
+                        const SizedBox(width: 8),
+                        _CircleIconButton(icon: Icons.qr_code_2, onTap: () => showQrModal(context, handle: user.id)),
                       ],
                     ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 12,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ],
+                ),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 12,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('${user.firstName} ${user.lastName}'.trim(), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
+                    Text('@${user.username}', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('${user.firstName} ${user.lastName}'.trim(), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-                        Text('@${user.username}', style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(width: 8, height: 8, decoration: BoxDecoration(color: online ? c.success : Colors.white38, shape: BoxShape.circle)),
-                            const SizedBox(width: 6),
-                            Text(online ? 'в сети' : 'не в сети', style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                          ],
-                        ),
+                        Container(width: 8, height: 8, decoration: BoxDecoration(color: online ? c.success : Colors.white38, shape: BoxShape.circle)),
+                        const SizedBox(width: 6),
+                        Text(online ? 'в сети' : 'не в сети', style: const TextStyle(color: Colors.white70, fontSize: 12)),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(child: _ActionTile(icon: Icons.image_outlined, label: 'Изменить фото', onTap: onChangePhoto)),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ActionTile(
-                icon: Icons.dark_mode_outlined,
-                label: 'Тема',
-                onTap: () => ref.read(themeModeProvider.notifier).toggle(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: _ActionTile(icon: Icons.qr_code_2, label: 'QR-код', onTap: () => showQrModal(context, handle: user.id))),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({required this.icon, required this.label, required this.onTap});
+class _CircleIconButton extends StatelessWidget {
+  const _CircleIconButton({required this.icon, required this.onTap});
   final IconData icon;
-  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.profileColors;
-    return InkWell(
-      borderRadius: BorderRadius.circular(ProfileMetrics.smallRadius),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(color: c.card, borderRadius: BorderRadius.circular(ProfileMetrics.smallRadius), border: Border.all(color: c.border)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: c.accent, size: 22),
-            const SizedBox(height: 6),
-            Text(label, style: ProfileTypography.caption(context), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ],
-        ),
+    return Material(
+      color: Colors.black.withValues(alpha: 0.35),
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(padding: const EdgeInsets.all(8), child: Icon(icon, color: Colors.white, size: 20)),
       ),
     );
   }

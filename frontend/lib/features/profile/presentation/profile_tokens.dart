@@ -121,7 +121,7 @@ class ProfileMetrics {
 
   /// Desktop content is centered with this max width; the mobile/desktop
   /// split itself matches AppShell's own rail breakpoint.
-  static const desktopContentMaxWidth = 900.0;
+  static const desktopContentMaxWidth = 700.0;
   static const wideBreakpoint = 768.0;
 
   /// Height of AppShell's mobile bottom tab bar (_BottomBar), not counting
