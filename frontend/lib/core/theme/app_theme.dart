@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../features/profile/presentation/profile_tokens.dart';
+
 /// Ports the CSS custom-property palette from src/styles/global.css
 /// (both the light :root values and the :root[data-theme="dark"] override
 /// block) into Flutter ColorSchemes — same colors, same two themes, so the
@@ -126,25 +128,39 @@ ThemeData _buildTheme(AppColors c, Brightness brightness) {
     colorScheme: scheme,
     scaffoldBackgroundColor: c.bg,
     appBarTheme: AppBarTheme(backgroundColor: c.surface, foregroundColor: c.text, elevation: 0),
+    // global.css's card recipe (.profile-card/.lesson-card/.auth-card/...) is
+    // background + border-radius + box-shadow — no visible border. Material's
+    // Card doesn't support CSS's two-layer soft shadow directly, so this is
+    // an elevation-based approximation rather than a literal port.
     cardTheme: CardThemeData(
       color: c.surface,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: c.border)),
+      elevation: 3,
+      shadowColor: brightness == Brightness.dark ? Colors.black : const Color(0xFF1C1F33),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: c.primary,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        elevation: 4,
+        shadowColor: c.primary,
       ),
     ),
+    // Mirrors .auth-field input: surface bg (not page bg), 1.5px border,
+    // radius-sm (10px), 11px/14px padding, primary border on focus.
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: c.bg,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.border)),
+      isDense: true,
+      fillColor: c.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border, width: 1.5)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.border, width: 1.5)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c.primary, width: 1.5)),
     ),
-    extensions: [c],
+    extensions: [c, brightness == Brightness.dark ? ProfileColors.dark : ProfileColors.light],
   );
 }
 

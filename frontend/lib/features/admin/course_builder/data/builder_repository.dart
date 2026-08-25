@@ -25,14 +25,14 @@ class BuilderRepository {
   }
 
   Future<AdminCourse> createCourse({required String title, String? description}) async {
-    final res = await _api.post(_base, body: {'title': title, if (description != null) 'description': description});
+    final res = await _api.post(_base, body: {'title': title, 'description': ?description});
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
 
   Future<AdminCourse> updateCourse(String courseId, {String? title, String? description, String? status}) async {
     final res = await _api.patch(
       '$_base/${Uri.encodeComponent(courseId)}',
-      body: {if (title != null) 'title': title, if (description != null) 'description': description, if (status != null) 'status': status},
+      body: {'title': ?title, 'description': ?description, 'status': ?status},
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
@@ -59,7 +59,7 @@ class BuilderRepository {
   Future<AdminCourse> addLesson(String courseId, {required String title, String? description}) async {
     final res = await _api.post(
       '$_base/${Uri.encodeComponent(courseId)}/lessons',
-      body: {'title': title, if (description != null) 'description': description},
+      body: {'title': title, 'description': ?description},
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
@@ -68,9 +68,9 @@ class BuilderRepository {
     final res = await _api.patch(
       '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}',
       body: {
-        if (title != null) 'title': title,
-        if (description != null) 'description': description,
-        if (materialText != null) 'materialText': materialText,
+        'title': ?title,
+        'description': ?description,
+        'materialText': ?materialText,
       },
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
@@ -142,7 +142,7 @@ class BuilderRepository {
   Future<void> updateWord(String courseId, String lessonId, String wordId, {String? german, String? translation, String? pronunciation}) async {
     await _api.patch(
       '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}',
-      body: {if (german != null) 'german': german, if (translation != null) 'translation': translation, if (pronunciation != null) 'pronunciation': pronunciation},
+      body: {'german': ?german, 'translation': ?translation, 'pronunciation': ?pronunciation},
     );
   }
 

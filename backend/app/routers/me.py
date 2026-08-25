@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require_auth
@@ -12,6 +13,7 @@ from app.schemas.user import UpdateProfileRequest
 from app.services.lesson_state import to_dto
 from app.services.progress import AttemptInput, compute_score, get_progress_summary_for_user
 from app.services.serialize import public_user
+from app.services.username import conflict_message, normalize_username
 from app.uploads.storage import AVATARS_DIR, delete_file, save_avatar
 from app.utils import from_iso, utcnow
 
@@ -34,9 +36,18 @@ async def update_me(
     if not user.canEditProfile:
         raise ApiError(403, "Редактирование профиля отключено администратором")
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    changes = body.model_dump(exclude_unset=True)
+    username_lower = normalize_username(changes["username"]) if "username" in changes else None
+    for field, value in changes.items():
         setattr(user, field, value)
-    await db.commit()
+    if username_lower is not None:
+        user.usernameLower = username_lower
+
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise ApiError(409, await conflict_message(db, changes.get("email"), username_lower, user.id))
     await db.refresh(user)
     return {"user": public_user(user)}
 

@@ -32,6 +32,10 @@ class User(Base):
         Enum(UserStatus, name="UserStatus", create_type=False), nullable=False, default=UserStatus.ACTIVE
     )
     avatarUrl: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Free-text "about me" — capped at 150 chars app-side (UpdateProfileRequest),
+    # not by a DB column length constraint.
+    bio: Mapped[str | None] = mapped_column(String, nullable=True)
+    birthDate: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     canEditProfile: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     lastLoginAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     lastActiveAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)

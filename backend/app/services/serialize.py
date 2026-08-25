@@ -22,6 +22,8 @@ def public_user(user: User) -> dict:
         "role": user.role.value,
         "status": user.status.value,
         "avatarUrl": user.avatarUrl,
+        "bio": user.bio,
+        "birthDate": to_iso_z(user.birthDate),
         "canEditProfile": user.canEditProfile,
         "lastLoginAt": to_iso_z(user.lastLoginAt),
         "lastActiveAt": to_iso_z(user.lastActiveAt),

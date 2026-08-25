@@ -37,6 +37,10 @@ model User {
   role           Role     @default(USER)
   status         UserStatus @default(ACTIVE)
   avatarUrl      String?
+  // Free-text "about me" shown on the profile screen — capped at 150 chars,
+  // enforced app-side (Pydantic/UI), not by a DB column length constraint.
+  bio            String?
+  birthDate      DateTime?
   canEditProfile Boolean  @default(true)
   // Timestamp of the most recent successful login — a denormalized copy of
   // the newest LoginEvent below, kept here too so the admin user list can

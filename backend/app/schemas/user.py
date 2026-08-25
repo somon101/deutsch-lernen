@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.models.enums import Role, UserStatus
@@ -45,3 +47,11 @@ class UpdateProfileRequest(BaseModel):
     lastName: str | None = Field(default=None, min_length=1)
     email: EmailStr | None = None
     phone: str | None = None
+    username: str | None = None
+    bio: str | None = Field(default=None, max_length=150)
+    birthDate: datetime | None = None
+
+    @field_validator("username")
+    @classmethod
+    def _check_username(cls, v: str | None) -> str | None:
+        return validate_username(v) if v is not None else v

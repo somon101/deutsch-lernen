@@ -17,35 +17,10 @@ from app.services import courses as courses_svc
 from app.services.content import DuplicateWordError, get_lesson_content, normalize_word, save_lesson_content, set_legacy_lesson_media
 from app.services.progress import get_progress_summary_for_user
 from app.services.serialize import with_online_status
-from app.services.username import normalize_username
+from app.services.username import conflict_message, normalize_username
 from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, delete_file, save_course_media, save_word_audio
 from app.utils import to_iso_z
 router = APIRouter(prefix="/api/admin", tags=["admin"])
-
-
-async def _conflict_message(
-    db: AsyncSession, email: str | None, username_lower: str | None, exclude_user_id: str | None = None
-) -> str:
-    """Postgres reports a unique-violation without naming the constraint, so
-    work out which field actually collided rather than guessing — telling an
-    admin "email is taken" when it was really the login is worse than
-    useless. Mirrors conflictMessage() in admin.routes.ts exactly."""
-    email_owner = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none() if email else None
-    username_owner = (
-        (await db.execute(select(User).where(User.usernameLower == username_lower))).scalar_one_or_none()
-        if username_lower
-        else None
-    )
-    email_taken = bool(email_owner and email_owner.id != exclude_user_id)
-    username_taken = bool(username_owner and username_owner.id != exclude_user_id)
-
-    if email_taken and username_taken:
-        return "Email и логин уже заняты"
-    if username_taken:
-        return "Такой логин уже занят (регистр букв не учитывается)"
-    if email_taken:
-        return "Email уже занят"
-    return "Email или логин уже заняты"
 
 
 @router.get("/users")
@@ -77,7 +52,7 @@ async def create_user(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise ApiError(409, await _conflict_message(db, body.email, username_lower))
+        raise ApiError(409, await conflict_message(db, body.email, username_lower))
     await db.refresh(new_user)
     return {"user": with_online_status(new_user)}
 
@@ -134,7 +109,7 @@ async def update_user(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise ApiError(409, await _conflict_message(db, changes.get("email"), username_lower, user_id))
+        raise ApiError(409, await conflict_message(db, changes.get("email"), username_lower, user_id))
     await db.refresh(target)
     return {"user": with_online_status(target)}
 

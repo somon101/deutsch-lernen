@@ -58,8 +58,24 @@ class ProfileRepository {
     return (res['progress'] as List<dynamic>).map((p) => LessonProgressSummary.fromJson(p as Map<String, dynamic>)).toList();
   }
 
-  Future<AppUser> updateProfile({required String firstName, required String lastName, required String email, String? phone}) async {
-    final res = await _api.patch('/api/me/', body: {'firstName': firstName, 'lastName': lastName, 'email': email, 'phone': phone});
+  Future<AppUser> updateProfile({
+    required String firstName,
+    required String lastName,
+    required String email,
+    String? phone,
+    String? username,
+    String? bio,
+    DateTime? birthDate,
+  }) async {
+    final res = await _api.patch('/api/me/', body: {
+      'firstName': firstName,
+      'lastName': lastName,
+      'email': email,
+      'phone': phone,
+      if (username != null) 'username': username,
+      if (bio != null) 'bio': bio,
+      if (birthDate != null) 'birthDate': birthDate.toUtc().toIso8601String(),
+    });
     return AppUser.fromJson(res['user'] as Map<String, dynamic>);
   }
 

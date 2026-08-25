@@ -26,6 +26,8 @@ class AppUser {
     required this.role,
     required this.status,
     required this.avatarUrl,
+    required this.bio,
+    required this.birthDate,
     required this.canEditProfile,
     required this.lastLoginAt,
     required this.lastActiveAt,
@@ -41,6 +43,8 @@ class AppUser {
         role: _roleFromJson(json['role'] as String),
         status: (json['status'] as String) == 'BLOCKED' ? UserStatus.blocked : UserStatus.active,
         avatarUrl: json['avatarUrl'] as String?,
+        bio: json['bio'] as String?,
+        birthDate: json['birthDate'] as String?,
         canEditProfile: json['canEditProfile'] as bool? ?? true,
         lastLoginAt: json['lastLoginAt'] as String?,
         lastActiveAt: json['lastActiveAt'] as String?,
@@ -55,6 +59,8 @@ class AppUser {
   final UserRole role;
   final UserStatus status;
   final String? avatarUrl;
+  final String? bio;
+  final String? birthDate;
   final bool canEditProfile;
   final String? lastLoginAt;
   final String? lastActiveAt;
@@ -72,6 +78,8 @@ class AppUser {
         'role': _roleToJson(role),
         'status': status == UserStatus.blocked ? 'BLOCKED' : 'ACTIVE',
         'avatarUrl': avatarUrl,
+        'bio': bio,
+        'birthDate': birthDate,
         'canEditProfile': canEditProfile,
         'lastLoginAt': lastLoginAt,
         'lastActiveAt': lastActiveAt,

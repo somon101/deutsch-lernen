@@ -16,7 +16,6 @@ class SecureStorage {
 
   static const _tokenKey = 'deutsch_lernen_token';
   static const _userKey = 'deutsch_lernen_user';
-  static const _themeKey = 'deutsch_lernen_theme';
 
   Future<String?> readToken() => _storage.read(key: _tokenKey);
 
@@ -40,9 +39,6 @@ class SecureStorage {
     await _storage.delete(key: _userKey);
   }
 
-  Future<String?> readTheme() => _storage.read(key: _themeKey);
-
-  Future<void> saveTheme(String value) => _storage.write(key: _themeKey, value: value);
 }
 
 final secureStorageProvider = Provider<SecureStorage>((ref) => SecureStorage());

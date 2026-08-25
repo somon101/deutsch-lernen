@@ -5,6 +5,10 @@
          server health, which is exactly what was masking as a login
          failure no matter which backend address was tried. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- "Сделать фото" in the avatar picker (settings screen) — Android only,
+         image_picker has no Windows desktop implementation so that option
+         doesn't exist there. -->
+    <uses-permission android:name="android.permission.CAMERA" />
     <application
         android:label="deutsch_lernen"
         android:name="${applicationName}"

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/api/router_refresh.dart';
 import 'core/auth/auth_state.dart';
 import 'core/auth/user.dart';
+import 'core/locale/locale_provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
+import 'l10n/app_localizations.dart';
 import 'features/admin/course_builder/presentation/admin_courses_hub_screen.dart';
 import 'features/admin/course_builder/presentation/builder_course_edit_screen.dart';
 import 'features/admin/legacy_lessons/presentation/admin_lesson_edit_screen.dart';
@@ -20,6 +23,10 @@ import 'features/courses/presentation/courses_screen.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/lesson_runner/presentation/lesson_runner_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
+import 'features/settings/presentation/personal_details_screen.dart';
+import 'features/settings/presentation/security_privacy_screen.dart';
+import 'features/settings/presentation/settings_screen.dart';
+import 'features/shell/presentation/app_shell.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
 /// (src/components/ProtectedRoute.tsx) is given per-route in App.tsx — kept
@@ -67,7 +74,19 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/403', builder: (context, state) => const ForbiddenScreen()),
-      GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+      // Shared desktop rail chrome around the top-level sections — everything
+      // else (lesson runner, detail/edit screens) stays outside it and is
+      // pushed full-screen as before.
+      ShellRoute(
+        builder: (context, state, child) => AppShell(currentPath: state.matchedLocation, child: child),
+        routes: [
+          GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+          GoRoute(path: '/courses', builder: (context, state) => const CoursesScreen()),
+          GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
+          GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
+        ],
+      ),
       GoRoute(
         path: '/lesson/:lessonId',
         redirect: (context, state) => '/lesson/${state.pathParameters['lessonId']}/vocabulary',
@@ -79,7 +98,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           stage: state.pathParameters['stage']!,
         ),
       ),
-      GoRoute(path: '/courses', builder: (context, state) => const CoursesScreen()),
       GoRoute(
         path: '/courses/:courseId',
         builder: (context, state) => CourseLessonsScreen(courseId: state.pathParameters['courseId']!),
@@ -92,9 +110,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           stage: state.pathParameters['stage']!,
         ),
       ),
-      GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
-      GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
-      GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
       GoRoute(path: '/admin/courses/legacy', builder: (context, state) => const AdminLegacyLessonsScreen()),
       GoRoute(
         path: '/admin/lessons/:lessonId',
@@ -111,6 +126,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/admin/users/:id',
         builder: (context, state) => AdminUserDetailScreen(userId: state.pathParameters['id']!),
       ),
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: '/settings/personal', builder: (context, state) => const PersonalDetailsScreen()),
+      GoRoute(path: '/settings/security', builder: (context, state) => const SecurityPrivacyScreen()),
     ],
   );
 });
@@ -122,6 +140,7 @@ class DeutschLernenApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final locale = ref.watch(localeProvider);
 
     return MaterialApp.router(
       title: 'Deutsch Lernen',
@@ -129,6 +148,14 @@ class DeutschLernenApp extends ConsumerWidget {
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: themeMode,
+      locale: locale,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,
     );
   }

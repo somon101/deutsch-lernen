@@ -1,8 +1,7 @@
 import 'dart:developer' as developer;
-import 'dart:io' show Platform;
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/secure_storage.dart';
@@ -38,7 +37,7 @@ void _logDebug(String message) {
 ///   (makes the device's own localhost:8000 tunnel to the host) or pass
 ///   --dart-define=API_URL=http://LAN_IP:8000 at build/run time.
 String _defaultApiUrl() {
-  if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) return 'http://10.0.2.2:8000';
   return 'http://localhost:8000';
 }
 
