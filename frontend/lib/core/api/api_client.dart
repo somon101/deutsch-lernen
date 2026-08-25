@@ -1,9 +1,27 @@
+import 'dart:developer' as developer;
 import 'dart:io' show Platform;
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/secure_storage.dart';
+
+/// Fields that must never reach the debug log, no matter which endpoint
+/// they pass through (login, create-user, reset-password, ...).
+const _secretBodyKeys = {'password', 'newPassword'};
+
+Object? _redactBody(Object? body) {
+  if (body is Map) {
+    return {for (final e in body.entries) e.key: _secretBodyKeys.contains(e.key) ? '***' : e.value};
+  }
+  if (body is FormData) return '<multipart form>';
+  return body;
+}
+
+void _logDebug(String message) {
+  if (kDebugMode) developer.log(message, name: 'ApiClient');
+}
 
 /// Mirrors src/auth/api.ts: a single base URL, Authorization: Bearer header
 /// injected on every request, {"error": "..."} envelope on non-2xx (except
@@ -49,9 +67,26 @@ class ApiClient {
         onRequest: (options, handler) async {
           final token = await _secureStorage.readToken();
           if (token != null) options.headers['Authorization'] = 'Bearer $token';
+          _logDebug(
+            'REQUEST ${options.method} ${options.uri}\n'
+            '  headers: ${options.headers.map((k, v) => MapEntry(k, k.toLowerCase() == 'authorization' ? 'Bearer ***' : v))}\n'
+            '  body: ${_redactBody(options.data)}',
+          );
           handler.next(options);
         },
-        onError: (error, handler) => handler.next(_normalizeError(error)),
+        onResponse: (response, handler) {
+          _logDebug('RESPONSE ${response.statusCode} ${response.requestOptions.uri}\n  body: ${response.data}');
+          handler.next(response);
+        },
+        onError: (error, handler) {
+          _logDebug(
+            'ERROR ${error.type} ${error.requestOptions.method} ${error.requestOptions.uri}\n'
+            '  status: ${error.response?.statusCode}\n'
+            '  message: ${error.message}\n'
+            '  body: ${error.response?.data}',
+          );
+          handler.next(_normalizeError(error));
+        },
       ),
     );
   }
@@ -61,7 +96,7 @@ class ApiClient {
 
   DioException _normalizeError(DioException error) {
     final data = error.response?.data;
-    String message = 'Ошибка сети';
+    String? message;
     if (data is Map && data['error'] is String) {
       message = data['error'] as String;
     } else if (data is Map && data['detail'] != null) {
@@ -73,40 +108,75 @@ class ApiClient {
         message = detail.first['msg'] as String;
       }
     }
+    // The server never answered at all — classify by *why*, so "wrong
+    // password" (a real response, handled above) is never confused with
+    // "couldn't even reach the server" (no response at all).
+    message ??= switch (error.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        'Сервер не отвечает (превышено время ожидания). Проверьте интернет-соединение.',
+      DioExceptionType.connectionError => 'Нет соединения с сервером. Проверьте интернет и адрес сервера.',
+      DioExceptionType.badCertificate => 'Ошибка проверки сертификата сервера (SSL).',
+      DioExceptionType.cancel => 'Запрос отменён.',
+      _ => switch (error.response?.statusCode) {
+          null => 'Неизвестная ошибка сети',
+          >= 500 => 'Ошибка сервера. Попробуйте позже.',
+          _ => 'Ошибка сети',
+        },
+    };
     return error.copyWith(error: ApiException(error.response?.statusCode ?? 0, message));
   }
 
-  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query}) async {
-    final res = await _dio.get<Map<String, dynamic>>(path, queryParameters: query);
-    return res.data ?? {};
+  /// Every request funnels through here so callers only ever have to catch
+  /// [ApiException] — not [DioException]. Dio's public API always throws
+  /// DioException, even after the onError interceptor above has already
+  /// packed the real ApiException into its `.error` field, so an `on
+  /// ApiException catch` at a call site would silently never match and
+  /// fall through to a generic message. This was a real, previously-
+  /// unnoticed bug affecting every error message in the app (login,
+  /// profile, every admin screen) — confirmed by grepping every `on
+  /// ApiException catch` / `is ApiException` call site in the app and
+  /// finding none of them could ever have actually matched.
+  Future<T> _unwrap<T>(Future<T> Function() run) async {
+    try {
+      return await run();
+    } on DioException catch (e) {
+      final unwrapped = e.error;
+      if (unwrapped is ApiException) throw unwrapped;
+      rethrow;
+    }
   }
 
-  Future<Map<String, dynamic>> post(String path, {Object? body}) async {
-    final res = await _dio.post<Map<String, dynamic>>(path, data: body ?? {});
-    return res.data ?? {};
-  }
+  Future<Map<String, dynamic>> get(String path, {Map<String, dynamic>? query}) => _unwrap(() async {
+        final res = await _dio.get<Map<String, dynamic>>(path, queryParameters: query);
+        return res.data ?? {};
+      });
 
-  Future<Map<String, dynamic>> put(String path, {Object? body}) async {
-    final res = await _dio.put<Map<String, dynamic>>(path, data: body ?? {});
-    return res.data ?? {};
-  }
+  Future<Map<String, dynamic>> post(String path, {Object? body}) => _unwrap(() async {
+        final res = await _dio.post<Map<String, dynamic>>(path, data: body ?? {});
+        return res.data ?? {};
+      });
 
-  Future<Map<String, dynamic>> patch(String path, {Object? body}) async {
-    final res = await _dio.patch<Map<String, dynamic>>(path, data: body ?? {});
-    return res.data ?? {};
-  }
+  Future<Map<String, dynamic>> put(String path, {Object? body}) => _unwrap(() async {
+        final res = await _dio.put<Map<String, dynamic>>(path, data: body ?? {});
+        return res.data ?? {};
+      });
 
-  Future<void> delete(String path) async {
-    await _dio.delete(path);
-  }
+  Future<Map<String, dynamic>> patch(String path, {Object? body}) => _unwrap(() async {
+        final res = await _dio.patch<Map<String, dynamic>>(path, data: body ?? {});
+        return res.data ?? {};
+      });
+
+  Future<void> delete(String path) => _unwrap(() => _dio.delete(path));
 
   /// Same as [delete], but for the few endpoints (e.g. DELETE
   /// /api/me/avatar) that return a body — the updated resource — instead of
   /// an empty response.
-  Future<Map<String, dynamic>> deleteExpectingBody(String path) async {
-    final res = await _dio.delete<Map<String, dynamic>>(path);
-    return res.data ?? {};
-  }
+  Future<Map<String, dynamic>> deleteExpectingBody(String path) => _unwrap(() async {
+        final res = await _dio.delete<Map<String, dynamic>>(path);
+        return res.data ?? {};
+      });
 
   /// Multipart file upload (avatars, word pronunciation audio, course
   /// media) — mirrors the FormData.append(...) calls the old React client
@@ -117,14 +187,15 @@ class ApiClient {
     required List<int> bytes,
     required String filename,
     Map<String, String>? fields,
-  }) async {
-    final form = FormData.fromMap({
-      ...?fields,
-      fieldName: MultipartFile.fromBytes(bytes, filename: filename),
-    });
-    final res = await _dio.post<Map<String, dynamic>>(path, data: form);
-    return res.data ?? {};
-  }
+  }) =>
+      _unwrap(() async {
+        final form = FormData.fromMap({
+          ...?fields,
+          fieldName: MultipartFile.fromBytes(bytes, filename: filename),
+        });
+        final res = await _dio.post<Map<String, dynamic>>(path, data: form);
+        return res.data ?? {};
+      });
 
   /// Full URL for an uploaded asset path like "/uploads/avatars/x.png" —
   /// mirrors assetUrl() in src/auth/api.ts.

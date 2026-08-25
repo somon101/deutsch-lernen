@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +39,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
-      setState(() => _error = 'Не удалось войти');
+      // Only reachable for a genuinely unexpected failure now (JSON
+      // shape mismatch, secure storage error, etc.) — every real network/
+      // auth failure is an ApiException and caught above. Debug builds
+      // show the real exception instead of guessing at a category.
+      setState(() => _error = kDebugMode ? 'Не удалось войти: $e' : 'Не удалось войти в аккаунт');
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

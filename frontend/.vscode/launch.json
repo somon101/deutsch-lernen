@@ -1,0 +1,37 @@
+{
+  // Debug launch configs — run/debug the real Flutter app before ever
+  // building an APK. Pick one from the "Run and Debug" panel (or the
+  // dropdown next to the play button), select a target device at the
+  // bottom-right of the VS Code window, and press F5. Hot reload works
+  // (save a file, or press the hot-reload button); breakpoints work;
+  // console output (including ApiClient's debug-only request/response
+  // logging) shows in the Debug Console.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Windows — local backend",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "windows",
+      "args": ["--dart-define=API_URL=http://localhost:8000"]
+    },
+    {
+      "name": "Android device (USB) — Render backend",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define=API_URL=https://deutsch-lernen-fastapi-pgxi.onrender.com"]
+    },
+    {
+      "name": "Android device (USB) — local backend via adb reverse",
+      "request": "launch",
+      "type": "dart",
+      "args": ["--dart-define=API_URL=http://localhost:8000"],
+      // Run once before launching, with the device already connected:
+      //   adb reverse tcp:8000 tcp:8000
+      // Tunnels the phone's own localhost:8000 to this PC over USB — the
+      // fastest inner loop (no network round trip to Render, no cold
+      // start), but only works while the USB cable stays connected.
+      "preLaunchTask": null
+    }
+  ]
+}

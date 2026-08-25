@@ -1,4 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for all network access (API calls, media/library file
+         picking, TTS voice downloads) — without it Android blocks every
+         socket-level connection at the OS level regardless of URL or
+         server health, which is exactly what was masking as a login
+         failure no matter which backend address was tried. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="deutsch_lernen"
         android:name="${applicationName}"
