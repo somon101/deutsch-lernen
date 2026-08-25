@@ -40,7 +40,10 @@ class ApiException implements Exception {
 
 class ApiClient {
   ApiClient(this._secureStorage) {
-    _dio = Dio(BaseOptions(baseUrl: apiBaseUrl, connectTimeout: const Duration(seconds: 15)));
+    // 60s, not 15s: free-tier hosts (e.g. Render) sleep after ~15 min idle
+    // and take 30-50s to wake on the next request — a short timeout fails
+    // that very first request before the server even finishes starting up.
+    _dio = Dio(BaseOptions(baseUrl: apiBaseUrl, connectTimeout: const Duration(seconds: 60), receiveTimeout: const Duration(seconds: 60)));
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
