@@ -30,7 +30,16 @@ app = FastAPI(title="Deutsch Lernen API", lifespan=lifespan)
 #   3. exactly https://localhost / capacitor://localhost -> allowed (the
 #      existing Capacitor Android app's bundled-webview origins)
 #   4. anything in the CORS_ORIGINS env list -> allowed
-_fixed_patterns = [r"^http://localhost:\d+$", r"^https://localhost$", r"^capacitor://localhost$"]
+_fixed_patterns = [
+    r"^http://localhost:\d+$",
+    r"^https://localhost$",
+    r"^capacitor://localhost$",
+    # Cloudflare's free "quick tunnel" hostnames — used to expose a local
+    # dev server (web build or the FastAPI backend itself) to a phone on a
+    # different network for ad-hoc testing. A new random subdomain each
+    # time a tunnel starts, always under this fixed, Cloudflare-owned domain.
+    r"^https://[a-z0-9-]+\.trycloudflare\.com$",
+]
 _env_patterns = [rf"^{re.escape(origin)}$" for origin in settings.cors_origins_list]
 _origin_regex = "|".join(_fixed_patterns + _env_patterns)
 
