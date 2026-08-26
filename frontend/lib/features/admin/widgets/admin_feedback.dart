@@ -8,28 +8,53 @@ import '../../../core/api/api_client.dart';
 /// `window.confirm(...)` calls (enumerated per-screen in the migration
 /// notes: delete course/lesson/block/word, overwrite-material-from-library).
 
-String adminErrorMessage(Object error, [String fallback = 'Не удалось выполнить действие']) {
+String adminErrorMessage(
+  Object error, [
+  String fallback = 'Не удалось выполнить действие',
+]) {
   if (error is ApiException) return error.message;
   return fallback;
 }
 
 void showSuccessSnack(BuildContext context, [String message = 'Сохранено']) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.green.shade700));
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), backgroundColor: Colors.green.shade700),
+  );
 }
 
-void showErrorSnack(BuildContext context, Object error, [String fallback = 'Не удалось выполнить действие']) {
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(adminErrorMessage(error, fallback)), backgroundColor: Theme.of(context).colorScheme.error));
+void showErrorSnack(
+  BuildContext context,
+  Object error, [
+  String fallback = 'Не удалось выполнить действие',
+]) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(adminErrorMessage(error, fallback)),
+      backgroundColor: Theme.of(context).colorScheme.error,
+    ),
+  );
 }
 
-Future<bool> confirmDialog(BuildContext context, {required String title, String? message, String confirmLabel = 'Удалить'}) async {
+Future<bool> confirmDialog(
+  BuildContext context, {
+  required String title,
+  String? message,
+  String confirmLabel = 'Удалить',
+}) async {
   final result = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
       content: message != null ? Text(message) : null,
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(confirmLabel)),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(confirmLabel),
+        ),
       ],
     ),
   );

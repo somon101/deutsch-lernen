@@ -1,5 +1,11 @@
 import 'exercise.dart';
 
+List<Exercise> _blockQuestions(dynamic json) => ((json as List<dynamic>?) ?? const [])
+    .cast<Map<String, dynamic>>()
+    .map((q) => QuestionDto.fromJson(q))
+    .map((q) => toExercise(q, q.id!))
+    .toList();
+
 /// Mirrors src/content/types.ts's VocabularyEntry.
 class VocabularyEntry {
   const VocabularyEntry({required this.id, required this.german, required this.translation, this.pronunciation, this.audioUrl});
@@ -40,11 +46,30 @@ sealed class MaterialBlock {
           pronunciation: json['pronunciation'] as String?,
           translation: json['translation'] as String,
         );
+      case 'block':
+        return MaterialGenericBlock(
+          id: json['id'] as String,
+          title: json['title'] as String,
+          content: json['content'] as String,
+          questions: _blockQuestions(json['questions']),
+        );
       case 'line':
       default:
         return MaterialLineBlock(text: json['text'] as String, tight: json['tight'] as bool? ?? false);
     }
   }
+}
+
+/// A teacher-authored block from the block-based material editor
+/// (content-taxonomy plan, 2026-08-26) — replaces the free-text parser's
+/// output entirely for any lesson that has been opened in that editor (see
+/// app/services/material.py's get_new_material_blocks).
+class MaterialGenericBlock extends MaterialBlock {
+  const MaterialGenericBlock({required this.id, required this.title, required this.content, this.questions = const []});
+  final String id;
+  final String title;
+  final String content;
+  final List<Exercise> questions;
 }
 
 class MaterialTitleBlock extends MaterialBlock {

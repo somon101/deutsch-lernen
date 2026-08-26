@@ -12,6 +12,11 @@ class Settings(BaseSettings):
     jwt_secret: str
     port: int = 4000
     cors_origins: str = "http://localhost:5173"
+    # Minimum percent of correctly-answered questions for a lesson/level to
+    # count as "passed" — a single named setting rather than a literal "75"
+    # scattered through the code, so it can change without touching every
+    # call site (per the approved content-taxonomy plan, 2026-08-26).
+    pass_threshold_percent: int = 75
 
     @property
     def cors_origins_list(self) -> list[str]:

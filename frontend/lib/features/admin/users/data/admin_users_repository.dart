@@ -22,20 +22,20 @@ class AdminUser {
   });
 
   factory AdminUser.fromJson(Map<String, dynamic> json) => AdminUser(
-        id: json['id'] as String,
-        firstName: json['firstName'] as String,
-        lastName: json['lastName'] as String,
-        email: json['email'] as String,
-        phone: json['phone'] as String?,
-        username: json['username'] as String,
-        role: json['role'] as String,
-        status: json['status'] as String,
-        avatarUrl: json['avatarUrl'] as String?,
-        canEditProfile: json['canEditProfile'] as bool,
-        lastLoginAt: json['lastLoginAt'] as String?,
-        lastActiveAt: json['lastActiveAt'] as String?,
-        online: json['online'] as bool,
-      );
+    id: json['id'] as String,
+    firstName: json['firstName'] as String,
+    lastName: json['lastName'] as String,
+    email: json['email'] as String,
+    phone: json['phone'] as String?,
+    username: json['username'] as String,
+    role: json['role'] as String,
+    status: json['status'] as String,
+    avatarUrl: json['avatarUrl'] as String?,
+    canEditProfile: json['canEditProfile'] as bool,
+    lastLoginAt: json['lastLoginAt'] as String?,
+    lastActiveAt: json['lastActiveAt'] as String?,
+    online: json['online'] as bool,
+  );
 
   final String id;
   final String firstName;
@@ -54,7 +54,10 @@ class AdminUser {
 
 class LoginEventRow {
   const LoginEventRow({required this.id, required this.createdAt});
-  factory LoginEventRow.fromJson(Map<String, dynamic> json) => LoginEventRow(id: json['id'] as String, createdAt: json['createdAt'] as String);
+  factory LoginEventRow.fromJson(Map<String, dynamic> json) => LoginEventRow(
+    id: json['id'] as String,
+    createdAt: json['createdAt'] as String,
+  );
   final String id;
   final String createdAt;
 }
@@ -69,7 +72,9 @@ class AdminUsersRepository {
 
   Future<List<AdminUser>> listUsers() async {
     final res = await _api.get(_base);
-    return (res['users'] as List<dynamic>).map((u) => AdminUser.fromJson(u as Map<String, dynamic>)).toList();
+    return (res['users'] as List<dynamic>)
+        .map((u) => AdminUser.fromJson(u as Map<String, dynamic>))
+        .toList();
   }
 
   Future<AdminUser> getUser(String id) async {
@@ -87,16 +92,19 @@ class AdminUsersRepository {
     required UserRole role,
     required bool canEditProfile,
   }) async {
-    final res = await _api.post(_base, body: {
-      'firstName': firstName,
-      'lastName': lastName,
-      'email': email,
-      if (phone != null && phone.isNotEmpty) 'phone': phone,
-      'username': username,
-      'password': password,
-      'role': _roleWire(role),
-      'canEditProfile': canEditProfile,
-    });
+    final res = await _api.post(
+      _base,
+      body: {
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+        'username': username,
+        'password': password,
+        'role': _roleWire(role),
+        'canEditProfile': canEditProfile,
+      },
+    );
     return AdminUser.fromJson(res['user'] as Map<String, dynamic>);
   }
 
@@ -111,38 +119,50 @@ class AdminUsersRepository {
     bool? canEditProfile,
     String? status,
   }) async {
-    final res = await _api.patch('$_base/${Uri.encodeComponent(id)}', body: {
-      if (firstName != null) 'firstName': firstName,
-      if (lastName != null) 'lastName': lastName,
-      if (email != null) 'email': email,
-      if (phone != null) 'phone': phone,
-      if (username != null) 'username': username,
-      if (role != null) 'role': _roleWire(role),
-      if (canEditProfile != null) 'canEditProfile': canEditProfile,
-      if (status != null) 'status': status,
-    });
+    final res = await _api.patch(
+      '$_base/${Uri.encodeComponent(id)}',
+      body: {
+        if (firstName != null) 'firstName': firstName,
+        if (lastName != null) 'lastName': lastName,
+        if (email != null) 'email': email,
+        if (phone != null) 'phone': phone,
+        if (username != null) 'username': username,
+        if (role != null) 'role': _roleWire(role),
+        if (canEditProfile != null) 'canEditProfile': canEditProfile,
+        if (status != null) 'status': status,
+      },
+    );
     return AdminUser.fromJson(res['user'] as Map<String, dynamic>);
   }
 
   Future<void> resetPassword(String id, String newPassword) async {
-    await _api.post('$_base/${Uri.encodeComponent(id)}/reset-password', body: {'newPassword': newPassword});
+    await _api.post(
+      '$_base/${Uri.encodeComponent(id)}/reset-password',
+      body: {'newPassword': newPassword},
+    );
   }
 
   Future<List<LoginEventRow>> loginHistory(String id) async {
     final res = await _api.get('$_base/${Uri.encodeComponent(id)}/logins');
-    return (res['logins'] as List<dynamic>).map((l) => LoginEventRow.fromJson(l as Map<String, dynamic>)).toList();
+    return (res['logins'] as List<dynamic>)
+        .map((l) => LoginEventRow.fromJson(l as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<LessonProgressSummary>> userProgress(String id) async {
     final res = await _api.get('$_base/${Uri.encodeComponent(id)}/progress');
-    return (res['progress'] as List<dynamic>).map((p) => LessonProgressSummary.fromJson(p as Map<String, dynamic>)).toList();
+    return (res['progress'] as List<dynamic>)
+        .map((p) => LessonProgressSummary.fromJson(p as Map<String, dynamic>))
+        .toList();
   }
 
   String _roleWire(UserRole role) => switch (role) {
-        UserRole.admin => 'ADMIN',
-        UserRole.teacher => 'TEACHER',
-        UserRole.user => 'USER',
-      };
+    UserRole.admin => 'ADMIN',
+    UserRole.teacher => 'TEACHER',
+    UserRole.user => 'USER',
+  };
 }
 
-final adminUsersRepositoryProvider = Provider<AdminUsersRepository>((ref) => AdminUsersRepository(ref.watch(apiClientProvider)));
+final adminUsersRepositoryProvider = Provider<AdminUsersRepository>(
+  (ref) => AdminUsersRepository(ref.watch(apiClientProvider)),
+);

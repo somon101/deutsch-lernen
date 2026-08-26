@@ -8,15 +8,21 @@ import 'block_question.dart';
 /// cross-cutting note: legacy lessons reuse the builder's own mutations).
 
 class AdminVocabWord {
-  const AdminVocabWord({required this.id, required this.german, required this.translation, required this.pronunciation, this.audioUrl});
+  const AdminVocabWord({
+    required this.id,
+    required this.german,
+    required this.translation,
+    required this.pronunciation,
+    this.audioUrl,
+  });
 
   factory AdminVocabWord.fromJson(Map<String, dynamic> json) => AdminVocabWord(
-        id: json['id'] as String,
-        german: json['german'] as String,
-        translation: json['translation'] as String,
-        pronunciation: json['pronunciation'] as String? ?? '',
-        audioUrl: json['audioUrl'] as String?,
-      );
+    id: json['id'] as String,
+    german: json['german'] as String,
+    translation: json['translation'] as String,
+    pronunciation: json['pronunciation'] as String? ?? '',
+    audioUrl: json['audioUrl'] as String?,
+  );
 
   final String id;
   final String german;
@@ -26,15 +32,23 @@ class AdminVocabWord {
 }
 
 class AdminBlock {
-  const AdminBlock({required this.id, required this.stage, required this.title, required this.position, required this.questions});
+  const AdminBlock({
+    required this.id,
+    required this.stage,
+    required this.title,
+    required this.position,
+    required this.questions,
+  });
 
   factory AdminBlock.fromJson(Map<String, dynamic> json) => AdminBlock(
-        id: json['id'] as String,
-        stage: json['stage'] as String,
-        title: json['title'] as String,
-        position: json['position'] as int,
-        questions: (json['questions'] as List<dynamic>).map((q) => questionDraftFromWire(q as Map<String, dynamic>)).toList(),
-      );
+    id: json['id'] as String,
+    stage: json['stage'] as String,
+    title: json['title'] as String,
+    position: json['position'] as int,
+    questions: (json['questions'] as List<dynamic>)
+        .map((q) => questionDraftFromWire(q as Map<String, dynamic>))
+        .toList(),
+  );
 
   final String id;
   final String stage;
@@ -57,32 +71,44 @@ class AdminLesson {
   });
 
   factory AdminLesson.fromJson(Map<String, dynamic> json) => AdminLesson(
-        id: json['id'] as String,
-        title: json['title'] as String,
-        description: json['description'] as String? ?? '',
-        materialText: json['materialText'] as String? ?? '',
-        videoUrl: json['videoUrl'] as String?,
-        audioUrl: json['audioUrl'] as String?,
-        position: json['position'] as int? ?? 0,
-        vocabulary: (json['vocabulary'] as List<dynamic>).map((w) => AdminVocabWord.fromJson(w as Map<String, dynamic>)).toList(),
-        blocks: (json['blocks'] as List<dynamic>).map((b) => AdminBlock.fromJson(b as Map<String, dynamic>)).toList(),
-      );
+    id: json['id'] as String,
+    title: json['title'] as String,
+    description: json['description'] as String? ?? '',
+    materialText: json['materialText'] as String? ?? '',
+    videoUrl: json['videoUrl'] as String?,
+    audioUrl: json['audioUrl'] as String?,
+    position: json['position'] as int? ?? 0,
+    vocabulary: (json['vocabulary'] as List<dynamic>)
+        .map((w) => AdminVocabWord.fromJson(w as Map<String, dynamic>))
+        .toList(),
+    blocks: (json['blocks'] as List<dynamic>)
+        .map((b) => AdminBlock.fromJson(b as Map<String, dynamic>))
+        .toList(),
+  );
 
   /// GET/PUT /api/admin/content/:lessonId's shape — keyed by `lessonId`
   /// instead of `id`, and has no `title`/`description` of its own (a legacy
   /// lesson's display title comes from its parsed material, supplied by the
   /// caller — see content.py's list_legacy_lessons on the backend side).
-  factory AdminLesson.fromLegacyJson(String lessonId, String title, Map<String, dynamic> json) => AdminLesson(
-        id: lessonId,
-        title: title,
-        description: '',
-        materialText: json['materialText'] as String? ?? '',
-        videoUrl: json['videoUrl'] as String?,
-        audioUrl: json['audioUrl'] as String?,
-        position: 0,
-        vocabulary: (json['vocabulary'] as List<dynamic>).map((w) => AdminVocabWord.fromJson(w as Map<String, dynamic>)).toList(),
-        blocks: (json['blocks'] as List<dynamic>).map((b) => AdminBlock.fromJson(b as Map<String, dynamic>)).toList(),
-      );
+  factory AdminLesson.fromLegacyJson(
+    String lessonId,
+    String title,
+    Map<String, dynamic> json,
+  ) => AdminLesson(
+    id: lessonId,
+    title: title,
+    description: '',
+    materialText: json['materialText'] as String? ?? '',
+    videoUrl: json['videoUrl'] as String?,
+    audioUrl: json['audioUrl'] as String?,
+    position: 0,
+    vocabulary: (json['vocabulary'] as List<dynamic>)
+        .map((w) => AdminVocabWord.fromJson(w as Map<String, dynamic>))
+        .toList(),
+    blocks: (json['blocks'] as List<dynamic>)
+        .map((b) => AdminBlock.fromJson(b as Map<String, dynamic>))
+        .toList(),
+  );
 
   final String id;
   final String title;
@@ -94,7 +120,9 @@ class AdminLesson {
   final List<AdminVocabWord> vocabulary;
   final List<AdminBlock> blocks;
 
-  List<AdminBlock> blocksFor(String stage) => blocks.where((b) => b.stage == stage).toList()..sort((a, b) => a.position.compareTo(b.position));
+  List<AdminBlock> blocksFor(String stage) =>
+      blocks.where((b) => b.stage == stage).toList()
+        ..sort((a, b) => a.position.compareTo(b.position));
 }
 
 class AdminCourse {
@@ -109,14 +137,16 @@ class AdminCourse {
   });
 
   factory AdminCourse.fromJson(Map<String, dynamic> json) => AdminCourse(
-        id: json['id'] as String,
-        title: json['title'] as String,
-        description: json['description'] as String? ?? '',
-        coverUrl: json['coverUrl'] as String?,
-        status: json['status'] as String,
-        position: json['position'] as int,
-        lessons: (json['lessons'] as List<dynamic>).map((l) => AdminLesson.fromJson(l as Map<String, dynamic>)).toList(),
-      );
+    id: json['id'] as String,
+    title: json['title'] as String,
+    description: json['description'] as String? ?? '',
+    coverUrl: json['coverUrl'] as String?,
+    status: json['status'] as String,
+    position: json['position'] as int,
+    lessons: (json['lessons'] as List<dynamic>)
+        .map((l) => AdminLesson.fromJson(l as Map<String, dynamic>))
+        .toList(),
+  );
 
   final String id;
   final String title;
@@ -140,7 +170,8 @@ class AdminCourseSummary {
     required this.questionCount,
   });
 
-  factory AdminCourseSummary.fromJson(Map<String, dynamic> json) => AdminCourseSummary(
+  factory AdminCourseSummary.fromJson(Map<String, dynamic> json) =>
+      AdminCourseSummary(
         id: json['id'] as String,
         title: json['title'] as String,
         description: json['description'] as String? ?? '',
@@ -164,8 +195,13 @@ class AdminCourseSummary {
 }
 
 class WordLibraryEntry {
-  const WordLibraryEntry({required this.german, required this.translation, required this.pronunciation});
-  factory WordLibraryEntry.fromJson(Map<String, dynamic> json) => WordLibraryEntry(
+  const WordLibraryEntry({
+    required this.german,
+    required this.translation,
+    required this.pronunciation,
+  });
+  factory WordLibraryEntry.fromJson(Map<String, dynamic> json) =>
+      WordLibraryEntry(
         german: json['german'] as String,
         translation: json['translation'] as String,
         pronunciation: json['pronunciation'] as String? ?? '',
@@ -177,15 +213,27 @@ class WordLibraryEntry {
 
 class MediaLibraryEntry {
   const MediaLibraryEntry({required this.url, required this.label});
-  factory MediaLibraryEntry.fromJson(Map<String, dynamic> json) => MediaLibraryEntry(url: json['url'] as String, label: json['label'] as String);
+  factory MediaLibraryEntry.fromJson(Map<String, dynamic> json) =>
+      MediaLibraryEntry(
+        url: json['url'] as String,
+        label: json['label'] as String,
+      );
   final String url;
   final String label;
 }
 
 class MaterialLibraryEntry {
-  const MaterialLibraryEntry({required this.label, required this.snippet, required this.materialText});
+  const MaterialLibraryEntry({
+    required this.label,
+    required this.snippet,
+    required this.materialText,
+  });
   factory MaterialLibraryEntry.fromJson(Map<String, dynamic> json) =>
-      MaterialLibraryEntry(label: json['label'] as String, snippet: json['snippet'] as String, materialText: json['materialText'] as String);
+      MaterialLibraryEntry(
+        label: json['label'] as String,
+        snippet: json['snippet'] as String,
+        materialText: json['materialText'] as String,
+      );
   final String label;
   final String snippet;
   final String materialText;
@@ -193,8 +241,14 @@ class MaterialLibraryEntry {
 
 /// Preview result from POST .../vocabulary/import/preview.
 class ImportPreviewItem {
-  const ImportPreviewItem({required this.index, required this.original, required this.status, this.message});
-  factory ImportPreviewItem.fromJson(Map<String, dynamic> json) => ImportPreviewItem(
+  const ImportPreviewItem({
+    required this.index,
+    required this.original,
+    required this.status,
+    this.message,
+  });
+  factory ImportPreviewItem.fromJson(Map<String, dynamic> json) =>
+      ImportPreviewItem(
         index: json['index'] as int,
         original: json['original'] as String,
         status: json['status'] as String,
@@ -207,13 +261,20 @@ class ImportPreviewItem {
 }
 
 class ImportPreview {
-  const ImportPreview({required this.total, required this.newCount, required this.duplicateCount, required this.items});
+  const ImportPreview({
+    required this.total,
+    required this.newCount,
+    required this.duplicateCount,
+    required this.items,
+  });
   factory ImportPreview.fromJson(Map<String, dynamic> json) => ImportPreview(
-        total: json['total'] as int,
-        newCount: json['newCount'] as int,
-        duplicateCount: json['duplicateCount'] as int,
-        items: (json['items'] as List<dynamic>).map((i) => ImportPreviewItem.fromJson(i as Map<String, dynamic>)).toList(),
-      );
+    total: json['total'] as int,
+    newCount: json['newCount'] as int,
+    duplicateCount: json['duplicateCount'] as int,
+    items: (json['items'] as List<dynamic>)
+        .map((i) => ImportPreviewItem.fromJson(i as Map<String, dynamic>))
+        .toList(),
+  );
   final int total;
   final int newCount;
   final int duplicateCount;

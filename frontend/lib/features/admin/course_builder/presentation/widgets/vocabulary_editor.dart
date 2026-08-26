@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../../core/widgets/word_audio_button.dart';
+import '../../../admin_tokens.dart';
+import '../../../admin_widgets.dart';
 import '../../../widgets/admin_feedback.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
@@ -15,7 +17,13 @@ import '../../domain/builder_domain.dart';
 /// import section (preview → import, mirroring the two-step backend
 /// contract exactly).
 class VocabularyEditor extends ConsumerStatefulWidget {
-  const VocabularyEditor({super.key, required this.courseId, required this.lessonId, required this.words, required this.onChanged});
+  const VocabularyEditor({
+    super.key,
+    required this.courseId,
+    required this.lessonId,
+    required this.words,
+    required this.onChanged,
+  });
 
   final String courseId;
   final String lessonId;
@@ -34,23 +42,50 @@ class _VocabularyEditorState extends ConsumerState<VocabularyEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.words.isEmpty) const Text('Слов пока нет — добавьте первое ниже.'),
-        for (final w in widget.words) _WordRow(courseId: widget.courseId, lessonId: widget.lessonId, word: w, onChanged: widget.onChanged),
-        const Divider(),
-        _NewWordRow(courseId: widget.courseId, lessonId: widget.lessonId, onChanged: widget.onChanged),
-        const SizedBox(height: 12),
+        if (widget.words.isEmpty)
+          const Text(
+            'Слов пока нет — добавьте первое ниже.',
+            style: AdminTypography.caption,
+          ),
+        for (final w in widget.words)
+          _WordRow(
+            courseId: widget.courseId,
+            lessonId: widget.lessonId,
+            word: w,
+            onChanged: widget.onChanged,
+          ),
+        const Divider(height: 20, color: AdminColors.border),
+        _NewWordRow(
+          courseId: widget.courseId,
+          lessonId: widget.lessonId,
+          onChanged: widget.onChanged,
+        ),
+        const SizedBox(height: AdminMetrics.fieldGap),
         TextButton(
           onPressed: () => setState(() => _importOpen = !_importOpen),
-          child: Text(_importOpen ? '▾ Импортировать JSON' : '▸ Импортировать JSON'),
+          style: AdminButtonStyles.text(),
+          child: Text(
+            _importOpen ? '▾ Импортировать JSON' : '▸ Импортировать JSON',
+          ),
         ),
-        if (_importOpen) _JsonImportPanel(courseId: widget.courseId, lessonId: widget.lessonId, onChanged: widget.onChanged),
+        if (_importOpen)
+          _JsonImportPanel(
+            courseId: widget.courseId,
+            lessonId: widget.lessonId,
+            onChanged: widget.onChanged,
+          ),
       ],
     );
   }
 }
 
 class _WordRow extends ConsumerStatefulWidget {
-  const _WordRow({required this.courseId, required this.lessonId, required this.word, required this.onChanged});
+  const _WordRow({
+    required this.courseId,
+    required this.lessonId,
+    required this.word,
+    required this.onChanged,
+  });
   final String courseId;
   final String lessonId;
   final AdminVocabWord word;
@@ -62,8 +97,12 @@ class _WordRow extends ConsumerStatefulWidget {
 
 class _WordRowState extends ConsumerState<_WordRow> {
   late final _german = TextEditingController(text: widget.word.german);
-  late final _translation = TextEditingController(text: widget.word.translation);
-  late final _pronunciation = TextEditingController(text: widget.word.pronunciation);
+  late final _translation = TextEditingController(
+    text: widget.word.translation,
+  );
+  late final _pronunciation = TextEditingController(
+    text: widget.word.pronunciation,
+  );
   bool _busy = false;
   bool _saved = false;
 
@@ -76,13 +115,18 @@ class _WordRowState extends ConsumerState<_WordRow> {
   }
 
   Future<void> _save() async {
-    if (_german.text.trim().isEmpty || _translation.text.trim().isEmpty || _pronunciation.text.trim().isEmpty) return;
+    if (_german.text.trim().isEmpty ||
+        _translation.text.trim().isEmpty ||
+        _pronunciation.text.trim().isEmpty)
+      return;
     setState(() {
       _busy = true;
       _saved = false;
     });
     try {
-      await ref.read(builderRepositoryProvider).updateWord(
+      await ref
+          .read(builderRepositoryProvider)
+          .updateWord(
             widget.courseId,
             widget.lessonId,
             widget.word.id,
@@ -100,10 +144,15 @@ class _WordRowState extends ConsumerState<_WordRow> {
   }
 
   Future<void> _delete() async {
-    final ok = await confirmDialog(context, title: 'Удалить слово «${widget.word.german}» из словаря курса?');
+    final ok = await confirmDialog(
+      context,
+      title: 'Удалить слово «${widget.word.german}» из словаря курса?',
+    );
     if (!ok) return;
     try {
-      await ref.read(builderRepositoryProvider).removeWord(widget.courseId, widget.lessonId, widget.word.id);
+      await ref
+          .read(builderRepositoryProvider)
+          .removeWord(widget.courseId, widget.lessonId, widget.word.id);
       widget.onChanged();
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось удалить слово');
@@ -116,7 +165,15 @@ class _WordRowState extends ConsumerState<_WordRow> {
     setState(() => _busy = true);
     try {
       final bytes = await file.readAsBytes();
-      await ref.read(builderRepositoryProvider).uploadWordAudio(widget.courseId, widget.lessonId, widget.word.id, bytes: bytes, filename: file.name);
+      await ref
+          .read(builderRepositoryProvider)
+          .uploadWordAudio(
+            widget.courseId,
+            widget.lessonId,
+            widget.word.id,
+            bytes: bytes,
+            filename: file.name,
+          );
       widget.onChanged();
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось загрузить аудио');
@@ -128,7 +185,9 @@ class _WordRowState extends ConsumerState<_WordRow> {
   Future<void> _removeAudio() async {
     setState(() => _busy = true);
     try {
-      await ref.read(builderRepositoryProvider).removeWordAudio(widget.courseId, widget.lessonId, widget.word.id);
+      await ref
+          .read(builderRepositoryProvider)
+          .removeWordAudio(widget.courseId, widget.lessonId, widget.word.id);
       widget.onChanged();
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -142,20 +201,53 @@ class _WordRowState extends ConsumerState<_WordRow> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          WordAudioButton(word: widget.word.german, audioUrl: widget.word.audioUrl),
-          Expanded(child: TextField(controller: _german, decoration: const InputDecoration(labelText: 'Немецкий'), enabled: !_busy)),
+          WordAudioButton(
+            word: widget.word.german,
+            audioUrl: widget.word.audioUrl,
+          ),
+          Expanded(
+            child: TextField(
+              controller: _german,
+              decoration: adminInputDecoration(label: 'Немецкий'),
+              enabled: !_busy,
+            ),
+          ),
           const SizedBox(width: 6),
-          Expanded(child: TextField(controller: _translation, decoration: const InputDecoration(labelText: 'Перевод'), enabled: !_busy)),
+          Expanded(
+            child: TextField(
+              controller: _translation,
+              decoration: adminInputDecoration(label: 'Перевод'),
+              enabled: !_busy,
+            ),
+          ),
           const SizedBox(width: 6),
-          Expanded(child: TextField(controller: _pronunciation, decoration: const InputDecoration(labelText: 'Транскрипция'), enabled: !_busy)),
+          Expanded(
+            child: TextField(
+              controller: _pronunciation,
+              decoration: adminInputDecoration(label: 'Транскрипция'),
+              enabled: !_busy,
+            ),
+          ),
           const SizedBox(width: 6),
           IconButton(
-            tooltip: widget.word.audioUrl != null ? 'Удалить запись' : 'Загрузить запись',
-            icon: Icon(widget.word.audioUrl != null ? Icons.mic_off : Icons.mic, size: 18),
-            onPressed: _busy ? null : (widget.word.audioUrl != null ? _removeAudio : _uploadAudio),
+            tooltip: widget.word.audioUrl != null
+                ? 'Удалить запись'
+                : 'Загрузить запись',
+            icon: Icon(
+              widget.word.audioUrl != null ? Icons.mic_off : Icons.mic,
+              size: 18,
+            ),
+            color: AdminColors.textSecondary,
+            onPressed: _busy
+                ? null
+                : (widget.word.audioUrl != null ? _removeAudio : _uploadAudio),
           ),
-          TextButton(onPressed: _busy ? null : _save, child: Text(_saved ? 'Сохранено' : 'Сохранить')),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 18), onPressed: _delete),
+          TextButton(
+            onPressed: _busy ? null : _save,
+            style: AdminButtonStyles.text(),
+            child: Text(_saved ? 'Сохранено' : 'Сохранить'),
+          ),
+          AdminDeleteLink(onPressed: _delete),
         ],
       ),
     );
@@ -163,7 +255,11 @@ class _WordRowState extends ConsumerState<_WordRow> {
 }
 
 class _NewWordRow extends ConsumerStatefulWidget {
-  const _NewWordRow({required this.courseId, required this.lessonId, required this.onChanged});
+  const _NewWordRow({
+    required this.courseId,
+    required this.lessonId,
+    required this.onChanged,
+  });
   final String courseId;
   final String lessonId;
   final VoidCallback onChanged;
@@ -180,7 +276,10 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
   List<WordLibraryEntry>? _suggestions;
   Timer? _debounce;
 
-  bool get _canSubmit => _german.text.trim().isNotEmpty && _translation.text.trim().isNotEmpty && _pronunciation.text.trim().isNotEmpty;
+  bool get _canSubmit =>
+      _german.text.trim().isNotEmpty &&
+      _translation.text.trim().isNotEmpty &&
+      _pronunciation.text.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -199,7 +298,9 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 300), () async {
-      final results = await ref.read(builderRepositoryProvider).searchWordLibrary(value.trim());
+      final results = await ref
+          .read(builderRepositoryProvider)
+          .searchWordLibrary(value.trim());
       if (mounted) setState(() => _suggestions = results);
     });
   }
@@ -215,7 +316,9 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
     if (!_canSubmit) return;
     setState(() => _busy = true);
     try {
-      await ref.read(builderRepositoryProvider).addWord(
+      await ref
+          .read(builderRepositoryProvider)
+          .addWord(
             widget.courseId,
             widget.lessonId,
             german: _german.text.trim(),
@@ -242,25 +345,56 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextField(controller: _german, decoration: const InputDecoration(labelText: 'Немецкий'), onChanged: _onGermanChanged),
+              child: TextField(
+                controller: _german,
+                decoration: adminInputDecoration(label: 'Немецкий'),
+                onChanged: _onGermanChanged,
+              ),
             ),
             const SizedBox(width: 6),
-            Expanded(child: TextField(controller: _translation, decoration: const InputDecoration(labelText: 'Перевод'), onChanged: (_) => setState(() {}))),
+            Expanded(
+              child: TextField(
+                controller: _translation,
+                decoration: adminInputDecoration(label: 'Перевод'),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
             const SizedBox(width: 6),
-            Expanded(child: TextField(controller: _pronunciation, decoration: const InputDecoration(labelText: 'Транскрипция'), onChanged: (_) => setState(() {}))),
+            Expanded(
+              child: TextField(
+                controller: _pronunciation,
+                decoration: adminInputDecoration(label: 'Транскрипция'),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
             const SizedBox(width: 6),
-            ElevatedButton(onPressed: _busy || !_canSubmit ? null : _submit, child: const Text('+ Добавить')),
+            FilledButton(
+              onPressed: _busy || !_canSubmit ? null : _submit,
+              style: AdminButtonStyles.primary(),
+              child: const Text('+ Добавить'),
+            ),
           ],
         ),
         if (_suggestions != null && _suggestions!.isNotEmpty)
-          Card(
+          Container(
+            margin: const EdgeInsets.only(top: 6),
+            decoration: BoxDecoration(
+              border: Border.all(color: AdminColors.border),
+              borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+            ),
             child: Column(
               children: [
                 for (final s in _suggestions!)
                   ListTile(
                     dense: true,
-                    title: Text('${s.german} — ${s.translation}'),
-                    subtitle: const Text('Уже есть в другом уроке — использовать?'),
+                    title: Text(
+                      '${s.german} — ${s.translation}',
+                      style: AdminTypography.body,
+                    ),
+                    subtitle: const Text(
+                      'Уже есть в другом уроке — использовать?',
+                      style: AdminTypography.caption,
+                    ),
                     onTap: () => _pickSuggestion(s),
                   ),
               ],
@@ -272,7 +406,11 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
 }
 
 class _JsonImportPanel extends ConsumerStatefulWidget {
-  const _JsonImportPanel({required this.courseId, required this.lessonId, required this.onChanged});
+  const _JsonImportPanel({
+    required this.courseId,
+    required this.lessonId,
+    required this.onChanged,
+  });
   final String courseId;
   final String lessonId;
   final VoidCallback onChanged;
@@ -305,7 +443,9 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
     try {
       parsed = jsonDecode(_text.text);
     } catch (_) {
-      setState(() => _error = 'Некорректный JSON: не удалось разобрать текст. Проверьте синтаксис.');
+      setState(
+        () => _error = 'Некорректный JSON: не удалось разобрать текст. Проверьте синтаксис.',
+      );
       return;
     }
     if (parsed is! List) {
@@ -324,13 +464,17 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
     }
     setState(() => _busy = true);
     try {
-      final preview = await ref.read(builderRepositoryProvider).previewVocabularyImport(widget.courseId, widget.lessonId, words);
+      final preview = await ref
+          .read(builderRepositoryProvider)
+          .previewVocabularyImport(widget.courseId, widget.lessonId, words);
       setState(() {
         _preview = preview;
         _parsedWords = words;
       });
     } catch (e) {
-      setState(() => _error = adminErrorMessage(e, 'Не удалось проверить JSON'));
+      setState(
+        () => _error = adminErrorMessage(e, 'Не удалось проверить JSON'),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -354,7 +498,9 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
     if (_parsedWords == null) return;
     setState(() => _busy = true);
     try {
-      final result = await ref.read(builderRepositoryProvider).importVocabulary(widget.courseId, widget.lessonId, _parsedWords!);
+      final result = await ref
+          .read(builderRepositoryProvider)
+          .importVocabulary(widget.courseId, widget.lessonId, _parsedWords!);
       setState(() {
         _result = result;
         _preview = null;
@@ -362,7 +508,9 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
       });
       widget.onChanged();
     } catch (e) {
-      setState(() => _error = adminErrorMessage(e, 'Не удалось импортировать слова'));
+      setState(
+        () => _error = adminErrorMessage(e, 'Не удалось импортировать слова'),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -379,34 +527,64 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
           TextField(
             controller: _text,
             maxLines: 8,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              hintText: '[{"original":"Hallo","transcription":"халло","translation":"привет"}]',
+            style: AdminTypography.mono,
+            decoration: adminInputDecoration(
+              hint: '[{"original":"Hallo","transcription":"халло","translation":"привет"}]',
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AdminMetrics.fieldGap),
           Align(
             alignment: Alignment.centerRight,
-            child: OutlinedButton(onPressed: _busy || _text.text.trim().isEmpty ? null : _check, child: const Text('Проверить JSON')),
+            child: OutlinedButton(
+              onPressed: _busy || _text.text.trim().isEmpty ? null : _check,
+              style: AdminButtonStyles.secondary(),
+              child: const Text('Проверить JSON'),
+            ),
           ),
-          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: AdminColors.danger, fontSize: 12),
+              ),
+            ),
           if (preview != null) ...[
             const SizedBox(height: 8),
-            Text('Всего: ${preview.total} · новых: ${preview.newCount} · дублей: ${preview.duplicateCount}'),
+            Text(
+              'Всего: ${preview.total} · новых: ${preview.newCount} · дублей: ${preview.duplicateCount}',
+              style: AdminTypography.body,
+            ),
             for (final item in preview.items.where((i) => i.status != 'new'))
-              Text('«${item.original}» — ${item.message ?? item.status}', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                '«${item.original}» — ${item.message ?? item.status}',
+                style: AdminTypography.caption,
+              ),
             if (preview.duplicateCount > 0 && preview.newCount > 0)
-              const Text('Дубликаты будут пропущены автоматически — импортируются только новые слова.', style: TextStyle(fontSize: 12)),
+              const Text(
+                'Дубликаты будут пропущены автоматически — импортируются только новые слова.',
+                style: AdminTypography.caption,
+              ),
             if (preview.newCount > 0) ...[
               const SizedBox(height: 8),
-              ElevatedButton(onPressed: _busy ? null : _import, child: Text(_newWordsLabel(preview.newCount))),
+              FilledButton(
+                onPressed: _busy ? null : _import,
+                style: AdminButtonStyles.primary(),
+                child: Text(_newWordsLabel(preview.newCount)),
+              ),
             ],
           ],
           if (_result != null) ...[
             const SizedBox(height: 8),
-            Text('Добавлено слов: ${_result!.addedCount}.', style: const TextStyle(color: Colors.green)),
+            Text(
+              'Добавлено слов: ${_result!.addedCount}.',
+              style: const TextStyle(color: Color(0xFF16A34A), fontSize: 14),
+            ),
             for (final s in _result!.skipped)
-              Text('«${s.original}» — ${s.message ?? s.status}', style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+              Text(
+                '«${s.original}» — ${s.message ?? s.status}',
+                style: const TextStyle(color: AdminColors.danger, fontSize: 12),
+              ),
           ],
         ],
       ),

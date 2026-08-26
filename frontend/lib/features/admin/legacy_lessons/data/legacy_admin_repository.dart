@@ -18,28 +18,83 @@ class LegacyAdminRepository {
 
   Future<AdminLesson> getContent(String lessonId, String title) async {
     final res = await _api.get('$_base/${Uri.encodeComponent(lessonId)}');
-    return AdminLesson.fromLegacyJson(lessonId, title, res['content'] as Map<String, dynamic>);
+    return AdminLesson.fromLegacyJson(
+      lessonId,
+      title,
+      res['content'] as Map<String, dynamic>,
+    );
   }
 
-  Future<AdminLesson> saveMaterialText(String lessonId, String title, String materialText) async {
-    final res = await _api.put('$_base/${Uri.encodeComponent(lessonId)}', body: {'materialText': materialText});
-    return AdminLesson.fromLegacyJson(lessonId, title, res['content'] as Map<String, dynamic>);
+  Future<AdminLesson> saveMaterialText(
+    String lessonId,
+    String title,
+    String materialText,
+  ) async {
+    final res = await _api.put(
+      '$_base/${Uri.encodeComponent(lessonId)}',
+      body: {'materialText': materialText},
+    );
+    return AdminLesson.fromLegacyJson(
+      lessonId,
+      title,
+      res['content'] as Map<String, dynamic>,
+    );
   }
 
-  Future<AdminLesson> uploadMedia(String lessonId, String title, {required String kind, required List<int> bytes, required String filename}) async {
-    final res = await _api.postMultipart('$_base/${Uri.encodeComponent(lessonId)}/media', fieldName: 'file', bytes: bytes, filename: filename, fields: {'kind': kind});
-    return AdminLesson.fromLegacyJson(lessonId, title, res['content'] as Map<String, dynamic>);
+  Future<AdminLesson> uploadMedia(
+    String lessonId,
+    String title, {
+    required String kind,
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final res = await _api.postMultipart(
+      '$_base/${Uri.encodeComponent(lessonId)}/media',
+      fieldName: 'file',
+      bytes: bytes,
+      filename: filename,
+      fields: {'kind': kind},
+    );
+    return AdminLesson.fromLegacyJson(
+      lessonId,
+      title,
+      res['content'] as Map<String, dynamic>,
+    );
   }
 
-  Future<AdminLesson> removeMedia(String lessonId, String title, String kind) async {
-    final res = await _api.deleteExpectingBody('$_base/${Uri.encodeComponent(lessonId)}/media?kind=${Uri.encodeComponent(kind)}');
-    return AdminLesson.fromLegacyJson(lessonId, title, res['content'] as Map<String, dynamic>);
+  Future<AdminLesson> removeMedia(
+    String lessonId,
+    String title,
+    String kind,
+  ) async {
+    final res = await _api.deleteExpectingBody(
+      '$_base/${Uri.encodeComponent(lessonId)}/media?kind=${Uri.encodeComponent(kind)}',
+    );
+    return AdminLesson.fromLegacyJson(
+      lessonId,
+      title,
+      res['content'] as Map<String, dynamic>,
+    );
   }
 
-  Future<AdminLesson> reuseMedia(String lessonId, String title, String kind, String url) async {
-    final res = await _api.put('$_base/${Uri.encodeComponent(lessonId)}/media/reuse', body: {'kind': kind, 'url': url});
-    return AdminLesson.fromLegacyJson(lessonId, title, res['content'] as Map<String, dynamic>);
+  Future<AdminLesson> reuseMedia(
+    String lessonId,
+    String title,
+    String kind,
+    String url,
+  ) async {
+    final res = await _api.put(
+      '$_base/${Uri.encodeComponent(lessonId)}/media/reuse',
+      body: {'kind': kind, 'url': url},
+    );
+    return AdminLesson.fromLegacyJson(
+      lessonId,
+      title,
+      res['content'] as Map<String, dynamic>,
+    );
   }
 }
 
-final legacyAdminRepositoryProvider = Provider<LegacyAdminRepository>((ref) => LegacyAdminRepository(ref.watch(apiClientProvider)));
+final legacyAdminRepositoryProvider = Provider<LegacyAdminRepository>(
+  (ref) => LegacyAdminRepository(ref.watch(apiClientProvider)),
+);

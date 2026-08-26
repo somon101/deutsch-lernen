@@ -18,8 +18,8 @@ from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
 from app.models.lesson_question import LessonQuestion
 from app.models.vocabulary_item import VocabularyItem
-from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word, to_question_dto
-from app.services.material import filter_new_vocabulary, parse_material
+from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
+from app.services.material import filter_new_vocabulary, get_new_material_blocks, parse_material, to_question_dto
 from app.utils import to_iso_z, utcnow
 
 STAGE_TITLES = {"minitest": "Мини-тест", "practice": "Практика", "review": "Закрепление"}
@@ -118,6 +118,8 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         new_vocab_keys_by_lesson[lesson.id] = set(taught_so_far)
         taught_so_far |= {w.germanKey for w in words if w.lessonId == lesson.id}
 
+    new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids)
+
     def lesson_dto(lesson: CourseLesson) -> dict:
         lesson_words = [w for w in words if w.lessonId == lesson.id]
         lesson_questions = [q for q in questions if q.lessonId == lesson.id]
@@ -127,12 +129,13 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
             for w in lesson_words
         ]
         parsed_material = parse_material(lesson.materialText, vocabulary_dtos)
+        new_blocks = new_material_by_lesson.get(lesson.id)
         return {
             "id": lesson.id,
             "title": lesson.title,
             "description": lesson.description,
             "materialText": lesson.materialText,
-            "material": parsed_material["blocks"],
+            "material": new_blocks if new_blocks is not None else parsed_material["blocks"],
             "phrases": parsed_material["phrases"],
             "videoUrl": lesson.videoUrl,
             "audioUrl": lesson.audioUrl,
@@ -149,7 +152,9 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
                     "title": b.title,
                     "position": b.position,
                     "questions": [
-                        to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data) for q in lesson_questions if q.blockId == b.id
+                        {"id": q.id, **to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data)}
+                        for q in lesson_questions
+                        if q.blockId == b.id
                     ],
                 }
                 for b in lesson_blocks

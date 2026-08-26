@@ -8,7 +8,7 @@ from app.models.lesson_content import LessonContent
 from app.models.lesson_question import LessonQuestion
 from app.models.vocabulary_item import VocabularyItem
 from app.schemas.content import ContentPayload
-from app.services.material import filter_new_vocabulary, parse_material
+from app.services.material import filter_new_vocabulary, get_new_material_blocks, parse_material, to_question_dto
 from app.utils import to_iso_z, utcnow
 
 # The original, file-based course. Courses made in the builder use their own
@@ -49,18 +49,6 @@ def lesson_label(lesson_id: str) -> str:
 
 class DuplicateWordError(Exception):
     """Raised when a word would end up in two lessons of the same course."""
-
-
-def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_answer: str, data) -> dict:
-    if kind == "truefalse":
-        return {"kind": "truefalse", "prompt": prompt, "correct": correct_answer == "true"}
-    if kind == "cloze":
-        return {"kind": "cloze", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
-    if kind == "scramble":
-        return {"kind": "scramble", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
-    if kind == "match":
-        return {"kind": "match", "prompt": prompt, "pairs": data or []}
-    return {"kind": "choice", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
 
 
 async def _legacy_lesson_order(db: AsyncSession) -> list[str]:
@@ -143,11 +131,12 @@ async def get_lesson_content(db: AsyncSession, lesson_id: str) -> dict:
     parsed_material = parse_material(material_text or "", vocabulary_dtos)
     taught_before = await _words_taught_before_legacy_lesson(db, lesson_id)
     new_vocabulary = filter_new_vocabulary(vocabulary_dtos, taught_before)
+    new_blocks = (await get_new_material_blocks(db, LEGACY_COURSE_ID, [lesson_id])).get(lesson_id)
 
     return {
         "lessonId": lesson_id,
         "materialText": material_text,
-        "material": parsed_material["blocks"],
+        "material": new_blocks if new_blocks is not None else parsed_material["blocks"],
         "phrases": parsed_material["phrases"],
         "videoUrl": content.videoUrl if content else None,
         "audioUrl": content.audioUrl if content else None,
@@ -164,7 +153,7 @@ async def get_lesson_content(db: AsyncSession, lesson_id: str) -> dict:
                 "title": b.title,
                 "position": b.position,
                 "questions": [
-                    to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data)
+                    {"id": q.id, **to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data)}
                     for q in questions
                     if q.blockId == b.id
                 ],

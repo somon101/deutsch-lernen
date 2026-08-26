@@ -9,7 +9,9 @@ import '../../../profile/presentation/profile_tokens.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/admin_users_repository.dart';
 
-final adminUsersListProvider = FutureProvider.autoDispose<List<AdminUser>>((ref) => ref.watch(adminUsersRepositoryProvider).listUsers());
+final adminUsersListProvider = FutureProvider.autoDispose<List<AdminUser>>(
+  (ref) => ref.watch(adminUsersRepositoryProvider).listUsers(),
+);
 
 /// "19.08.2026, 14:32" — mirrors src/lib/formatDate.ts's formatDateTime.
 String _formatDateTime(String iso) {
@@ -34,15 +36,24 @@ class AdminUsersScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Пользователи'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
       ),
       body: users.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, st) => Center(child: Text('Не удалось загрузить список: $err')),
+        error: (err, st) =>
+            Center(child: Text('Не удалось загрузить список: $err')),
         data: (list) => RefreshIndicator(
           onRefresh: () async => ref.invalidate(adminUsersListProvider),
           child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + bottomBarClearance(context),
+            ),
             children: [
               Center(
                 child: ConstrainedBox(
@@ -91,7 +102,15 @@ class _UsersTableCardState extends State<_UsersTableCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Пользователи', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.22, color: c.text)),
+            Text(
+              'Пользователи',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.22,
+                color: c.text,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
               '«Онлайн» — пользователь пользовался платформой в последние 5 минут. «Последний вход» — когда он в '
@@ -100,52 +119,80 @@ class _UsersTableCardState extends State<_UsersTableCard> {
             ),
             const SizedBox(height: 16),
             Theme(
-              data: Theme.of(context).copyWith(dividerColor: c.border.withValues(alpha: 0.6)),
+              data: Theme.of(context)
+                  .copyWith(dividerColor: c.border.withValues(alpha: 0.6)),
               child: Scrollbar(
                 controller: _scrollController,
                 thumbVisibility: true,
                 trackVisibility: true,
                 child: SingleChildScrollView(
-                controller: _scrollController,
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(bottom: 10),
-                child: DataTable(
-                  headingRowHeight: 34,
-                  dataRowMinHeight: 34,
-                  dataRowMaxHeight: 40,
-                  columnSpacing: 18,
-                  horizontalMargin: 8,
-                  dividerThickness: 0.6,
-                  headingTextStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: c.textFaint, letterSpacing: 0.5),
-                  dataTextStyle: TextStyle(fontSize: 14, color: c.text),
-                  columns: const [
-                    DataColumn(label: Text('ИМЯ')),
-                    DataColumn(label: Text('ЛОГИН')),
-                    DataColumn(label: Text('EMAIL')),
-                    DataColumn(label: Text('РОЛЬ')),
-                    DataColumn(label: Text('СТАТУС')),
-                    DataColumn(label: Text('ОНЛАЙН')),
-                    DataColumn(label: Text('ПОСЛЕДНИЙ ВХОД')),
-                    DataColumn(label: Text('')),
-                  ],
-                  rows: [
-                    for (final u in users)
-                      DataRow(cells: [
-                        DataCell(Text('${u.firstName} ${u.lastName}')),
-                        DataCell(Text(u.username)),
-                        DataCell(Text(u.email)),
-                        DataCell(Text(u.role)),
-                        DataCell(StatusPill(label: u.status == 'ACTIVE' ? 'Активен' : 'Заблокирован', active: u.status == 'ACTIVE')),
-                        DataCell(StatusPill(label: u.online ? '● В сети' : 'Не в сети', active: u.online)),
-                        DataCell(
-                          u.lastLoginAt != null
-                              ? Text(_formatDateTime(u.lastLoginAt!))
-                              : Text('никогда', style: TextStyle(color: c.textFaint)),
+                  controller: _scrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: DataTable(
+                    headingRowHeight: 34,
+                    dataRowMinHeight: 34,
+                    dataRowMaxHeight: 40,
+                    columnSpacing: 18,
+                    horizontalMargin: 8,
+                    dividerThickness: 0.6,
+                    headingTextStyle: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: c.textFaint,
+                      letterSpacing: 0.5,
+                    ),
+                    dataTextStyle: TextStyle(fontSize: 14, color: c.text),
+                    columns: const [
+                      DataColumn(label: Text('ИМЯ')),
+                      DataColumn(label: Text('ЛОГИН')),
+                      DataColumn(label: Text('EMAIL')),
+                      DataColumn(label: Text('РОЛЬ')),
+                      DataColumn(label: Text('СТАТУС')),
+                      DataColumn(label: Text('ОНЛАЙН')),
+                      DataColumn(label: Text('ПОСЛЕДНИЙ ВХОД')),
+                      DataColumn(label: Text('')),
+                    ],
+                    rows: [
+                      for (final u in users)
+                        DataRow(
+                          cells: [
+                            DataCell(Text('${u.firstName} ${u.lastName}')),
+                            DataCell(Text(u.username)),
+                            DataCell(Text(u.email)),
+                            DataCell(Text(u.role)),
+                            DataCell(
+                              StatusPill(
+                                label: u.status == 'ACTIVE'
+                                    ? 'Активен'
+                                    : 'Заблокирован',
+                                active: u.status == 'ACTIVE',
+                              ),
+                            ),
+                            DataCell(
+                              StatusPill(
+                                label: u.online ? '● В сети' : 'Не в сети',
+                                active: u.online,
+                              ),
+                            ),
+                            DataCell(
+                              u.lastLoginAt != null
+                                  ? Text(_formatDateTime(u.lastLoginAt!))
+                                  : Text(
+                                      'никогда',
+                                      style: TextStyle(color: c.textFaint),
+                                    ),
+                            ),
+                            DataCell(
+                              _OpenButton(
+                                onPressed: () =>
+                                    context.go('/admin/users/${u.id}'),
+                              ),
+                            ),
+                          ],
                         ),
-                        DataCell(_OpenButton(onPressed: () => context.go('/admin/users/${u.id}'))),
-                      ]),
-                  ],
-                ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -219,7 +266,9 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
       _error = null;
     });
     try {
-      await ref.read(adminUsersRepositoryProvider).createUser(
+      await ref
+          .read(adminUsersRepositoryProvider)
+          .createUser(
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
             email: _email.text.trim(),
@@ -242,7 +291,9 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
       ref.invalidate(adminUsersListProvider);
       if (mounted) showSuccessSnack(context, 'Пользователь создан');
     } catch (e) {
-      setState(() => _error = adminErrorMessage(e, 'Не удалось создать пользователя'));
+      setState(
+        () => _error = adminErrorMessage(e, 'Не удалось создать пользователя'),
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -257,40 +308,74 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Создать пользователя', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.2, color: c.text)),
-            const SizedBox(height: 16),
-            _FieldRow(children: [
-              _Field(label: 'Имя', controller: _firstName),
-              _Field(label: 'Фамилия', controller: _lastName),
-            ]),
-            const SizedBox(height: 14),
-            _FieldRow(children: [
-              _Field(label: 'Email', controller: _email, keyboardType: TextInputType.emailAddress),
-              _Field(label: 'Телефон', controller: _phone),
-            ]),
-            const SizedBox(height: 14),
-            _FieldRow(children: [
-              _Field(
-                label: 'Логин',
-                controller: _username,
-                hint: 'Только латинские буквы. Регистр не важен: Ivan и ivan — один и тот же логин.',
+            Text(
+              'Создать пользователя',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+                color: c.text,
               ),
-              _Field(label: 'Первоначальный пароль', controller: _password),
-            ]),
+            ),
+            const SizedBox(height: 16),
+            _FieldRow(
+              children: [
+                _Field(label: 'Имя', controller: _firstName),
+                _Field(label: 'Фамилия', controller: _lastName),
+              ],
+            ),
             const SizedBox(height: 14),
-            _FieldRow(children: [
-              _RoleField(value: _role, onChanged: (v) => setState(() => _role = v ?? UserRole.user)),
-              const SizedBox.shrink(),
-            ]),
+            _FieldRow(
+              children: [
+                _Field(
+                  label: 'Email',
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                _Field(label: 'Телефон', controller: _phone),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _FieldRow(
+              children: [
+                _Field(
+                  label: 'Логин',
+                  controller: _username,
+                  hint: 'Только латинские буквы. Регистр не важен: Ivan и ivan — один и тот же логин.',
+                ),
+                _Field(label: 'Первоначальный пароль', controller: _password),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _FieldRow(
+              children: [
+                _RoleField(
+                  value: _role,
+                  onChanged: (v) => setState(() => _role = v ?? UserRole.user),
+                ),
+                const SizedBox.shrink(),
+              ],
+            ),
             const SizedBox(height: 14),
             InkWell(
               onTap: () => setState(() => _canEditProfile = !_canEditProfile),
               child: Row(
                 children: [
-                  Checkbox(value: _canEditProfile, onChanged: (v) => setState(() => _canEditProfile = v ?? true)),
+                  Checkbox(
+                    value: _canEditProfile,
+                    onChanged: (v) =>
+                        setState(() => _canEditProfile = v ?? true),
+                  ),
                   const SizedBox(width: 4),
                   Expanded(
-                    child: Text('Пользователь может редактировать свой профиль', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
+                    child: Text(
+                      'Пользователь может редактировать свой профиль',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: c.text,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -299,15 +384,27 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(color: c.dangerSoft, borderRadius: BorderRadius.circular(14)),
-                child: Text(_error!, style: TextStyle(fontSize: 14.5, color: c.danger)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: c.dangerSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  _error!,
+                  style: TextStyle(fontSize: 14.5, color: c.danger),
+                ),
               ),
             ],
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'Создаём…' : 'Создать пользователя')),
+              child: ElevatedButton(
+                onPressed: _busy ? null : _submit,
+                child: Text(_busy ? 'Создаём…' : 'Создать пользователя'),
+              ),
             ),
           ],
         ),
@@ -349,7 +446,12 @@ class _FieldRow extends StatelessWidget {
 
 /// Mirrors .auth-field — label above input, optional hint below.
 class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.controller, this.hint, this.keyboardType});
+  const _Field({
+    required this.label,
+    required this.controller,
+    this.hint,
+    this.keyboardType,
+  });
   final String label;
   final TextEditingController controller;
   final String? hint;
@@ -361,9 +463,24 @@ class _Field extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.textMuted)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: c.textMuted,
+          ),
+        ),
         const SizedBox(height: 6),
-        TextField(controller: controller, keyboardType: keyboardType, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.text)),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: c.text,
+          ),
+        ),
         if (hint != null) ...[
           const SizedBox(height: 4),
           Text(hint!, style: TextStyle(fontSize: 12, color: c.textFaint)),
@@ -384,17 +501,37 @@ class _RoleField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Роль', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.textMuted)),
+        Text(
+          'Роль',
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: c.textMuted,
+          ),
+        ),
         const SizedBox(height: 6),
         DropdownButtonFormField<UserRole>(
           initialValue: value,
           isExpanded: true,
           decoration: const InputDecoration(),
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.text),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: c.text,
+          ),
           items: const [
-            DropdownMenuItem(value: UserRole.user, child: Text('USER — ученик')),
-            DropdownMenuItem(value: UserRole.teacher, child: Text('TEACHER — преподаватель')),
-            DropdownMenuItem(value: UserRole.admin, child: Text('ADMIN — администратор')),
+            DropdownMenuItem(
+              value: UserRole.user,
+              child: Text('USER — ученик'),
+            ),
+            DropdownMenuItem(
+              value: UserRole.teacher,
+              child: Text('TEACHER — преподаватель'),
+            ),
+            DropdownMenuItem(
+              value: UserRole.admin,
+              child: Text('ADMIN — администратор'),
+            ),
           ],
           onChanged: onChanged,
         ),

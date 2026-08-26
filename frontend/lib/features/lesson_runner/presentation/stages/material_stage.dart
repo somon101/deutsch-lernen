@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/word_audio_button.dart';
+import '../../data/lesson_repository.dart';
+import '../../domain/exercise.dart';
 import '../../domain/lesson_content.dart';
 import '../lesson_runner_controller.dart';
+import '../widgets/choice_question.dart';
+import '../widgets/cloze_question.dart';
+import '../widgets/match_question.dart';
+import '../widgets/scramble_question.dart';
+import '../widgets/truefalse_question.dart';
 
 class _Group {
   _Group({this.title});
@@ -22,6 +29,9 @@ List<_Group> _groupBlocks(List<MaterialBlock> blocks) {
     if (block is MaterialStepBlock) {
       if (current.blocks.isNotEmpty) groups.add(current);
       current = _Group(title: 'Шаг ${block.number}. ${block.title}')..blocks.add(block);
+    } else if (block is MaterialGenericBlock) {
+      if (current.blocks.isNotEmpty) groups.add(current);
+      current = _Group(title: block.title)..blocks.add(block);
     } else {
       current.blocks.add(block);
     }
@@ -156,7 +166,58 @@ class _MaterialBlockView extends StatelessWidget {
           padding: EdgeInsets.only(bottom: b.tight ? 2 : 10),
           child: Text(b.text, style: Theme.of(context).textTheme.bodyLarge),
         ),
+      MaterialGenericBlock() => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(b.title, style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 6),
+              Text(b.content, style: Theme.of(context).textTheme.bodyLarge),
+              if (b.questions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                for (final exercise in b.questions)
+                  Padding(padding: const EdgeInsets.only(bottom: 12), child: _InlineCheckpointQuestion(key: ValueKey(exercise.id), exercise: exercise)),
+              ],
+            ],
+          ),
+        ),
     };
+  }
+}
+
+/// One reusable-pool question attached to a MaterialBlock, answered as a
+/// checkpoint right where it appears in the reading flow (2026-08-26
+/// decision: "внутри чтения материала") — reuses the exact same per-kind
+/// widgets the quiz stages use, just without ExerciseStage's scoring/
+/// results-screen wrapper, since a single inline checkpoint isn't a "test".
+class _InlineCheckpointQuestion extends ConsumerWidget {
+  const _InlineCheckpointQuestion({super.key, required this.exercise});
+  final Exercise exercise;
+
+  Future<void> _handleAnswered(WidgetRef ref, bool correct) async {
+    try {
+      await ref.read(lessonRepositoryProvider).submitAnswer(exercise.id, correct);
+    } catch (_) {
+      // Best-effort — a logging failure must never block reading the lesson.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    void onAnswered(bool correct) => _handleAnswered(ref, correct);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: switch (exercise) {
+          ChoiceQuestion e => ChoiceQuestionView(exercise: e, onAnswered: onAnswered),
+          TrueFalseQuestion e => TrueFalseQuestionView(exercise: e, onAnswered: onAnswered),
+          ClozeExercise e => ClozeQuestionView(exercise: e, onAnswered: onAnswered),
+          ScrambleExercise e => ScrambleQuestionView(exercise: e, onAnswered: onAnswered),
+          MatchExercise e => MatchQuestionView(exercise: e, onAnswered: onAnswered),
+        },
+      ),
+    );
   }
 }
 

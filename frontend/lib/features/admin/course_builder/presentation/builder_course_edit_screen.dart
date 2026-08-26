@@ -4,12 +4,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../admin_tokens.dart';
+import '../../admin_widgets.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
 import '../domain/builder_domain.dart';
 import 'widgets/lesson_editor_panel.dart';
 
-final _courseProvider = FutureProvider.autoDispose.family<AdminCourse, String>((ref, courseId) => ref.watch(builderRepositoryProvider).getCourse(courseId));
+final _courseProvider = FutureProvider.autoDispose.family<AdminCourse, String>(
+  (ref, courseId) => ref.watch(builderRepositoryProvider).getCourse(courseId),
+);
+
+int _wordCount(AdminCourse c) =>
+    c.lessons.fold(0, (sum, l) => sum + l.vocabulary.length);
+int _questionCount(AdminCourse c) => c.lessons.fold(
+  0,
+  (sum, l) => sum + l.blocks.fold(0, (s, b) => s + b.questions.length),
+);
+
+String _mediaCounter(String? url) =>
+    url != null && url.isNotEmpty ? 'файл' : 'нет';
+String _blocksCounter(List<AdminBlock> blocks) =>
+    blocks.isEmpty ? 'нет блоков' : '${blocks.length} блок(ов)';
 
 /// Mirrors BuilderCourseEditPage.tsx: course settings (title/description/
 /// cover/publish toggle), the lesson tree, and — when a lesson is expanded
@@ -24,9 +40,19 @@ class BuilderCourseEditScreen extends ConsumerWidget {
     final course = ref.watch(_courseProvider(courseId));
 
     return Scaffold(
+      backgroundColor: AdminColors.bg,
       appBar: AppBar(
-        title: Text(course.value?.title ?? 'Курс'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/admin/courses')),
+        backgroundColor: AdminColors.card,
+        foregroundColor: AdminColors.text,
+        elevation: 0,
+        title: Text(
+          course.value?.title ?? 'Курс',
+          style: AdminTypography.pageTitle,
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/admin/courses'),
+        ),
       ),
       body: course.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -37,17 +63,46 @@ class BuilderCourseEditScreen extends ConsumerWidget {
           });
           return const Center(child: CircularProgressIndicator());
         },
-        data: (c) => ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _CourseSettingsCard(course: c),
-            const SizedBox(height: 20),
-            Text('Уроки', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            for (var i = 0; i < c.lessons.length; i++) _LessonTile(courseId: courseId, course: c, index: i),
-            const SizedBox(height: 12),
-            _AddLessonCard(courseId: courseId),
-          ],
+        data: (c) => AdminMaxWidth(
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: GestureDetector(
+                  onTap: () => context.go('/admin/courses'),
+                  child: const Text('Курсы →', style: AdminTypography.caption),
+                ),
+              ),
+              _CourseSettingsCard(course: c),
+              const SizedBox(height: AdminMetrics.cardGap),
+              AdminCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Структура курса',
+                      style: AdminTypography.cardTitle,
+                    ),
+                    Text(
+                      '${c.lessons.length} уроков · ${_wordCount(c)} слов · ${_questionCount(c)} вопросов',
+                      style: AdminTypography.caption,
+                    ),
+                    const SizedBox(height: AdminMetrics.fieldGap),
+                    for (var i = 0; i < c.lessons.length; i++)
+                      _LessonTile(courseId: courseId, course: c, index: i),
+                    if (c.lessons.isEmpty)
+                      const Text(
+                        'Уроков пока нет — добавьте первый ниже.',
+                        style: AdminTypography.caption,
+                      ),
+                    const SizedBox(height: 8),
+                    _AddLessonRow(courseId: courseId),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -59,12 +114,15 @@ class _CourseSettingsCard extends ConsumerStatefulWidget {
   final AdminCourse course;
 
   @override
-  ConsumerState<_CourseSettingsCard> createState() => _CourseSettingsCardState();
+  ConsumerState<_CourseSettingsCard> createState() =>
+      _CourseSettingsCardState();
 }
 
 class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
   late final _title = TextEditingController(text: widget.course.title);
-  late final _description = TextEditingController(text: widget.course.description);
+  late final _description = TextEditingController(
+    text: widget.course.description,
+  );
   bool _busy = false;
 
   @override
@@ -77,7 +135,13 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
   Future<void> _save() async {
     setState(() => _busy = true);
     try {
-      await ref.read(builderRepositoryProvider).updateCourse(widget.course.id, title: _title.text.trim(), description: _description.text.trim());
+      await ref
+          .read(builderRepositoryProvider)
+          .updateCourse(
+            widget.course.id,
+            title: _title.text.trim(),
+            description: _description.text.trim(),
+          );
       ref.invalidate(_courseProvider(widget.course.id));
       if (mounted) showSuccessSnack(context);
     } catch (e) {
@@ -90,7 +154,9 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
   Future<void> _togglePublish() async {
     final next = widget.course.status == 'PUBLISHED' ? 'DRAFT' : 'PUBLISHED';
     try {
-      await ref.read(builderRepositoryProvider).updateCourse(widget.course.id, status: next);
+      await ref
+          .read(builderRepositoryProvider)
+          .updateCourse(widget.course.id, status: next);
       ref.invalidate(_courseProvider(widget.course.id));
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось изменить статус');
@@ -103,7 +169,13 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
     setState(() => _busy = true);
     try {
       final bytes = await file.readAsBytes();
-      await ref.read(builderRepositoryProvider).uploadCourseCover(widget.course.id, bytes: bytes, filename: file.name);
+      await ref
+          .read(builderRepositoryProvider)
+          .uploadCourseCover(
+            widget.course.id,
+            bytes: bytes,
+            filename: file.name,
+          );
       ref.invalidate(_courseProvider(widget.course.id));
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось загрузить обложку');
@@ -114,7 +186,9 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
 
   Future<void> _removeCover() async {
     try {
-      await ref.read(builderRepositoryProvider).removeCourseCover(widget.course.id);
+      await ref
+          .read(builderRepositoryProvider)
+          .removeCourseCover(widget.course.id);
       ref.invalidate(_courseProvider(widget.course.id));
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось удалить обложку');
@@ -123,48 +197,111 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final coverUrl = ref.read(apiClientProvider).assetUrl(widget.course.coverUrl);
+    final coverUrl = ref
+        .read(apiClientProvider)
+        .assetUrl(widget.course.coverUrl);
     final published = widget.course.status == 'PUBLISHED';
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (coverUrl.isNotEmpty)
-              ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(coverUrl, height: 120, fit: BoxFit.cover)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton(onPressed: _busy ? null : _pickCover, child: const Text('Загрузить обложку')),
-                if (coverUrl.isNotEmpty) OutlinedButton(onPressed: _removeCover, child: const Text('Удалить обложку')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            TextField(controller: _title, decoration: const InputDecoration(labelText: 'Название')),
-            const SizedBox(height: 8),
-            TextField(controller: _description, maxLines: 3, decoration: const InputDecoration(labelText: 'Описание')),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                ElevatedButton(onPressed: _busy ? null : _save, child: const Text('Сохранить')),
-                const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: _togglePublish,
-                  child: Text(published ? 'Вернуть в черновики' : 'Опубликовать курс'),
+    return AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  widget.course.title,
+                  style: AdminTypography.cardTitle,
                 ),
-              ],
+              ),
+              AdminStatusBadge(published: published),
+            ],
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(
+            controller: _title,
+            decoration: adminInputDecoration(label: 'Название курса'),
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(
+            controller: _description,
+            maxLines: 3,
+            decoration: adminInputDecoration(label: 'Описание'),
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          if (coverUrl.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(coverUrl, height: 100, fit: BoxFit.cover),
             ),
+            const SizedBox(height: 8),
           ],
-        ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (coverUrl.isEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AdminColors.blockBg,
+                    borderRadius: BorderRadius.circular(
+                      AdminMetrics.buttonRadius,
+                    ),
+                  ),
+                  child: const Text(
+                    'Без обложки',
+                    style: AdminTypography.caption,
+                  ),
+                ),
+              OutlinedButton(
+                onPressed: _busy ? null : _pickCover,
+                style: AdminButtonStyles.secondary(),
+                child: Text(
+                  coverUrl.isEmpty ? 'Загрузить обложку' : 'Заменить обложку',
+                ),
+              ),
+              if (coverUrl.isNotEmpty)
+                AdminDeleteLink(
+                  onPressed: _removeCover,
+                  label: 'Удалить обложку',
+                ),
+            ],
+          ),
+          const SizedBox(height: AdminMetrics.cardGap),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: _togglePublish,
+                style: AdminButtonStyles.secondary(),
+                child: Text(
+                  published ? 'Вернуть в черновики' : 'Опубликовать курс',
+                ),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: _busy ? null : _save,
+                style: AdminButtonStyles.primary(),
+                child: const Text('Сохранить курс'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
 class _LessonTile extends ConsumerStatefulWidget {
-  const _LessonTile({required this.courseId, required this.course, required this.index});
+  const _LessonTile({
+    required this.courseId,
+    required this.course,
+    required this.index,
+  });
   final String courseId;
   final AdminCourse course;
   final int index;
@@ -186,18 +323,26 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
     ids[widget.index] = ids[j];
     ids[j] = tmp;
     try {
-      await ref.read(builderRepositoryProvider).reorderLessons(widget.courseId, ids);
+      await ref
+          .read(builderRepositoryProvider)
+          .reorderLessons(widget.courseId, ids);
       ref.invalidate(_courseProvider(widget.courseId));
     } catch (e) {
-      if (mounted) showErrorSnack(context, e, 'Не удалось изменить порядок уроков');
+      if (mounted)
+        showErrorSnack(context, e, 'Не удалось изменить порядок уроков');
     }
   }
 
   Future<void> _delete() async {
-    final ok = await confirmDialog(context, title: 'Удалить урок «${_lesson.title}» вместе со словами и вопросами?');
+    final ok = await confirmDialog(
+      context,
+      title: 'Удалить урок «${_lesson.title}» вместе со словами и вопросами?',
+    );
     if (!ok) return;
     try {
-      await ref.read(builderRepositoryProvider).removeLesson(widget.courseId, _lesson.id);
+      await ref
+          .read(builderRepositoryProvider)
+          .removeLesson(widget.courseId, _lesson.id);
       ref.invalidate(_courseProvider(widget.courseId));
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось удалить урок');
@@ -207,31 +352,54 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
   @override
   Widget build(BuildContext context) {
     final lesson = _lesson;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: _open ? AdminColors.blockBg : null,
+        borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+        border: Border.all(color: AdminColors.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               children: [
-                IconButton(icon: const Icon(Icons.arrow_upward), onPressed: widget.index > 0 ? () => _reorder(-1) : null),
-                IconButton(icon: const Icon(Icons.arrow_downward), onPressed: widget.index < widget.course.lessons.length - 1 ? () => _reorder(1) : null),
+                IconButton(
+                  icon: Icon(
+                    _open ? Icons.expand_less : Icons.expand_more,
+                    size: 20,
+                  ),
+                  onPressed: () => setState(() => _open = !_open),
+                ),
                 Expanded(
                   child: InkWell(
                     onTap: () => setState(() => _open = !_open),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text('${widget.index + 1}. ${lesson.title}', style: Theme.of(context).textTheme.titleSmall),
+                      child: Text(
+                        '${widget.index + 1}. ${lesson.title}',
+                        style: AdminTypography.stageTitle,
+                      ),
                     ),
                   ),
                 ),
-                IconButton(icon: Icon(_open ? Icons.expand_less : Icons.expand_more), onPressed: () => setState(() => _open = !_open)),
-                IconButton(icon: const Icon(Icons.delete_outline), onPressed: _delete),
+                AdminReorderArrows(
+                  canMoveUp: widget.index > 0,
+                  canMoveDown: widget.index < widget.course.lessons.length - 1,
+                  onMove: _reorder,
+                ),
+                const SizedBox(width: 4),
+                AdminDeleteLink(onPressed: _delete),
               ],
             ),
           ),
+          if (!_open)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(44, 0, 12, 10),
+              child: _LessonStatusGrid(lesson: lesson),
+            ),
           if (_open)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -239,47 +407,119 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _LessonNameCard(courseId: widget.courseId, lesson: lesson),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AdminMetrics.fieldGap),
                   LessonEditorPanel(
                     courseId: widget.courseId,
                     lesson: lesson,
-                    onSaveMaterial: (text) async {
-                      await ref.read(builderRepositoryProvider).updateLesson(widget.courseId, lesson.id, materialText: text);
-                      ref.invalidate(_courseProvider(widget.courseId));
-                    },
-                    libraryLoader: (kind) => ref.read(builderRepositoryProvider).listMediaLibrary(kind),
+                    libraryLoader: (kind) => ref
+                        .read(builderRepositoryProvider)
+                        .listMediaLibrary(kind),
                     onUploadMedia: (kind, bytes, filename) async {
                       try {
-                        await ref.read(builderRepositoryProvider).uploadLessonMedia(widget.courseId, lesson.id, kind: kind, bytes: bytes, filename: filename);
+                        await ref
+                            .read(builderRepositoryProvider)
+                            .uploadLessonMedia(
+                              widget.courseId,
+                              lesson.id,
+                              kind: kind,
+                              bytes: bytes,
+                              filename: filename,
+                            );
                         ref.invalidate(_courseProvider(widget.courseId));
                         if (context.mounted) showSuccessSnack(context);
                       } catch (e) {
-                        if (context.mounted) showErrorSnack(context, e, 'Не удалось загрузить файл');
+                        if (context.mounted)
+                          showErrorSnack(
+                            context,
+                            e,
+                            'Не удалось загрузить файл',
+                          );
                       }
                     },
                     onRemoveMedia: (kind) async {
                       try {
-                        await ref.read(builderRepositoryProvider).removeLessonMedia(widget.courseId, lesson.id, kind);
+                        await ref
+                            .read(builderRepositoryProvider)
+                            .removeLessonMedia(
+                              widget.courseId,
+                              lesson.id,
+                              kind,
+                            );
                         ref.invalidate(_courseProvider(widget.courseId));
                       } catch (e) {
-                        if (context.mounted) showErrorSnack(context, e, 'Не удалось удалить файл');
+                        if (context.mounted)
+                          showErrorSnack(context, e, 'Не удалось удалить файл');
                       }
                     },
                     onReuseMedia: (kind, url) async {
                       try {
-                        await ref.read(builderRepositoryProvider).reuseLessonMedia(widget.courseId, lesson.id, kind, url);
+                        await ref
+                            .read(builderRepositoryProvider)
+                            .reuseLessonMedia(
+                              widget.courseId,
+                              lesson.id,
+                              kind,
+                              url,
+                            );
                         ref.invalidate(_courseProvider(widget.courseId));
                       } catch (e) {
-                        if (context.mounted) showErrorSnack(context, e, 'Не удалось выбрать файл');
+                        if (context.mounted)
+                          showErrorSnack(context, e, 'Не удалось выбрать файл');
                       }
                     },
-                    onReload: () => ref.invalidate(_courseProvider(widget.courseId)),
+                    onReload: () =>
+                        ref.invalidate(_courseProvider(widget.courseId)),
                   ),
                 ],
               ),
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The compact 3-column status grid shown under a collapsed lesson row —
+/// lets an admin see which stages of every lesson are still empty without
+/// opening each one (Screenshot 8).
+class _LessonStatusGrid extends StatelessWidget {
+  const _LessonStatusGrid({required this.lesson});
+  final AdminLesson lesson;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      ('Слова', '${lesson.vocabulary.length}'),
+      ('Материал', 'блоки'),
+      ('Видео', _mediaCounter(lesson.videoUrl)),
+      ('Аудио', _mediaCounter(lesson.audioUrl)),
+      ('Мини-тест', _blocksCounter(lesson.blocksFor('minitest'))),
+      ('Практика', _blocksCounter(lesson.blocksFor('practice'))),
+      ('Закрепление', _blocksCounter(lesson.blocksFor('review'))),
+    ];
+    return GridView.count(
+      crossAxisCount: 3,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 4.2,
+      mainAxisSpacing: 2,
+      children: [
+        for (final (label, value) in items)
+          Row(
+            children: [
+              Text('$label ', style: AdminTypography.caption),
+              Expanded(
+                child: Text(
+                  value,
+                  style: AdminTypography.caption.copyWith(
+                    color: AdminColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }
@@ -295,7 +535,9 @@ class _LessonNameCard extends ConsumerStatefulWidget {
 
 class _LessonNameCardState extends ConsumerState<_LessonNameCard> {
   late final _title = TextEditingController(text: widget.lesson.title);
-  late final _description = TextEditingController(text: widget.lesson.description);
+  late final _description = TextEditingController(
+    text: widget.lesson.description,
+  );
   bool _busy = false;
 
   @override
@@ -308,7 +550,14 @@ class _LessonNameCardState extends ConsumerState<_LessonNameCard> {
   Future<void> _save() async {
     setState(() => _busy = true);
     try {
-      await ref.read(builderRepositoryProvider).updateLesson(widget.courseId, widget.lesson.id, title: _title.text.trim(), description: _description.text.trim());
+      await ref
+          .read(builderRepositoryProvider)
+          .updateLesson(
+            widget.courseId,
+            widget.lesson.id,
+            title: _title.text.trim(),
+            description: _description.text.trim(),
+          );
       ref.invalidate(_courseProvider(widget.courseId));
       if (mounted) showSuccessSnack(context);
     } catch (e) {
@@ -323,25 +572,38 @@ class _LessonNameCardState extends ConsumerState<_LessonNameCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(controller: _title, decoration: const InputDecoration(labelText: 'Название урока')),
+        TextField(
+          controller: _title,
+          decoration: adminInputDecoration(label: 'Название урока'),
+        ),
+        const SizedBox(height: AdminMetrics.fieldGap),
+        TextField(
+          controller: _description,
+          decoration: adminInputDecoration(label: 'Описание'),
+        ),
         const SizedBox(height: 8),
-        TextField(controller: _description, decoration: const InputDecoration(labelText: 'Описание')),
-        const SizedBox(height: 8),
-        Align(alignment: Alignment.centerRight, child: TextButton(onPressed: _busy ? null : _save, child: const Text('Сохранить название'))),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: _busy ? null : _save,
+            style: AdminButtonStyles.text(),
+            child: const Text('Сохранить название'),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _AddLessonCard extends ConsumerStatefulWidget {
-  const _AddLessonCard({required this.courseId});
+class _AddLessonRow extends ConsumerStatefulWidget {
+  const _AddLessonRow({required this.courseId});
   final String courseId;
 
   @override
-  ConsumerState<_AddLessonCard> createState() => _AddLessonCardState();
+  ConsumerState<_AddLessonRow> createState() => _AddLessonRowState();
 }
 
-class _AddLessonCardState extends ConsumerState<_AddLessonCard> {
+class _AddLessonRowState extends ConsumerState<_AddLessonRow> {
   final _title = TextEditingController();
   bool _busy = false;
 
@@ -355,7 +617,9 @@ class _AddLessonCardState extends ConsumerState<_AddLessonCard> {
     if (_title.text.trim().isEmpty) return;
     setState(() => _busy = true);
     try {
-      await ref.read(builderRepositoryProvider).addLesson(widget.courseId, title: _title.text.trim());
+      await ref
+          .read(builderRepositoryProvider)
+          .addLesson(widget.courseId, title: _title.text.trim());
       _title.clear();
       ref.invalidate(_courseProvider(widget.courseId));
     } catch (e) {
@@ -369,9 +633,18 @@ class _AddLessonCardState extends ConsumerState<_AddLessonCard> {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Expanded(child: TextField(controller: _title, decoration: const InputDecoration(labelText: 'Название нового урока'))),
+        Expanded(
+          child: TextField(
+            controller: _title,
+            decoration: adminInputDecoration(label: 'Название нового урока'),
+          ),
+        ),
         const SizedBox(width: 8),
-        ElevatedButton(onPressed: _busy ? null : _submit, child: const Text('+ Добавить урок')),
+        FilledButton(
+          onPressed: _busy ? null : _submit,
+          style: AdminButtonStyles.primary(),
+          child: const Text('+ Добавить урок'),
+        ),
       ],
     );
   }

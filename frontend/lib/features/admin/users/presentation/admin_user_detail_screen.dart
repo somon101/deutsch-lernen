@@ -13,19 +13,29 @@ import '../data/admin_users_repository.dart';
 import 'admin_users_screen.dart';
 
 class _DetailData {
-  const _DetailData({required this.user, required this.progress, required this.logins, required this.lessonTitles});
+  const _DetailData({
+    required this.user,
+    required this.progress,
+    required this.logins,
+    required this.lessonTitles,
+  });
   final AdminUser user;
   final List<LessonProgressSummary> progress;
   final List<LoginEventRow> logins;
   final Map<String, String> lessonTitles;
 }
 
-final _detailProvider = FutureProvider.autoDispose.family<_DetailData, String>((ref, userId) async {
+final _detailProvider = FutureProvider.autoDispose.family<_DetailData, String>((
+  ref,
+  userId,
+) async {
   final repo = ref.watch(adminUsersRepositoryProvider);
   final user = await repo.getUser(userId);
   final progress = await repo.userProgress(userId);
   final logins = await repo.loginHistory(userId);
-  final legacyLessons = await ref.watch(profileRepositoryProvider).fetchLegacyLessons();
+  final legacyLessons = await ref
+      .watch(profileRepositoryProvider)
+      .fetchLegacyLessons();
   return _DetailData(
     user: user,
     progress: progress,
@@ -60,7 +70,10 @@ class AdminUserDetailScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Пользователь'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/admin')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/admin'),
+        ),
       ),
       body: data.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -114,10 +127,21 @@ class _SectionCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: -0.2, color: c.text)),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+                color: c.text,
+              ),
+            ),
             if (subtitle != null) ...[
               const SizedBox(height: 8),
-              Text(subtitle!, style: TextStyle(fontSize: 13, color: c.textMuted)),
+              Text(
+                subtitle!,
+                style: TextStyle(fontSize: 13, color: c.textMuted),
+              ),
             ],
             const SizedBox(height: 16),
             child,
@@ -136,28 +160,31 @@ class _ProgressList extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final rows = data.lessonTitles.entries.toList();
-    if (rows.isEmpty) return Text('Уроки не найдены.', style: TextStyle(color: c.textMuted));
+    if (rows.isEmpty)
+      return Text('Уроки не найдены.', style: TextStyle(color: c.textMuted));
     return Column(
       children: [
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
-          Builder(builder: (context) {
-            final entry = rows[i];
-            LessonProgressSummary? summary;
-            for (final p in data.progress) {
-              if (p.lessonId == entry.key) {
-                summary = p;
-                break;
+          Builder(
+            builder: (context) {
+              final entry = rows[i];
+              LessonProgressSummary? summary;
+              for (final p in data.progress) {
+                if (p.lessonId == entry.key) {
+                  summary = p;
+                  break;
+                }
               }
-            }
-            return _ProgressRow(
-              title: 'Урок ${i + 1}. ${entry.value}',
-              stats: summary == null
-                  ? 'Не начат'
-                  : 'Лучший результат: ${summary.bestScore}% · попыток: ${summary.attempts} · последняя: ${summary.lastScore}%',
-              muted: summary == null,
-            );
-          }),
+              return _ProgressRow(
+                title: 'Урок ${i + 1}. ${entry.value}',
+                stats: summary == null
+                    ? 'Не начат'
+                    : 'Лучший результат: ${summary.bestScore}% · попыток: ${summary.attempts} · последняя: ${summary.lastScore}%',
+                muted: summary == null,
+              );
+            },
+          ),
         ],
       ],
     );
@@ -171,7 +198,11 @@ class _LoginHistoryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    if (logins.isEmpty) return Text('Ещё ни разу не входил(а).', style: TextStyle(color: c.textFaint));
+    if (logins.isEmpty)
+      return Text(
+        'Ещё ни разу не входил(а).',
+        style: TextStyle(color: c.textFaint),
+      );
     return Column(
       children: [
         for (var i = 0; i < logins.length; i++) ...[
@@ -196,16 +227,32 @@ class _ProgressRow extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(color: c.bg, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: c.bg,
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
         spacing: 8,
         runSpacing: 4,
         children: [
-          Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: c.text)),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w700,
+              color: c.text,
+            ),
+          ),
           if (stats != null)
-            Text(stats!, style: TextStyle(fontSize: 13.5, color: muted ? c.textFaint : c.textMuted)),
+            Text(
+              stats!,
+              style: TextStyle(
+                fontSize: 13.5,
+                color: muted ? c.textFaint : c.textMuted,
+              ),
+            ),
         ],
       ),
     );
@@ -216,7 +263,11 @@ class _ProgressRow extends StatelessWidget {
 /// editable fields, block/activate + save row. Mirrors AdminUserDetailPage's
 /// first .profile-card, plus a read-only avatar (new — see class doc above).
 class _ProfileCard extends ConsumerStatefulWidget {
-  const _ProfileCard({required this.userId, required this.user, required this.isSelf});
+  const _ProfileCard({
+    required this.userId,
+    required this.user,
+    required this.isSelf,
+  });
   final String userId;
   final AdminUser user;
   final bool isSelf;
@@ -238,10 +289,10 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
   String? _error;
 
   UserRole _roleFromWire(String r) => switch (r) {
-        'ADMIN' => UserRole.admin,
-        'TEACHER' => UserRole.teacher,
-        _ => UserRole.user,
-      };
+    'ADMIN' => UserRole.admin,
+    'TEACHER' => UserRole.teacher,
+    _ => UserRole.user,
+  };
 
   @override
   void dispose() {
@@ -259,7 +310,9 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
       _error = null;
     });
     try {
-      await ref.read(adminUsersRepositoryProvider).updateUser(
+      await ref
+          .read(adminUsersRepositoryProvider)
+          .updateUser(
             widget.userId,
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
@@ -272,7 +325,9 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
       ref.invalidate(adminUsersListProvider);
       if (mounted) showSuccessSnack(context, 'Сохранено');
     } catch (e) {
-      setState(() => _error = adminErrorMessage(e, 'Не удалось сохранить изменения'));
+      setState(
+        () => _error = adminErrorMessage(e, 'Не удалось сохранить изменения'),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -285,11 +340,15 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
     });
     try {
       final next = widget.user.status == 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
-      await ref.read(adminUsersRepositoryProvider).updateUser(widget.userId, status: next);
+      await ref
+          .read(adminUsersRepositoryProvider)
+          .updateUser(widget.userId, status: next);
       ref.invalidate(_detailProvider(widget.userId));
       ref.invalidate(adminUsersListProvider);
     } catch (e) {
-      setState(() => _error = adminErrorMessage(e, 'Не удалось изменить статус'));
+      setState(
+        () => _error = adminErrorMessage(e, 'Не удалось изменить статус'),
+      );
     } finally {
       if (mounted) setState(() => _togglingStatus = false);
     }
@@ -300,7 +359,10 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
     final c = context.colors;
     final u = widget.user;
     final avatarUrl = ref.read(apiClientProvider).assetUrl(u.avatarUrl);
-    final initials = ((u.firstName.isNotEmpty ? u.firstName[0] : '') + (u.lastName.isNotEmpty ? u.lastName[0] : '')).toUpperCase();
+    final initials =
+        ((u.firstName.isNotEmpty ? u.firstName[0] : '') +
+                (u.lastName.isNotEmpty ? u.lastName[0] : ''))
+            .toUpperCase();
     final active = u.status == 'ACTIVE';
 
     return Card(
@@ -315,9 +377,18 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
                 CircleAvatar(
                   radius: 32,
                   backgroundColor: c.primarySoft,
-                  backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  backgroundImage: avatarUrl.isNotEmpty
+                      ? NetworkImage(avatarUrl)
+                      : null,
                   child: avatarUrl.isEmpty
-                      ? Text(initials, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: c.primaryDark))
+                      ? Text(
+                          initials,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: c.primaryDark,
+                          ),
+                        )
                       : null,
                 ),
                 const SizedBox(width: 16),
@@ -325,10 +396,20 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${u.firstName} ${u.lastName}',
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.22, color: c.text)),
+                      Text(
+                        '${u.firstName} ${u.lastName}',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.22,
+                          color: c.text,
+                        ),
+                      ),
                       const SizedBox(height: 2),
-                      Text('@${u.username}', style: TextStyle(fontSize: 15.5, color: c.textMuted)),
+                      Text(
+                        '@${u.username}',
+                        style: TextStyle(fontSize: 15.5, color: c.textMuted),
+                      ),
                     ],
                   ),
                 ),
@@ -338,13 +419,19 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(color: c.bg, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                color: c.bg,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: 12,
                 runSpacing: 6,
                 children: [
-                  StatusPill(label: u.online ? '● В сети сейчас' : 'Не в сети', active: u.online),
+                  StatusPill(
+                    label: u.online ? '● В сети сейчас' : 'Не в сети',
+                    active: u.online,
+                  ),
                   Text(
                     '— пользовался платформой в последние 5 минут (учитывается любое действие, не только вход)',
                     style: TextStyle(fontSize: 12.5, color: c.textFaint),
@@ -355,12 +442,21 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
             const SizedBox(height: 12),
             RichText(
               text: TextSpan(
-                style: TextStyle(fontSize: 15.5, color: c.textMuted, height: 1.5),
+                style: TextStyle(
+                  fontSize: 15.5,
+                  color: c.textMuted,
+                  height: 1.5,
+                ),
                 children: [
                   const TextSpan(text: 'Последний вход: '),
                   TextSpan(
-                    text: u.lastLoginAt != null ? _formatDateTime(u.lastLoginAt!) : 'никогда не входил(а)',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: c.text),
+                    text: u.lastLoginAt != null
+                        ? _formatDateTime(u.lastLoginAt!)
+                        : 'никогда не входил(а)',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: c.text,
+                    ),
                   ),
                 ],
               ),
@@ -373,10 +469,20 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
               const SizedBox(height: 8),
               RichText(
                 text: TextSpan(
-                  style: TextStyle(fontSize: 15.5, color: c.textMuted, height: 1.5),
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    color: c.textMuted,
+                    height: 1.5,
+                  ),
                   children: [
                     const TextSpan(text: 'Последняя активность: '),
-                    TextSpan(text: _formatDateTime(u.lastActiveAt!), style: TextStyle(fontWeight: FontWeight.w700, color: c.text)),
+                    TextSpan(
+                      text: _formatDateTime(u.lastActiveAt!),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: c.text,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -386,20 +492,30 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
               ),
             ],
             const SizedBox(height: 16),
-            _FieldRow(children: [
-              _Field(label: 'Имя', controller: _firstName),
-              _Field(label: 'Фамилия', controller: _lastName),
-            ]),
+            _FieldRow(
+              children: [
+                _Field(label: 'Имя', controller: _firstName),
+                _Field(label: 'Фамилия', controller: _lastName),
+              ],
+            ),
             const SizedBox(height: 14),
-            _FieldRow(children: [
-              _Field(label: 'Email', controller: _email),
-              _Field(label: 'Телефон', controller: _phone),
-            ]),
+            _FieldRow(
+              children: [
+                _Field(label: 'Email', controller: _email),
+                _Field(label: 'Телефон', controller: _phone),
+              ],
+            ),
             const SizedBox(height: 14),
-            _FieldRow(children: [
-              _Field(label: 'Логин', controller: _username),
-              _RoleCodeField(value: _role, enabled: !widget.isSelf, onChanged: (v) => setState(() => _role = v ?? _role)),
-            ]),
+            _FieldRow(
+              children: [
+                _Field(label: 'Логин', controller: _username),
+                _RoleCodeField(
+                  value: _role,
+                  enabled: !widget.isSelf,
+                  onChanged: (v) => setState(() => _role = v ?? _role),
+                ),
+              ],
+            ),
             if (widget.isSelf) ...[
               const SizedBox(height: 12),
               Text(
@@ -412,9 +528,20 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
               onTap: () => setState(() => _canEditProfile = !_canEditProfile),
               child: Row(
                 children: [
-                  Checkbox(value: _canEditProfile, onChanged: (v) => setState(() => _canEditProfile = v ?? true)),
+                  Checkbox(
+                    value: _canEditProfile,
+                    onChanged: (v) =>
+                        setState(() => _canEditProfile = v ?? true),
+                  ),
                   const SizedBox(width: 4),
-                  Text('Пользователь может редактировать свой профиль', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.text)),
+                  Text(
+                    'Пользователь может редактировать свой профиль',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: c.text,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -422,34 +549,58 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(color: c.dangerSoft, borderRadius: BorderRadius.circular(14)),
-                child: Text(_error!, style: TextStyle(fontSize: 14.5, color: c.danger)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                decoration: BoxDecoration(
+                  color: c.dangerSoft,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  _error!,
+                  style: TextStyle(fontSize: 14.5, color: c.danger),
+                ),
               ),
             ],
             const SizedBox(height: 16),
             Row(
               children: [
                 OutlinedButton(
-                  onPressed: widget.isSelf || _togglingStatus ? null : _toggleStatus,
+                  onPressed: widget.isSelf || _togglingStatus
+                      ? null
+                      : _toggleStatus,
                   style: active
                       ? OutlinedButton.styleFrom(
                           foregroundColor: c.primary,
                           side: BorderSide(color: c.primarySoft, width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 26,
+                            vertical: 13,
+                          ),
                         )
                       : OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           backgroundColor: c.primary,
                           side: BorderSide.none,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
-                          padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 26,
+                            vertical: 13,
+                          ),
                         ),
                   child: Text(active ? 'Заблокировать' : 'Активировать'),
                 ),
                 const Spacer(),
-                ElevatedButton(onPressed: _saving ? null : _save, child: Text(_saving ? 'Сохраняем…' : 'Сохранить')),
+                ElevatedButton(
+                  onPressed: _saving ? null : _save,
+                  child: Text(_saving ? 'Сохраняем…' : 'Сохранить'),
+                ),
               ],
             ),
           ],
@@ -485,7 +636,9 @@ class _ResetPasswordCardState extends ConsumerState<_ResetPasswordCard> {
       _message = null;
     });
     try {
-      await ref.read(adminUsersRepositoryProvider).resetPassword(widget.userId, _password.text);
+      await ref
+          .read(adminUsersRepositoryProvider)
+          .resetPassword(widget.userId, _password.text);
       _password.clear();
       setState(() {
         _message = 'Пароль обновлён';
@@ -515,8 +668,17 @@ class _ResetPasswordCardState extends ConsumerState<_ResetPasswordCard> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(color: _ok ? c.successSoft : c.dangerSoft, borderRadius: BorderRadius.circular(14)),
-              child: Text(_message!, style: TextStyle(fontSize: 14.5, color: _ok ? c.success : c.danger)),
+              decoration: BoxDecoration(
+                color: _ok ? c.successSoft : c.dangerSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                _message!,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  color: _ok ? c.success : c.danger,
+                ),
+              ),
             ),
           ],
           const SizedBox(height: 16),
@@ -526,9 +688,14 @@ class _ResetPasswordCardState extends ConsumerState<_ResetPasswordCard> {
               foregroundColor: c.primary,
               backgroundColor: c.surface,
               side: BorderSide(color: c.primarySoft, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 13),
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             child: const Text('Сбросить пароль'),
           ),
@@ -568,9 +735,23 @@ class _Field extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.textMuted)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: c.textMuted,
+          ),
+        ),
         const SizedBox(height: 6),
-        TextField(controller: controller, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.text)),
+        TextField(
+          controller: controller,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: c.text,
+          ),
+        ),
       ],
     );
   }
@@ -580,7 +761,11 @@ class _Field extends StatelessWidget {
 /// AdminUserDetailPage.tsx's <option> labels exactly (unlike the create-user
 /// form, which uses descriptive labels).
 class _RoleCodeField extends StatelessWidget {
-  const _RoleCodeField({required this.value, required this.enabled, required this.onChanged});
+  const _RoleCodeField({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
   final UserRole value;
   final bool enabled;
   final ValueChanged<UserRole?> onChanged;
@@ -591,12 +776,23 @@ class _RoleCodeField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Роль', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: c.textMuted)),
+        Text(
+          'Роль',
+          style: TextStyle(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+            color: c.textMuted,
+          ),
+        ),
         const SizedBox(height: 6),
         DropdownButtonFormField<UserRole>(
           initialValue: value,
           decoration: const InputDecoration(),
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: c.text),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+            color: c.text,
+          ),
           items: const [
             DropdownMenuItem(value: UserRole.user, child: Text('USER')),
             DropdownMenuItem(value: UserRole.teacher, child: Text('TEACHER')),

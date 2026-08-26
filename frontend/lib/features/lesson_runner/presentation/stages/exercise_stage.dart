@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/sound_effects.dart';
+import '../../data/lesson_repository.dart';
 import '../../domain/exercise.dart';
 import '../../domain/progress.dart';
 import '../../domain/stage.dart';
@@ -76,6 +77,11 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
       await sounds.playCorrect();
     } else {
       await sounds.playIncorrect();
+    }
+    try {
+      await ref.read(lessonRepositoryProvider).submitAnswer(_exercises[_index].id, correct);
+    } catch (_) {
+      // Best-effort — a logging failure must never block the quiz flow.
     }
   }
 

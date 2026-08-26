@@ -7,13 +7,19 @@ import '../data/legacy_admin_repository.dart';
 import '../../course_builder/domain/builder_domain.dart';
 
 class _Row {
-  const _Row({required this.lessonId, required this.title, required this.lesson});
+  const _Row({
+    required this.lessonId,
+    required this.title,
+    required this.lesson,
+  });
   final String lessonId;
   final String title;
   final AdminLesson lesson;
 }
 
-final _legacyLessonsAdminProvider = FutureProvider.autoDispose<List<_Row>>((ref) async {
+final _legacyLessonsAdminProvider = FutureProvider.autoDispose<List<_Row>>((
+  ref,
+) async {
   final list = await ref.watch(profileRepositoryProvider).fetchLegacyLessons();
   final repo = ref.watch(legacyAdminRepositoryProvider);
   final rows = <_Row>[];
@@ -35,11 +41,15 @@ class AdminLegacyLessonsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Немецкий с нуля'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/admin/courses')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/admin/courses'),
+        ),
       ),
       body: rows.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, st) => Center(child: Text('Не удалось загрузить уроки: $err')),
+        error: (err, st) =>
+            Center(child: Text('Не удалось загрузить уроки: $err')),
         data: (list) {
           if (list.isEmpty) {
             return const Center(child: Text('Уроки не найдены.'));
@@ -58,7 +68,8 @@ class _LessonCard extends StatelessWidget {
   const _LessonCard({required this.row});
   final _Row row;
 
-  int _blockQuestionCount(AdminLesson lesson, String stage) => lesson.blocksFor(stage).fold(0, (sum, b) => sum + b.questions.length);
+  int _blockQuestionCount(AdminLesson lesson, String stage) =>
+      lesson.blocksFor(stage).fold(0, (sum, b) => sum + b.questions.length);
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +87,12 @@ class _LessonCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Expanded(child: Text(row.title, style: Theme.of(context).textTheme.titleMedium)),
+                  Expanded(
+                    child: Text(
+                      row.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
                   const Icon(Icons.chevron_right),
                 ],
               ),
@@ -85,13 +101,25 @@ class _LessonCard extends StatelessWidget {
                 spacing: 12,
                 runSpacing: 4,
                 children: [
-                  _Chip('Материал: ${lesson.materialText.isNotEmpty ? "есть" : "нет"}'),
+                  _Chip(
+                    'Материал: ${lesson.materialText.isNotEmpty ? "есть" : "нет"}',
+                  ),
                   _Chip('Видео: ${lesson.videoUrl != null ? "есть" : "нет"}'),
-                  _Chip('Аудиоурок: ${lesson.audioUrl != null ? "есть" : "нет"}'),
-                  _Chip('Словарь: ${lesson.vocabulary.length} слов · озвучено $withAudio'),
-                  _Chip('Мини-тест: ${_countLabel(_blockQuestionCount(lesson, "minitest"))}'),
-                  _Chip('Практика: ${_countLabel(_blockQuestionCount(lesson, "practice"))}'),
-                  _Chip('Закрепление: ${_countLabel(_blockQuestionCount(lesson, "review"))}'),
+                  _Chip(
+                    'Аудиоурок: ${lesson.audioUrl != null ? "есть" : "нет"}',
+                  ),
+                  _Chip(
+                    'Словарь: ${lesson.vocabulary.length} слов · озвучено $withAudio',
+                  ),
+                  _Chip(
+                    'Мини-тест: ${_countLabel(_blockQuestionCount(lesson, "minitest"))}',
+                  ),
+                  _Chip(
+                    'Практика: ${_countLabel(_blockQuestionCount(lesson, "practice"))}',
+                  ),
+                  _Chip(
+                    'Закрепление: ${_countLabel(_blockQuestionCount(lesson, "review"))}',
+                  ),
                 ],
               ),
             ],
@@ -109,5 +137,8 @@ class _Chip extends StatelessWidget {
   final String label;
 
   @override
-  Widget build(BuildContext context) => Chip(label: Text(label, style: const TextStyle(fontSize: 12)), visualDensity: VisualDensity.compact);
+  Widget build(BuildContext context) => Chip(
+    label: Text(label, style: const TextStyle(fontSize: 12)),
+    visualDensity: VisualDensity.compact,
+  );
 }

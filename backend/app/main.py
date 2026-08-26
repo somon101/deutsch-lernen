@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db import async_session
 from app.errors import ApiError
-from app.routers import admin, auth, builder, content, learner_courses, me
+from app.routers import admin, auth, builder, content, learner_courses, me, taxonomy
 from app.services.bootstrap import ensure_admin_exists
 from app.uploads.storage import UPLOADS_ROOT
 
@@ -79,3 +79,4 @@ app.include_router(admin.router)
 app.include_router(content.router)
 app.include_router(builder.router)
 app.include_router(learner_courses.router)
+app.include_router(taxonomy.router)

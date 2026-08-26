@@ -9,8 +9,32 @@ pre-parsed content instead of raw text, without a second parser
 implementation existing anywhere.
 """
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.legacy_parser.parse_lesson_text import parse_lesson_text
 from app.legacy_parser.text_utils import normalize_answer
+from app.models.material import Material
+from app.models.material_block import MaterialBlock
+from app.models.question import Question
+from app.models.question_placement import QuestionPlacement
+
+
+def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_answer: str, data) -> dict:
+    """Renders one stored question row (LessonQuestion or Question — same 5
+    kinds, same field shapes) into the wire dict every client's Exercise
+    parser expects. Lives here rather than in content.py so material.py's
+    own get_new_material_blocks can embed a MaterialBlock's attached
+    questions without a circular import."""
+    if kind == "truefalse":
+        return {"kind": "truefalse", "prompt": prompt, "correct": correct_answer == "true"}
+    if kind == "cloze":
+        return {"kind": "cloze", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
+    if kind == "scramble":
+        return {"kind": "scramble", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
+    if kind == "match":
+        return {"kind": "match", "prompt": prompt, "pairs": data or []}
+    return {"kind": "choice", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
 
 
 def parse_material(material_text: str, vocabulary: list[dict]) -> dict:
@@ -33,6 +57,64 @@ def parse_material(material_text: str, vocabulary: list[dict]) -> dict:
     blocks = [with_pronunciation(b) if b["type"] == "phrase" else b for b in parsed["blocks"]]
     phrases = [with_pronunciation(p) for p in parsed["phrases"]]
     return {"blocks": blocks, "phrases": phrases}
+
+
+async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: list[str]) -> dict[str, list[dict]]:
+    """Renders the new block-based editor's Material/MaterialBlock rows
+    (content-taxonomy plan, 2026-08-26) into the same {type, ...} shape
+    MaterialStage already renders. Keyed by lessonId; a lesson present here
+    (even with an empty list, meaning the admin opened the new editor but
+    hasn't added a block yet) has been migrated and should use these blocks
+    instead of parsing materialText — a lesson absent from the dict has no
+    "text" Material yet and the caller should fall back to parse_material,
+    so pre-migration lessons keep working exactly as before."""
+    if not lesson_ids:
+        return {}
+    materials = (
+        await db.execute(
+            select(Material)
+            .where(Material.courseId == course_id, Material.lessonId.in_(lesson_ids), Material.materialType == "text")
+            .order_by(Material.lessonId, Material.position)
+        )
+    ).scalars().all()
+    if not materials:
+        return {}
+
+    material_ids = [m.id for m in materials]
+    lesson_by_material = {m.id: m.lessonId for m in materials}
+    rows = (
+        await db.execute(
+            select(MaterialBlock).where(MaterialBlock.materialId.in_(material_ids)).order_by(MaterialBlock.materialId, MaterialBlock.position)
+        )
+    ).scalars().all()
+
+    # A reusable Question attached to one of these blocks is rendered inline
+    # right after the block's text (§ where-pool-questions-appear, 2026-08-26
+    # decision: "внутри чтения материала") — the learner answers it as a
+    # checkpoint before moving on, and the answer is logged the same way any
+    # other question's is.
+    block_ids = [b.id for b in rows]
+    questions_by_block: dict[str, list[dict]] = {}
+    if block_ids:
+        placement_rows = (
+            await db.execute(
+                select(QuestionPlacement, Question)
+                .join(Question, Question.id == QuestionPlacement.questionId)
+                .where(QuestionPlacement.materialBlockId.in_(block_ids))
+                .order_by(QuestionPlacement.materialBlockId, QuestionPlacement.position)
+            )
+        ).all()
+        for placement, question in placement_rows:
+            questions_by_block.setdefault(placement.materialBlockId, []).append(
+                {"id": question.id, **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data)}
+            )
+
+    result: dict[str, list[dict]] = {m.lessonId: [] for m in materials}
+    for b in rows:
+        result[lesson_by_material[b.materialId]].append(
+            {"type": "block", "id": b.id, "title": b.title, "content": b.content, "questions": questions_by_block.get(b.id, [])}
+        )
+    return result
 
 
 def filter_new_vocabulary(vocabulary: list[dict], taught_before_keys: set[str]) -> list[dict]:

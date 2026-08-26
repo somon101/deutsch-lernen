@@ -22,7 +22,7 @@ enum UserStatus {
 // audio, vocabulary, text) stays file-based under /lessonN — this table only
 // ever references a lessonId string, never the material itself.
 model User {
-  id             String   @id @default(uuid())
+  id             String     @id @default(uuid())
   // 9-digit public-facing identifier shown in the UI (profile, personal
   // details, QR card) instead of the internal `id` above. `id` stays the
   // primary key — every relation/route already depends on it — this is
@@ -30,26 +30,26 @@ model User {
   // every existing row, then set NOT NULL — see the two
   // add_public_id_nullable / public_id_not_null migrations. Every code
   // path that creates a User must set it explicitly.
-  publicId       String   @unique
+  publicId       String     @unique
   firstName      String
   lastName       String
-  email          String   @unique
+  email          String     @unique
   phone          String?
-  username       String   @unique
+  username       String     @unique
   // Lower-cased copy of `username`, kept in sync on every write. The unique
   // constraint lives here so "Ivan" and "ivan" cannot both exist — enforced
   // by the database, not just by validation. `username` keeps the original
   // casing for display.
-  usernameLower  String   @unique
+  usernameLower  String     @unique
   passwordHash   String
-  role           Role     @default(USER)
+  role           Role       @default(USER)
   status         UserStatus @default(ACTIVE)
   avatarUrl      String?
   // Free-text "about me" shown on the profile screen — capped at 150 chars,
   // enforced app-side (Pydantic/UI), not by a DB column length constraint.
   bio            String?
   birthDate      DateTime?
-  canEditProfile Boolean  @default(true)
+  canEditProfile Boolean    @default(true)
   // Timestamp of the most recent successful login — a denormalized copy of
   // the newest LoginEvent below, kept here too so the admin user list can
   // show it without joining/aggregating per row.
@@ -59,12 +59,13 @@ model User {
   // stay signed in and keep using the app for a long time after their last
   // actual login.
   lastActiveAt   DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
-  attempts LessonAttempt[]
+  attempts     LessonAttempt[]
   lessonStates LessonState[]
   loginEvents  LoginEvent[]
+  answerLogs   AnswerLog[]
 }
 
 /// One row per successful login, so an admin can see a user's full login
@@ -112,10 +113,10 @@ model LessonState {
 // querying this table, not stored redundantly, so the server is always the
 // single source of truth for scoring.
 model LessonAttempt {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lessonId        String
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId String
 
   miniTestCorrect Int
   miniTestTotal   Int
@@ -139,7 +140,7 @@ model LessonAttempt {
 // ---------------------------------------------------------------------------
 
 model LessonContent {
-  lessonId String @id
+  lessonId     String   @id
   // The lesson text in the same plain format as the source file, parsed by
   // the very same client-side parser. Null means "no override" — same
   // meaning as videoUrl/audioUrl below, so a row can exist to carry just a
@@ -225,8 +226,109 @@ model Course {
   createdById String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+  // Nullable during the migration window (add nullable -> backfill -> set
+  // NOT NULL, same pattern as User.publicId earlier). The legacy file-based
+  // course (lessonN folders, courseId "legacy") has no Course row at all and
+  // is deliberately exempt from the language/level dimension — see the
+  // approved migration plan.
+  levelId     String?
+  level       Level?       @relation(fields: [levelId], references: [id], onDelete: Restrict)
 
   lessons CourseLesson[]
+}
+
+// ---------------------------------------------------------------------------
+// Language / Level / Topic — content taxonomy layered on top of the existing
+// Course/CourseLesson tree. Schema-ready for multiple languages (per the
+// approved plan), but only "de" is seeded/populated for now — adding a real
+// second language is a deliberately separate future step, not part of this
+// change.
+// ---------------------------------------------------------------------------
+
+model Language {
+  id   String @id // ISO-639-1-style short code (e.g. "de") — the code IS the id.
+  name String
+
+  levels Level[]
+  topics Topic[]
+}
+
+model Level {
+  id         String   @id @default(uuid())
+  languageId String
+  language   Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
+  code       String // e.g. "A1" — unique per language, not globally (A1 exists once per language).
+  name       String
+  position   Int // display/progress-aggregation order: A1 < A2 < B1 < ...
+
+  courses Course[]
+
+  @@unique([languageId, code])
+}
+
+/// A knowledge/topic tag (e.g. "Präteritum") that different Materials across
+/// different lessons can share, so weak-spot detection can point at a
+/// specific piece of knowledge rather than "redo the whole lesson".
+model Topic {
+  id         String   @id @default(uuid())
+  languageId String
+  language   Language @relation(fields: [languageId], references: [id], onDelete: Restrict)
+  name       String
+  createdAt  DateTime @default(now())
+
+  materials Material[]
+  questions Question[]
+
+  @@index([languageId])
+}
+
+// ---------------------------------------------------------------------------
+// Material / MaterialBlock — a lesson's teaching content as real, addressable
+// objects, replacing the flat CourseLesson.materialText/videoUrl/audioUrl
+// fields going forward (those old fields are kept, unused, as a safe
+// rollback/reference — see the migration plan's backfill step). One lesson
+// can have several Materials (theory text, a video, an audio track, ...),
+// each independently taggable with a Topic. A text Material is itself made
+// of ordered MaterialBlocks (the teacher-authored "Что такое Präteritum?"
+// style chunks) — this is intentionally a SEPARATE model from LessonBlock
+// below, which groups QUESTIONS inside a minitest/practice/review stage and
+// means something different despite the similar name.
+// ---------------------------------------------------------------------------
+
+model Material {
+  id           String   @id @default(uuid())
+  // Loose references, matching the existing LessonBlock/LessonQuestion
+  // convention (no DB-level FK to Course/CourseLesson): "legacy" for the
+  // file-based course, else a real Course.id; lessonId is CourseLesson.id
+  // for builder courses, or the "lessonN" folder slug for legacy.
+  courseId     String
+  lessonId     String
+  // "text" | "video" | "audio" | "grammar" | "other" — free-text, not an
+  // enum, same convention as LessonBlock.stage/LessonQuestion.kind.
+  materialType String
+  title        String
+  topicId      String?
+  topic        Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  position     Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  blocks MaterialBlock[]
+
+  @@index([lessonId, position])
+}
+
+model MaterialBlock {
+  id         String   @id @default(uuid())
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  position   Int
+
+  placements QuestionPlacement[]
+
+  @@index([materialId, position])
 }
 
 model CourseLesson {
@@ -258,4 +360,90 @@ model LessonBlock {
   position Int
 
   @@index([lessonId, stage, position])
+}
+
+// ---------------------------------------------------------------------------
+// Reusable question pool + per-question answer history.
+//
+// LessonQuestion (above) is untouched and keeps working exactly as before —
+// every existing row and every existing read/write path against it stays
+// valid. Question/QuestionPlacement is the new, parallel path going forward:
+// a Question is a standalone, reusable object (a stable question_id); a
+// QuestionPlacement says WHERE it's used (a MaterialBlock's theory quiz, or
+// an existing LessonBlock's minitest/practice/review stage) — one Question
+// can have many Placements, which is what makes reuse a real reference
+// instead of a copy. The existing 109 LessonQuestion rows are copied into
+// this shape by the migration's backfill step, not deleted.
+// ---------------------------------------------------------------------------
+
+model Question {
+  id            String   @id @default(uuid())
+  // "choice" | "truefalse" | "cloze" | "scramble" | "match" — same 5 kinds
+  // LessonQuestion already uses.
+  kind          String   @default("choice")
+  prompt        String
+  options       String[]
+  correctAnswer String
+  // Only "match" questions use this — same convention as LessonQuestion.data.
+  data          Json?
+  topicId       String?
+  topic         Topic?   @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  placements QuestionPlacement[]
+
+  @@index([topicId])
+}
+
+model QuestionPlacement {
+  id              String         @id @default(uuid())
+  questionId      String
+  question        Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  // Exactly ONE of these three is set on any given row — a placement lives
+  // in a Material's theory block, an existing LessonBlock's quiz stage, or
+  // (for the legacy file-based course, which has neither) a bare
+  // lessonId+setName pair, mirroring LessonQuestion's own
+  // lessonId/setName/blockId split for that course. lessonBlockId/
+  // legacyLessonId/legacySetName are loose references (same convention as
+  // LessonQuestion.blockId), not DB-level FKs.
+  materialBlockId String?
+  materialBlock   MaterialBlock? @relation(fields: [materialBlockId], references: [id], onDelete: Cascade)
+  lessonBlockId   String?
+  legacyLessonId  String?
+  legacySetName   String?
+  position        Int
+
+  @@index([materialBlockId, position])
+  @@index([lessonBlockId, position])
+  @@index([legacyLessonId, legacySetName, position])
+  @@index([questionId])
+}
+
+/// One row per answered question — the real, per-question source of truth
+/// that lesson/level/overall progress and weak-spot detection are computed
+/// from. LessonAttempt/LessonState (above) are left untouched and keep being
+/// written exactly as before for backward compatibility; nothing here
+/// replaces them, this is purely additive.
+model AnswerLog {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Loose reference, no FK (2026-08-26 — extended to cover quiz answers
+  // too): either a Question.id (reusable pool question, attached to a
+  // MaterialBlock) or a LessonQuestion.id (old quiz system — minitest/
+  // practice/review). The two id spaces are disjoint UUIDs, so this is safe;
+  // see submit_answer() for the validation that accepts either.
+  questionId    String
+  // Which QuestionPlacement the user actually answered it through — nullable
+  // since a question can in principle be answered standalone (e.g. a future
+  // "review your weak spots" flow not tied to a specific lesson placement).
+  placementId   String?
+  answerData    Json
+  correct       Boolean
+  attemptNumber Int      @default(1)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, questionId])
+  @@index([questionId])
 }

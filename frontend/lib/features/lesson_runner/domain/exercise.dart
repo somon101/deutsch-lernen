@@ -67,6 +67,7 @@ class QuestionDto {
   const QuestionDto({
     required this.kind,
     required this.prompt,
+    this.id,
     this.options = const [],
     this.correctAnswer = '',
     this.correct = false,
@@ -75,6 +76,7 @@ class QuestionDto {
 
   factory QuestionDto.fromJson(Map<String, dynamic> json) => QuestionDto(
         kind: json['kind'] as String,
+        id: json['id'] as String?,
         prompt: json['prompt'] as String? ?? '',
         options: (json['options'] as List<dynamic>?)?.cast<String>() ?? const [],
         correctAnswer: json['correctAnswer'] as String? ?? '',
@@ -85,6 +87,10 @@ class QuestionDto {
             const [],
       );
 
+  // Real, stable Question/LessonQuestion id — null only for shapes that
+  // never carried one before this field existed (e.g. the legacy flat
+  // "questions" list in ContentPayload, unrelated to the graded exercises).
+  final String? id;
   final String kind;
   final String prompt;
   final List<String> options;
@@ -164,6 +170,7 @@ List<Exercise> exercisesForStage(List<QuestionBlock> blocks, String stage) {
   final stageBlocks = blocks.where((b) => b.stage == stage).toList()..sort((a, b) => a.position.compareTo(b.position));
   return [
     for (final block in stageBlocks)
-      for (var i = 0; i < block.questions.length; i++) toExercise(block.questions[i], '${block.id}-$i'),
+      for (var i = 0; i < block.questions.length; i++)
+        toExercise(block.questions[i], block.questions[i].id ?? '${block.id}-$i'),
   ];
 }

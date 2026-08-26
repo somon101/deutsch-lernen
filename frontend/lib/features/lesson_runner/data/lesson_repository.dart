@@ -69,6 +69,17 @@ class LessonRepository {
       },
     );
   }
+
+  /// Real per-question answer log (content-taxonomy plan, 2026-08-26) —
+  /// `questionId` is a loose reference: either a reusable pool Question's id
+  /// (material-block checkpoint questions) or a quiz LessonQuestion's id
+  /// (minitest/practice/review) — both are accepted server-side. Fire-and
+  /// -forget from the caller's point of view: a failure here must never
+  /// block the learner's flow, so this can be awaited without surfacing
+  /// errors to the UI beyond a caught exception.
+  Future<void> submitAnswer(String questionId, bool correct) async {
+    await _api.post('/api/me/answers', body: {'questionId': questionId, 'answerData': {'correct': correct}, 'correct': correct});
+  }
 }
 
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) => LessonRepository(ref.watch(apiClientProvider)));

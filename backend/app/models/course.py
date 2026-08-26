@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -11,6 +11,7 @@ from app.utils import utcnow
 
 if TYPE_CHECKING:
     from app.models.course_lesson import CourseLesson
+    from app.models.level import Level
 
 
 class Course(Base):
@@ -29,5 +30,11 @@ class Course(Base):
     createdAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, server_default="now()")
     # No DB-level default (confirmed via information_schema) — set client-side.
     updatedAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
+    # Nullable during the migration window (add nullable -> backfill -> set
+    # NOT NULL, same pattern as User.publicId). The legacy file-based course
+    # has no Course row at all and is deliberately exempt from this
+    # dimension — see the approved migration plan.
+    levelId: Mapped[str | None] = mapped_column(String, ForeignKey("Level.id"), nullable=True)
 
     lessons: Mapped[list["CourseLesson"]] = relationship(back_populates="course", cascade="all, delete-orphan")
+    level: Mapped["Level | None"] = relationship(back_populates="courses")

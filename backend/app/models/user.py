@@ -10,6 +10,7 @@ from app.models.enums import Role, UserStatus
 from app.utils import utcnow
 
 if TYPE_CHECKING:
+    from app.models.answer_log import AnswerLog
     from app.models.login_event import LoginEvent
 
 
@@ -56,3 +57,4 @@ class User(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 
     loginEvents: Mapped[list["LoginEvent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    answerLogs: Mapped[list["AnswerLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
