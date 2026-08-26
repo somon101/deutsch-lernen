@@ -4,7 +4,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/core/auth/auth_state.dart';
 import 'package:deutsch_lernen/core/auth/secure_storage.dart';
 import 'package:deutsch_lernen/core/auth/user.dart';
 import 'package:deutsch_lernen/features/profile/presentation/profile_qr_screen.dart';
@@ -14,7 +13,6 @@ class _FakeSecureStorage implements SecureStorage {
   _FakeSecureStorage(this.user);
   AppUser? user;
   String? token = 'fake-token';
-  String? theme;
 
   @override
   Future<String?> readToken() async => token;
@@ -31,11 +29,6 @@ class _FakeSecureStorage implements SecureStorage {
     token = null;
     user = null;
   }
-
-  @override
-  Future<String?> readTheme() async => theme;
-  @override
-  Future<void> saveTheme(String value) async => theme = value;
 }
 
 final _testUser = AppUser(
