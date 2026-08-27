@@ -79,7 +79,9 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
       await sounds.playIncorrect();
     }
     try {
-      await ref.read(lessonRepositoryProvider).submitAnswer(_exercises[_index].id, correct);
+      await ref
+          .read(lessonRepositoryProvider)
+          .submitAnswer(_exercises[_index].id, correct, placementId: _exercises[_index].placementId);
     } catch (_) {
       // Best-effort — a logging failure must never block the quiz flow.
     }

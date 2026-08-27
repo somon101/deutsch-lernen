@@ -77,8 +77,11 @@ class LessonRepository {
   /// -forget from the caller's point of view: a failure here must never
   /// block the learner's flow, so this can be awaited without surfacing
   /// errors to the UI beyond a caught exception.
-  Future<void> submitAnswer(String questionId, bool correct) async {
-    await _api.post('/api/me/answers', body: {'questionId': questionId, 'answerData': {'correct': correct}, 'correct': correct});
+  Future<void> submitAnswer(String questionId, bool correct, {String? placementId}) async {
+    await _api.post(
+      '/api/me/answers',
+      body: {'questionId': questionId, 'placementId': ?placementId, 'answerData': {'correct': correct}, 'correct': correct},
+    );
   }
 }
 

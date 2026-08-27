@@ -106,13 +106,48 @@ async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: 
         ).all()
         for placement, question in placement_rows:
             questions_by_block.setdefault(placement.materialBlockId, []).append(
-                {"id": question.id, **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data)}
+                {
+                    "id": question.id,
+                    "placementId": placement.id,
+                    **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data),
+                }
             )
 
     result: dict[str, list[dict]] = {m.lessonId: [] for m in materials}
     for b in rows:
         result[lesson_by_material[b.materialId]].append(
             {"type": "block", "id": b.id, "title": b.title, "content": b.content, "questions": questions_by_block.get(b.id, [])}
+        )
+    return result
+
+
+async def get_pool_questions_for_lesson_blocks(db: AsyncSession, lesson_block_ids: list[str]) -> dict[str, list[dict]]:
+    """Reusable-pool Questions placed in a quiz LessonBlock (minitest/
+    practice/review), keyed by lessonBlockId — mirrors
+    get_new_material_blocks's placement lookup exactly, just scoped to
+    lessonBlockId instead of materialBlockId (§ approved rule 4, 2026-08-27:
+    the learner must actually receive these, not just the admin UI). Merged
+    into a block's existing LessonQuestion-sourced questions by the caller,
+    never replacing them — the old full-replace quiz-question path keeps
+    working exactly as before."""
+    if not lesson_block_ids:
+        return {}
+    placement_rows = (
+        await db.execute(
+            select(QuestionPlacement, Question)
+            .join(Question, Question.id == QuestionPlacement.questionId)
+            .where(QuestionPlacement.lessonBlockId.in_(lesson_block_ids))
+            .order_by(QuestionPlacement.lessonBlockId, QuestionPlacement.position)
+        )
+    ).all()
+    result: dict[str, list[dict]] = {}
+    for placement, question in placement_rows:
+        result.setdefault(placement.lessonBlockId, []).append(
+            {
+                "id": question.id,
+                "placementId": placement.id,
+                **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data),
+            }
         )
     return result
 

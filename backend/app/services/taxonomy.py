@@ -79,6 +79,18 @@ async def create_topic(db: AsyncSession, body) -> tuple[Topic, bool]:
     return topic, False
 
 
+async def delete_topic(db: AsyncSession, topic_id: str) -> bool:
+    """Materials/Questions tagged with this Topic keep existing (their
+    topicId is set NULL by the FK, per the model's ondelete="SET NULL") —
+    deleting a Topic never deletes content, only the tag."""
+    topic = await db.get(Topic, topic_id)
+    if not topic:
+        return False
+    await db.delete(topic)
+    await db.commit()
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Material / MaterialBlock
 # ---------------------------------------------------------------------------
@@ -277,17 +289,19 @@ def question_dto(question: Question) -> dict:
     }
 
 
-async def list_block_questions(db: AsyncSession, material_block_id: str) -> list[tuple[QuestionPlacement, Question]]:
-    """Every question actually attached to one MaterialBlock, in placement
-    order — the admin editor uses this to show the teacher what's already
-    linked here (was missing entirely before; teachers could only add/search,
-    never see what a block already had)."""
+async def list_block_questions(
+    db: AsyncSession, *, material_block_id: str | None = None, lesson_block_id: str | None = None
+) -> list[tuple[QuestionPlacement, Question]]:
+    """Every question actually attached to one block, in placement order —
+    the admin editor uses this to show the teacher what's already linked
+    here. Works for either a MaterialBlock (the "Материал" stage) or a
+    LessonBlock (minitest/practice/review) — same reusable-pool mechanism,
+    just a different placement column, exactly like create/reuse already
+    accept either one."""
+    condition = QuestionPlacement.materialBlockId == material_block_id if material_block_id else QuestionPlacement.lessonBlockId == lesson_block_id
     rows = (
         await db.execute(
-            select(QuestionPlacement, Question)
-            .join(Question, Question.id == QuestionPlacement.questionId)
-            .where(QuestionPlacement.materialBlockId == material_block_id)
-            .order_by(QuestionPlacement.position)
+            select(QuestionPlacement, Question).join(Question, Question.id == QuestionPlacement.questionId).where(condition).order_by(QuestionPlacement.position)
         )
     ).all()
     return [(p, q) for p, q in rows]

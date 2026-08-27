@@ -8,19 +8,28 @@ import 'dart:math';
 /// plan §3's Решение 2), so this Dart port never needs a procedural
 /// generator — it only ever maps already-authored/frozen questions.
 sealed class Exercise {
-  const Exercise(this.id);
+  const Exercise(this.id, this.placementId);
   final String id;
+  // Which specific use of this question this is (§ approved architecture,
+  // 2026-08-27) — null for the old, non-reusable LessonQuestion path, where
+  // the question itself is already 1:1 with one lesson. Sent back with the
+  // answer so the server can scope progress to the lesson this placement
+  // belongs to, instead of crediting every lesson that happens to reuse the
+  // same underlying question.
+  final String? placementId;
 }
 
 class ChoiceQuestion extends Exercise {
-  const ChoiceQuestion({required String id, required this.prompt, required this.options, required this.correctAnswer}) : super(id);
+  const ChoiceQuestion({required String id, String? placementId, required this.prompt, required this.options, required this.correctAnswer})
+      : super(id, placementId);
   final String prompt;
   final List<String> options;
   final String correctAnswer;
 }
 
 class TrueFalseQuestion extends Exercise {
-  const TrueFalseQuestion({required String id, required this.statement, required this.correct, required this.explanation}) : super(id);
+  const TrueFalseQuestion({required String id, String? placementId, required this.statement, required this.correct, required this.explanation})
+      : super(id, placementId);
   final String statement;
   final bool correct;
   final String explanation;
@@ -29,12 +38,13 @@ class TrueFalseQuestion extends Exercise {
 class ClozeExercise extends Exercise {
   const ClozeExercise({
     required String id,
+    String? placementId,
     required this.translation,
     required this.before,
     required this.after,
     required this.options,
     required this.answer,
-  }) : super(id);
+  }) : super(id, placementId);
   final String translation;
   final String before;
   final String after;
@@ -43,7 +53,8 @@ class ClozeExercise extends Exercise {
 }
 
 class ScrambleExercise extends Exercise {
-  const ScrambleExercise({required String id, required this.translation, required this.tokens, required this.answer}) : super(id);
+  const ScrambleExercise({required String id, String? placementId, required this.translation, required this.tokens, required this.answer})
+      : super(id, placementId);
   final String translation;
   final List<String> tokens;
   final List<String> answer;
@@ -57,7 +68,7 @@ class MatchPair {
 }
 
 class MatchExercise extends Exercise {
-  const MatchExercise({required String id, required this.pairs}) : super(id);
+  const MatchExercise({required String id, String? placementId, required this.pairs}) : super(id, placementId);
   final List<MatchPair> pairs;
 }
 
@@ -68,6 +79,7 @@ class QuestionDto {
     required this.kind,
     required this.prompt,
     this.id,
+    this.placementId,
     this.options = const [],
     this.correctAnswer = '',
     this.correct = false,
@@ -77,6 +89,7 @@ class QuestionDto {
   factory QuestionDto.fromJson(Map<String, dynamic> json) => QuestionDto(
         kind: json['kind'] as String,
         id: json['id'] as String?,
+        placementId: json['placementId'] as String?,
         prompt: json['prompt'] as String? ?? '',
         options: (json['options'] as List<dynamic>?)?.cast<String>() ?? const [],
         correctAnswer: json['correctAnswer'] as String? ?? '',
@@ -91,6 +104,9 @@ class QuestionDto {
   // never carried one before this field existed (e.g. the legacy flat
   // "questions" list in ContentPayload, unrelated to the graded exercises).
   final String? id;
+  // Which QuestionPlacement this specific appearance came from — null for
+  // the old LessonQuestion path (never reusable, so no placement concept).
+  final String? placementId;
   final String kind;
   final String prompt;
   final List<String> options;
@@ -129,21 +145,36 @@ List<T> _shuffle<T>(List<T> items) {
 Exercise toExercise(QuestionDto q, String id) {
   switch (q.kind) {
     case 'truefalse':
-      return TrueFalseQuestion(id: id, statement: q.prompt, correct: q.correct, explanation: _explanationFor(q.prompt, q.correct));
+      return TrueFalseQuestion(
+        id: id,
+        placementId: q.placementId,
+        statement: q.prompt,
+        correct: q.correct,
+        explanation: _explanationFor(q.prompt, q.correct),
+      );
     case 'cloze':
       final split = _splitBlank(q.prompt);
-      return ClozeExercise(id: id, translation: '', before: split.before, after: split.after, options: q.options, answer: q.correctAnswer);
+      return ClozeExercise(
+        id: id,
+        placementId: q.placementId,
+        translation: '',
+        before: split.before,
+        after: split.after,
+        options: q.options,
+        answer: q.correctAnswer,
+      );
     case 'scramble':
       final answer = q.correctAnswer.split(' ').where((w) => w.isNotEmpty).toList();
-      return ScrambleExercise(id: id, translation: q.prompt, tokens: _shuffle(q.options), answer: answer);
+      return ScrambleExercise(id: id, placementId: q.placementId, translation: q.prompt, tokens: _shuffle(q.options), answer: answer);
     case 'match':
       return MatchExercise(
         id: id,
+        placementId: q.placementId,
         pairs: [for (var i = 0; i < q.pairs.length; i++) MatchPair(id: '$id-$i', left: q.pairs[i].left, right: q.pairs[i].right)],
       );
     case 'choice':
     default:
-      return ChoiceQuestion(id: id, prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer);
+      return ChoiceQuestion(id: id, placementId: q.placementId, prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer);
   }
 }
 

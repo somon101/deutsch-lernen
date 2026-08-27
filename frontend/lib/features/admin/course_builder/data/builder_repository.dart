@@ -399,6 +399,13 @@ class BuilderRepository {
     return (AdminTopic.fromJson(res['topic'] as Map<String, dynamic>), res['existing'] as bool);
   }
 
+  /// Deletes the tag itself — Materials/Questions that had it keep existing,
+  /// their topicId just goes back to null (server-side FK is ON DELETE SET
+  /// NULL).
+  Future<void> deleteTopic(String topicId) async {
+    await _api.delete('/api/topics/${Uri.encodeComponent(topicId)}');
+  }
+
   // ---------------------------------------------------------------------
   // Material / MaterialBlock
   // ---------------------------------------------------------------------
@@ -456,9 +463,15 @@ class BuilderRepository {
 
   /// Every reusable question already attached to this block — was missing
   /// entirely before (teachers could only add/search, never see what a
-  /// block already had).
-  Future<List<PoolQuestion>> listBlockQuestions(String materialBlockId) async {
-    final res = await _api.get('/api/materials/blocks/${Uri.encodeComponent(materialBlockId)}/questions');
+  /// block already had). Works for either a MaterialBlock (pass
+  /// `materialBlockId`) or a quiz LessonBlock — minitest/practice/review —
+  /// (pass `lessonBlockId`); exactly one must be given, matching the
+  /// backend's two equivalent endpoints.
+  Future<List<PoolQuestion>> listBlockQuestions({String? materialBlockId, String? lessonBlockId}) async {
+    final path = materialBlockId != null
+        ? '/api/materials/blocks/${Uri.encodeComponent(materialBlockId)}/questions'
+        : '/api/lesson-blocks/${Uri.encodeComponent(lessonBlockId!)}/questions';
+    final res = await _api.get(path);
     return (res['questions'] as List<dynamic>).map((q) => PoolQuestion.fromJson(q as Map<String, dynamic>)).toList();
   }
 

@@ -26,6 +26,7 @@ class CompleteStage extends ConsumerStatefulWidget {
 
 class _CompleteStageState extends ConsumerState<CompleteStage> {
   bool _sideEffectsRan = false;
+  bool _restarting = false;
 
   void _runSideEffectsOnce(bool alreadyComplete) {
     if (_sideEffectsRan) return;
@@ -34,6 +35,15 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
       ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).completeLesson();
     }
     ref.read(soundEffectsProvider).playComplete();
+  }
+
+  Future<void> _restart() async {
+    setState(() => _restarting = true);
+    await ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).restartLesson();
+    if (!mounted) return;
+    final key = widget.runnerKey;
+    final base = key.courseId != null ? '/courses/${key.courseId}/lesson/${key.lessonId}' : '/lesson/${key.lessonId}';
+    context.go('$base/vocabulary');
   }
 
   @override
@@ -72,7 +82,17 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
             ],
           ),
           const SizedBox(height: 32),
-          OutlinedButton(onPressed: () => context.go('/'), child: const Text('На главную')),
+          Wrap(
+            spacing: 12,
+            alignment: WrapAlignment.center,
+            children: [
+              OutlinedButton(onPressed: () => context.go('/'), child: const Text('На главную')),
+              FilledButton(
+                onPressed: _restarting ? null : _restart,
+                child: Text(_restarting ? 'Начинаем…' : 'Пройти ещё раз'),
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -100,6 +100,17 @@ class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, Lesso
       ),
     );
   }
+
+  /// Full reset for "Пройти ещё раз" — clears every stage back to
+  /// not-started (fresh `startedAt`, no quiz results), so the learner walks
+  /// through the whole lesson again from vocabulary. Old AnswerLog rows are
+  /// untouched (attemptNumber keeps counting up), only THIS lesson's
+  /// stage-completion state is reset.
+  Future<void> restartLesson() async {
+    final current = state.value;
+    if (current == null) return;
+    await _persist(LessonProgress.empty(current.content.lessonId));
+  }
 }
 
 final lessonRunnerControllerProvider =

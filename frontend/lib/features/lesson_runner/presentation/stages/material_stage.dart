@@ -197,7 +197,7 @@ class _InlineCheckpointQuestion extends ConsumerWidget {
 
   Future<void> _handleAnswered(WidgetRef ref, bool correct) async {
     try {
-      await ref.read(lessonRepositoryProvider).submitAnswer(exercise.id, correct);
+      await ref.read(lessonRepositoryProvider).submitAnswer(exercise.id, correct, placementId: exercise.placementId);
     } catch (_) {
       // Best-effort — a logging failure must never block reading the lesson.
     }

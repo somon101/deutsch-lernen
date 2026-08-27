@@ -1,9 +1,12 @@
-from sqlalchemy import func, select
+from collections import defaultdict
+
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.answer_log import AnswerLog
 from app.models.course import Course
+from app.models.course_lesson import CourseLesson
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_state import LessonAttempt
 from app.models.lesson_question import LessonQuestion
@@ -100,57 +103,13 @@ async def submit_answer(
     return log
 
 
-async def _question_ids_for_material_blocks(db: AsyncSession, material_block_ids: list[str]) -> set[str]:
-    if not material_block_ids:
-        return set()
-    result = await db.execute(select(QuestionPlacement.questionId).where(QuestionPlacement.materialBlockId.in_(material_block_ids)))
-    return set(result.scalars().all())
-
-
-async def _question_ids_for_lesson_blocks(db: AsyncSession, lesson_block_ids: list[str]) -> set[str]:
-    if not lesson_block_ids:
-        return set()
-    result = await db.execute(select(QuestionPlacement.questionId).where(QuestionPlacement.lessonBlockId.in_(lesson_block_ids)))
-    return set(result.scalars().all())
-
-
-async def _question_ids_for_lesson(db: AsyncSession, lesson_id: str) -> list[str]:
-    material_ids = (await db.execute(select(Material.id).where(Material.lessonId == lesson_id))).scalars().all()
-    material_block_ids = (
-        (await db.execute(select(MaterialBlock.id).where(MaterialBlock.materialId.in_(material_ids)))).scalars().all() if material_ids else []
-    )
-    lesson_block_ids = (await db.execute(select(LessonBlock.id).where(LessonBlock.lessonId == lesson_id))).scalars().all()
-
-    q_ids = await _question_ids_for_material_blocks(db, material_block_ids)
-    q_ids |= await _question_ids_for_lesson_blocks(db, lesson_block_ids)
-    # Legacy pool questions have neither a MaterialBlock nor a LessonBlock —
-    # the backfill recorded them via legacyLessonId directly instead.
-    legacy_ids = (await db.execute(select(QuestionPlacement.questionId).where(QuestionPlacement.legacyLessonId == lesson_id))).scalars().all()
-    q_ids |= set(legacy_ids)
-    # Old quiz questions (minitest/practice/review) — real LessonQuestion.id
-    # values, counted directly since new ones never get a QuestionPlacement.
-    quiz_ids = (await db.execute(select(LessonQuestion.id).where(LessonQuestion.lessonId == lesson_id))).scalars().all()
-    q_ids |= set(quiz_ids)
-    return list(q_ids)
-
-
-async def _question_ids_for_courses(db: AsyncSession, course_ids: list[str]) -> list[str]:
-    if not course_ids:
-        return []
-    material_ids = (await db.execute(select(Material.id).where(Material.courseId.in_(course_ids)))).scalars().all()
-    material_block_ids = (
-        (await db.execute(select(MaterialBlock.id).where(MaterialBlock.materialId.in_(material_ids)))).scalars().all() if material_ids else []
-    )
-    lesson_block_ids = (await db.execute(select(LessonBlock.id).where(LessonBlock.courseId.in_(course_ids)))).scalars().all()
-
-    q_ids = await _question_ids_for_material_blocks(db, material_block_ids)
-    q_ids |= await _question_ids_for_lesson_blocks(db, lesson_block_ids)
-    quiz_ids = (await db.execute(select(LessonQuestion.id).where(LessonQuestion.courseId.in_(course_ids)))).scalars().all()
-    q_ids |= set(quiz_ids)
-    return list(q_ids)
-
-
 async def _weighted_progress(db: AsyncSession, user_id: str, question_ids: list[str]) -> dict:
+    """Global, cross-lesson mastery: the latest answer to a question ANYWHERE
+    it was ever placed, no matter which lesson. Deliberately used only for
+    Topic progress now (§ approved rule 8/9, 2026-08-27) — a Topic is a
+    statistic about the knowledge itself, not about finishing one lesson's
+    copy of it. Lesson/level progress use `_weighted_progress_for_scope`
+    below instead, which never lets one lesson's answer count for another."""
     if not question_ids:
         return {"correct": 0, "total": 0, "answered": 0, "percent": 0, "passed": False}
     result = await db.execute(
@@ -175,45 +134,140 @@ async def _weighted_progress(db: AsyncSession, user_id: str, question_ids: list[
     }
 
 
+async def _lesson_progress_scope(db: AsyncSession, lesson_id: str) -> tuple[set[str], dict[str, list[str]]]:
+    """The atomic units of progress for one lesson (§ approved rule
+    4/5/6, 2026-08-27):
+      - quiz_question_ids: old LessonQuestion rows — always 1:1 with this
+        lesson, never reusable elsewhere, so no placement scoping needed.
+      - placement_ids_by_question: every reusable-pool Question placed
+        ANYWHERE in this lesson (a material block, a quiz block, or the
+        legacy bare-lessonId path), keyed by questionId — a question placed
+        twice in the same lesson (e.g. once in Практика, once in
+        Закрепление) still gets exactly ONE denominator slot, backed by
+        every placement that could have been answered."""
+    material_ids = (await db.execute(select(Material.id).where(Material.lessonId == lesson_id))).scalars().all()
+    material_block_ids = (
+        (await db.execute(select(MaterialBlock.id).where(MaterialBlock.materialId.in_(material_ids)))).scalars().all() if material_ids else []
+    )
+    lesson_block_ids = (await db.execute(select(LessonBlock.id).where(LessonBlock.lessonId == lesson_id))).scalars().all()
+
+    conditions = [QuestionPlacement.legacyLessonId == lesson_id]
+    if material_block_ids:
+        conditions.append(QuestionPlacement.materialBlockId.in_(material_block_ids))
+    if lesson_block_ids:
+        conditions.append(QuestionPlacement.lessonBlockId.in_(lesson_block_ids))
+    placement_rows = (await db.execute(select(QuestionPlacement.id, QuestionPlacement.questionId).where(or_(*conditions)))).all()
+
+    placement_ids_by_question: dict[str, list[str]] = defaultdict(list)
+    for placement_id, question_id in placement_rows:
+        placement_ids_by_question[question_id].append(placement_id)
+
+    quiz_question_ids = set((await db.execute(select(LessonQuestion.id).where(LessonQuestion.lessonId == lesson_id))).scalars().all())
+    return quiz_question_ids, dict(placement_ids_by_question)
+
+
+async def _weighted_progress_for_scope(
+    db: AsyncSession, user_id: str, quiz_question_ids: set[str], placement_ids_by_question: dict[str, list[str]]
+) -> dict:
+    """Same "latest answer per question wins" idea as `_weighted_progress`,
+    but the AnswerLog lookup is scoped to THIS lesson's own placements — an
+    answer given under a different lesson's placement of the same question
+    never counts here (§ approved rule 6). Quiz questions are matched by
+    `questionId` with `placementId IS NULL` (they never carry a placement,
+    since they're not reusable to begin with)."""
+    total = len(quiz_question_ids) + len(placement_ids_by_question)
+    if total == 0:
+        return {"correct": 0, "total": 0, "answered": 0, "percent": 0, "passed": False}
+
+    placement_to_question = {pid: qid for qid, pids in placement_ids_by_question.items() for pid in pids}
+    conditions = []
+    if placement_to_question:
+        conditions.append(AnswerLog.placementId.in_(list(placement_to_question)))
+    if quiz_question_ids:
+        conditions.append(and_(AnswerLog.questionId.in_(quiz_question_ids), AnswerLog.placementId.is_(None)))
+
+    latest_by_question: dict[str, bool] = {}
+    if conditions:
+        result = await db.execute(
+            select(AnswerLog).where(AnswerLog.userId == user_id, or_(*conditions)).order_by(AnswerLog.createdAt.asc())
+        )
+        for log in result.scalars().all():
+            if log.placementId in placement_to_question:
+                latest_by_question[placement_to_question[log.placementId]] = log.correct
+            elif log.questionId in quiz_question_ids:
+                latest_by_question[log.questionId] = log.correct
+
+    correct = sum(1 for v in latest_by_question.values() if v)
+    percent = round((correct / total) * 100) if total else 0
+    return {
+        "correct": correct,
+        "total": total,
+        "answered": len(latest_by_question),
+        "percent": percent,
+        "passed": percent >= settings.pass_threshold_percent,
+    }
+
+
 async def get_lesson_progress_from_answers(db: AsyncSession, lesson_id: str, user_id: str) -> dict:
-    question_ids = await _question_ids_for_lesson(db, lesson_id)
-    return await _weighted_progress(db, user_id, question_ids)
+    quiz_question_ids, placement_ids_by_question = await _lesson_progress_scope(db, lesson_id)
+    return await _weighted_progress_for_scope(db, user_id, quiz_question_ids, placement_ids_by_question)
 
 
 async def get_level_progress(db: AsyncSession, user_id: str, level_id: str) -> dict | None:
+    """Sums each of the level's lessons' own, already lesson-scoped results
+    (§ approved rule 7) — never re-dedupes a question across lessons: if the
+    same Question is placed in two lessons of this level, it contributes one
+    independently-graded denominator slot per lesson, not one for the
+    level."""
     level = await db.get(Level, level_id)
     if not level:
         return None
     course_ids = (await db.execute(select(Course.id).where(Course.levelId == level_id))).scalars().all()
-    question_ids = await _question_ids_for_courses(db, course_ids)
-    return await _weighted_progress(db, user_id, question_ids)
+    lesson_ids = (await db.execute(select(CourseLesson.id).where(CourseLesson.courseId.in_(course_ids)))).scalars().all() if course_ids else []
+
+    total_correct = total_all = total_answered = 0
+    for lesson_id in lesson_ids:
+        p = await get_lesson_progress_from_answers(db, lesson_id, user_id)
+        total_correct += p["correct"]
+        total_all += p["total"]
+        total_answered += p["answered"]
+
+    percent = round((total_correct / total_all) * 100) if total_all else 0
+    return {
+        "correct": total_correct,
+        "total": total_all,
+        "answered": total_answered,
+        "percent": percent,
+        "passed": percent >= settings.pass_threshold_percent,
+    }
 
 
 async def get_overall_progress(db: AsyncSession, user_id: str) -> dict:
     """Only levels the user has actually started count (§22: "не учитывай
-    будущие уровни, которые пользователь ещё не проходил") — a level with
-    zero AnswerLog rows for the user is skipped entirely rather than
+    будущие уровни, которые пользователь ещё не проходил") — a level whose
+    lessons sum to zero answered questions is skipped entirely rather than
     dragging the average down with an implicit 0%."""
     levels = (await db.execute(select(Level))).scalars().all()
     total_correct = 0
     total_all = 0
     included = []
     for level in levels:
-        course_ids = (await db.execute(select(Course.id).where(Course.levelId == level.id))).scalars().all()
-        question_ids = await _question_ids_for_courses(db, course_ids)
-        if not question_ids:
+        progress = await get_level_progress(db, user_id, level.id)
+        if not progress or progress["total"] == 0 or progress["answered"] == 0:
             continue
-        touched = (
-            await db.execute(
-                select(func.count()).select_from(AnswerLog).where(AnswerLog.userId == user_id, AnswerLog.questionId.in_(question_ids))
-            )
-        ).scalar_one()
-        if touched == 0:
-            continue
-        progress = await _weighted_progress(db, user_id, question_ids)
         total_correct += progress["correct"]
         total_all += progress["total"]
         included.append({"levelId": level.id, "code": level.code, "name": level.name, **progress})
 
     percent = round((total_correct / total_all) * 100) if total_all else 0
     return {"correct": total_correct, "total": total_all, "percent": percent, "passed": percent >= settings.pass_threshold_percent, "levels": included}
+
+
+async def get_topic_progress(db: AsyncSession, user_id: str, topic_id: str) -> dict:
+    """Cross-lesson knowledge stat (§ approved rule 8/9): the learner's
+    latest answer to every Question tagged with this Topic, wherever it was
+    placed. This is a statistic about topic mastery, not a claim that the
+    topic itself is "complete" — deliberately reuses the global
+    `_weighted_progress`, which is exactly this semantics already."""
+    question_ids = (await db.execute(select(Question.id).where(Question.topicId == topic_id))).scalars().all()
+    return await _weighted_progress(db, user_id, list(question_ids))

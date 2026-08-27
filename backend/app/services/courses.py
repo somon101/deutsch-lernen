@@ -19,7 +19,7 @@ from app.models.lesson_content import LessonContent
 from app.models.lesson_question import LessonQuestion
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
-from app.services.material import filter_new_vocabulary, get_new_material_blocks, parse_material, to_question_dto
+from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
 from app.utils import to_iso_z, utcnow
 
 STAGE_TITLES = {"minitest": "Мини-тест", "practice": "Практика", "review": "Закрепление"}
@@ -119,6 +119,7 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         taught_so_far |= {w.germanKey for w in words if w.lessonId == lesson.id}
 
     new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids)
+    pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks])
 
     def lesson_dto(lesson: CourseLesson) -> dict:
         lesson_words = [w for w in words if w.lessonId == lesson.id]
@@ -151,11 +152,15 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
                     "stage": b.stage,
                     "title": b.title,
                     "position": b.position,
+                    # LessonQuestion rows (old full-replace quiz path) plus any
+                    # reusable-pool Questions placed here (§ approved rule 4,
+                    # 2026-08-27) — merged, never one replacing the other.
                     "questions": [
                         {"id": q.id, **to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data)}
                         for q in lesson_questions
                         if q.blockId == b.id
-                    ],
+                    ]
+                    + pool_questions_by_lesson_block.get(b.id, []),
                 }
                 for b in lesson_blocks
             ],

@@ -18,7 +18,7 @@ from app.schemas.taxonomy import (
     TopicInput,
 )
 from app.services import taxonomy as svc
-from app.services.progress import get_lesson_progress_from_answers, get_level_progress, get_overall_progress, submit_answer
+from app.services.progress import get_lesson_progress_from_answers, get_level_progress, get_overall_progress, get_topic_progress, submit_answer
 
 router = APIRouter(prefix="/api", tags=["taxonomy"])
 
@@ -94,6 +94,14 @@ async def create_topic(body: TopicInput, admin: User = Depends(require_staff), d
     return {"topic": _topic_dto(topic), "existing": existing}
 
 
+@router.delete("/topics/{topic_id}")
+async def delete_topic(topic_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    ok = await svc.delete_topic(db, topic_id)
+    if not ok:
+        raise ApiError(404, "Тема не найдена")
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Material / MaterialBlock
 # ---------------------------------------------------------------------------
@@ -165,7 +173,17 @@ async def reorder_material_blocks(material_id: str, body: MaterialBlockReorderIn
 
 @router.get("/materials/blocks/{block_id}/questions")
 async def list_block_questions(block_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
-    rows = await svc.list_block_questions(db, block_id)
+    rows = await svc.list_block_questions(db, material_block_id=block_id)
+    return {"questions": [{"placementId": p.id, **svc.question_dto(q)} for p, q in rows]}
+
+
+@router.get("/lesson-blocks/{block_id}/questions")
+async def list_lesson_block_questions(block_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Same reusable-pool listing as materials/blocks/{id}/questions, scoped
+    to a quiz LessonBlock (minitest/practice/review) instead — lets the old
+    quiz-block editor show/manage pool questions the same way the new
+    material-block editor does."""
+    rows = await svc.list_block_questions(db, lesson_block_id=block_id)
     return {"questions": [{"placementId": p.id, **svc.question_dto(q)} for p, q in rows]}
 
 
@@ -249,4 +267,12 @@ async def level_progress_route(level_id: str, user: User = Depends(require_auth)
 @router.get("/me/progress/overall")
 async def overall_progress_route(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     progress = await get_overall_progress(db, user.id)
+    return {"progress": progress}
+
+
+@router.get("/me/progress/topic/{topic_id}")
+async def topic_progress_route(topic_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Cross-lesson knowledge stat, not tied to any one lesson's completion
+    (§ approved rule 8/9, 2026-08-27)."""
+    progress = await get_topic_progress(db, user.id, topic_id)
     return {"progress": progress}

@@ -9,6 +9,7 @@ import '../../../admin_widgets.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/block_question.dart';
 import '../../domain/builder_domain.dart';
+import 'pool_questions_section.dart';
 import 'question_kind_editors.dart';
 
 /// Mirrors BuilderBlockEditor.tsx — one named block of questions (any mix
@@ -237,6 +238,8 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
                 child: Text(_busy ? 'Сохраняем…' : 'Сохранить вопросы'),
               ),
             ),
+            const Divider(height: 32, color: AdminColors.border),
+            PoolQuestionsSection(lessonBlockId: widget.block.id),
           ],
         ],
       ),
