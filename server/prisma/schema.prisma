@@ -66,6 +66,7 @@ model User {
   lessonStates LessonState[]
   loginEvents  LoginEvent[]
   answerLogs   AnswerLog[]
+  pushTokens   PushToken[]
 }
 
 /// One row per successful login, so an admin can see a user's full login
@@ -446,4 +447,59 @@ model AnswerLog {
 
   @@index([userId, questionId])
   @@index([questionId])
+}
+
+// ---------------------------------------------------------------------------
+// Push notifications — a generic mechanism, not tied to any one event.
+// `Notification.type` identifies which event produced it ("lesson_created"
+// is the only one wired up today); a future event type reuses these same
+// three tables and the same send path, no new system needed. Purely
+// additive — no existing table's columns change.
+// ---------------------------------------------------------------------------
+
+/// One row per device a user has granted notification permission on (a user
+/// can have several — phone + another phone, reinstall, etc.). `token` is
+/// the FCM registration token; unique because a token is never meaningfully
+/// shared between rows, and re-registering the same token just updates it.
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  // "android" | "ios" | "web" — free-text, same convention as
+  // LessonBlock.stage / LessonQuestion.kind, so a future platform needs no
+  // migration.
+  platform  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+/// A log of every notification actually sent (or attempted), and the record
+/// the manual "Отправить уведомление" button re-sends from if needed.
+/// courseId/lessonId are the same loose, no-FK convention as
+/// Material/LessonBlock — this event's deep-link target, not a hard
+/// dependency.
+model Notification {
+  id          String   @id @default(uuid())
+  type        String
+  title       String
+  body        String
+  deepLink    String?
+  courseId    String?
+  lessonId    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([type, createdAt])
+}
+
+/// Single-row table (id is always "singleton") holding the admin-facing
+/// on/off switches for automatic sending. One boolean per event type, so a
+/// future event adds one column here rather than a new table.
+model NotificationSettings {
+  id                  String   @id @default("singleton")
+  autoSendOnNewLesson Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
 }

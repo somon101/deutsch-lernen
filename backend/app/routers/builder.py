@@ -123,6 +123,25 @@ async def delete_lesson(course_id: str, lesson_id: str, db: AsyncSession = Depen
     return {"course": course}
 
 
+@router.post("/courses/{course_id}/lessons/{lesson_id}/notify", status_code=201)
+async def notify_lesson(course_id: str, lesson_id: str, user: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    """Manual "Отправить уведомление" — always sends regardless of the
+    auto-send setting (that toggle only gates the automatic call from
+    create_lesson)."""
+    from app.services import push as push_svc
+
+    course = await svc.get_course(db, course_id)
+    if not course:
+        raise ApiError(404, "Курс не найден")
+    lesson = next((l for l in course["lessons"] if l["id"] == lesson_id), None)
+    if not lesson:
+        raise ApiError(404, "Урок не найден")
+    notification = await push_svc.notify_lesson_created(
+        db, course_id=course_id, course_title=course["title"], lesson_id=lesson_id, lesson_title=lesson["title"], created_by_id=user.id
+    )
+    return {"notification": notification}
+
+
 @router.post("/courses/{course_id}/lessons/{lesson_id}/media")
 async def upload_lesson_media(
     course_id: str,

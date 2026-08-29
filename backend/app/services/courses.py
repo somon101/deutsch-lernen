@@ -230,16 +230,33 @@ async def create_lesson(db: AsyncSession, course_id: str, title: str, descriptio
     if not course:
         return None
     last = await db.scalar(select(CourseLesson.position).where(CourseLesson.courseId == course_id).order_by(CourseLesson.position.desc()).limit(1))
-    db.add(
-        CourseLesson(
-            courseId=course_id,
-            title=title,
-            description=description or "",
-            materialText=material_text or "",
-            position=(last if last is not None else -1) + 1,
-        )
+    lesson = CourseLesson(
+        courseId=course_id,
+        title=title,
+        description=description or "",
+        materialText=material_text or "",
+        position=(last if last is not None else -1) + 1,
     )
+    db.add(lesson)
     await db.commit()
+
+    # Push notifications, event "lesson_created" (§ generic mechanism,
+    # 2026-08-29): a lesson only actually reaches learners once its course
+    # is PUBLISHED, so a lesson added to a still-DRAFT course is silent —
+    # nothing to notify about yet. Never allowed to break lesson creation
+    # itself: send_notification() already swallows its own errors, this
+    # try/except is only for the settings lookup around it.
+    if course.status == CourseStatus.PUBLISHED:
+        try:
+            from app.services import push as push_svc
+
+            if (await push_svc.get_settings(db)).autoSendOnNewLesson:
+                await push_svc.notify_lesson_created(
+                    db, course_id=course_id, course_title=course.title, lesson_id=lesson.id, lesson_title=lesson.title, created_by_id=None
+                )
+        except Exception as exc:  # noqa: BLE001 — a push failure must never break lesson creation
+            print(f"Push: auto-notify on lesson creation failed: {exc!r}")
+
     return await get_course(db, course_id)
 
 

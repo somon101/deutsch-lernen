@@ -11,6 +11,9 @@ from app.models.level import Level
 from app.models.login_event import LoginEvent
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
+from app.models.notification import Notification
+from app.models.notification_settings import NotificationSettings
+from app.models.push_token import PushToken
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
 from app.models.topic import Topic
@@ -34,6 +37,9 @@ __all__ = [
     "LoginEvent",
     "Material",
     "MaterialBlock",
+    "Notification",
+    "NotificationSettings",
+    "PushToken",
     "Question",
     "QuestionPlacement",
     "Topic",

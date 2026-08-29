@@ -12,6 +12,7 @@ from app.utils import utcnow
 if TYPE_CHECKING:
     from app.models.answer_log import AnswerLog
     from app.models.login_event import LoginEvent
+    from app.models.push_token import PushToken
 
 
 class User(Base):
@@ -58,3 +59,4 @@ class User(Base):
 
     loginEvents: Mapped[list["LoginEvent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     answerLogs: Mapped[list["AnswerLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    pushTokens: Mapped[list["PushToken"]] = relationship(back_populates="user", cascade="all, delete-orphan")

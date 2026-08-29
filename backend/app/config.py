@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = ""
     supabase_storage_bucket: str = "uploads"
 
+    # Optional: when both are set, push notifications (app/services/push.py)
+    # actually call Firebase Cloud Messaging. Left unset, every push call is
+    # a safe no-op — Notification rows still get written (so the admin UI
+    # and "manual send" history keep working), nothing is ever delivered.
+    # firebase_service_account_json is the raw JSON key file content (same
+    # "paste the whole file as one secret" convention as Supabase's key).
+    firebase_project_id: str = ""
+    firebase_service_account_json: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
@@ -32,6 +41,10 @@ class Settings(BaseSettings):
     @property
     def supabase_storage_enabled(self) -> bool:
         return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
+
+    @property
+    def push_enabled(self) -> bool:
+        return bool(self.firebase_project_id.strip() and self.firebase_service_account_json.strip())
 
 
 settings = Settings()
