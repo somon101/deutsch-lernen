@@ -1,14 +1,16 @@
 import ssl
 from collections.abc import AsyncGenerator
 from urllib.parse import parse_qs, urlsplit, urlunsplit
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
 
-def _to_asyncpg_url(url: str) -> tuple[str, dict]:
+def _to_asyncpg_url(url: str) -> tuple[str, dict, bool]:
     # Prisma's DATABASE_URL uses the plain "postgresql://" scheme; asyncpg
     # needs the "+asyncpg" driver marker. Same connection string, same
     # database. Prisma's "?schema=public" query param is its own convention
@@ -49,20 +51,24 @@ def _to_asyncpg_url(url: str) -> tuple[str, dict]:
         context.verify_mode = ssl.CERT_NONE
         connect_args["ssl"] = context
     if use_pooler:
-        # statement_cache_size=0 only disables asyncpg's OWN cache.
-        # SQLAlchemy's asyncpg dialect keeps a separate, wrapper-level cache
-        # of named prepared statements (prepared_statement_cache_size,
-        # default 100) that must also be zeroed out, or it still issues
-        # named PREPARE statements the transaction-mode pooler doesn't scope
-        # per client — causing "prepared statement ... already exists" once
-        # a backend connection is handed to a second session.
+        # SQLAlchemy's asyncpg dialect always names its prepared statements
+        # (__asyncpg_stmt_N__, counting from 1 per connection). Transaction-
+        # mode PgBouncer/Supavisor doesn't scope or clear those between
+        # clients, so a fresh connection's "__asyncpg_stmt_1__" can already
+        # be registered on whatever physical backend the pooler hands it —
+        # "prepared statement ... already exists". Per SQLAlchemy's own
+        # asyncpg docs, the fix is UUID-suffixed names (never collide) plus
+        # NullPool (no reason to pool client-side when PgBouncer already
+        # pools server-side, and pooling here is what lets a stale name
+        # counter and a swapped-out backend connection disagree).
         connect_args["statement_cache_size"] = 0
         connect_args["prepared_statement_cache_size"] = 0
+        connect_args["prepared_statement_name_func"] = lambda: f"__asyncpg_{uuid4()}__"
 
-    return async_url, connect_args
+    return async_url, connect_args, use_pooler
 
 
-_async_url, _connect_args = _to_asyncpg_url(settings.database_url)
+_async_url, _connect_args, _use_pooler = _to_asyncpg_url(settings.database_url)
 
 # Node's pg driver (via Prisma) sets the session timezone to UTC by default;
 # asyncpg does not, and inherits whatever the Postgres server's own default
@@ -73,7 +79,9 @@ _async_url, _connect_args = _to_asyncpg_url(settings.database_url)
 # LessonAttempt.createdAt came out ~3 hours off from true UTC. Force UTC
 # explicitly so both backends agree.
 _engine_kwargs: dict = {"connect_args": _connect_args}
-if "supabase.co" in (urlsplit(settings.database_url).hostname or "").lower():
+if _use_pooler:
+    _engine_kwargs["poolclass"] = NullPool
+elif "supabase.co" in (urlsplit(settings.database_url).hostname or "").lower():
     # Free-tier Supabase caps direct connections; keep the pool small and
     # go through the pooler URL in DATABASE_URL.
     _engine_kwargs["pool_size"] = 5
