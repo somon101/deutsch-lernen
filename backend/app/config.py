@@ -29,10 +29,12 @@ class Settings(BaseSettings):
     # actually call Firebase Cloud Messaging. Left unset, every push call is
     # a safe no-op — Notification rows still get written (so the admin UI
     # and "manual send" history keep working), nothing is ever delivered.
-    # firebase_service_account_json is the raw JSON key file content (same
-    # "paste the whole file as one secret" convention as Supabase's key).
+    # The service-account key is base64'd (firebase_service_account_json_b64)
+    # rather than pasted raw: the raw JSON's commas collide with Cloud Run's
+    # own comma-delimited env-var syntax and get corrupted in transit — see
+    # the deploy workflow's comment on this same variable.
     firebase_project_id: str = ""
-    firebase_service_account_json: str = ""
+    firebase_service_account_json_b64: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:
@@ -44,7 +46,15 @@ class Settings(BaseSettings):
 
     @property
     def push_enabled(self) -> bool:
-        return bool(self.firebase_project_id.strip() and self.firebase_service_account_json.strip())
+        return bool(self.firebase_project_id.strip() and self.firebase_service_account_json_b64.strip())
+
+    @property
+    def firebase_service_account_json(self) -> str:
+        import base64
+
+        if not self.firebase_service_account_json_b64.strip():
+            return ""
+        return base64.b64decode(self.firebase_service_account_json_b64).decode("utf-8")
 
 
 settings = Settings()
