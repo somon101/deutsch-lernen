@@ -24,3 +24,16 @@ async def get_published_course(course_id: str, user: User = Depends(require_auth
     if not course or course["status"] != "PUBLISHED":
         raise ApiError(404, "Курс не найден")
     return {"course": course}
+
+
+@router.get("/{course_id}/version")
+async def get_published_course_version(course_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Cheap cache-busting check (frontend caching plan, 2026-08-29) — lets
+    the app confirm "is my cached copy of this course still current?"
+    without downloading the whole course again. Same not-found rule as the
+    full fetch: a draft course's version isn't distinguishable from a
+    nonexistent one."""
+    course = await svc.get_course(db, course_id)
+    if not course or course["status"] != "PUBLISHED":
+        raise ApiError(404, "Курс не найден")
+    return {"version": await svc.get_course_version(db, course_id)}

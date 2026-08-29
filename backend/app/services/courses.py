@@ -5,6 +5,7 @@ live entirely in the database and are independent of the original
 file-based course and of each other — nothing is ever copied between them.
 """
 
+import hashlib
 import uuid
 
 from sqlalchemy import and_, func, or_, select
@@ -17,6 +18,10 @@ from app.models.course_lesson import CourseLesson
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
 from app.models.lesson_question import LessonQuestion
+from app.models.material import Material
+from app.models.material_block import MaterialBlock
+from app.models.question import Question
+from app.models.question_placement import QuestionPlacement
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
 from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
@@ -176,6 +181,71 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         "updatedAt": to_iso_z(course.updatedAt),
         "lessons": [lesson_dto(l) for l in lessons],
     }
+
+
+async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
+    """A cheap, opaque fingerprint of everything a learner's course view
+    depends on (frontend caching plan, 2026-08-29) — the client compares
+    this to what it has cached and skips re-downloading the whole course
+    when nothing changed. Deliberately COMPUTED, not a stored/maintained
+    column: several nested tables (CourseLesson, LessonBlock,
+    VocabularyItem, QuestionPlacement) have no updatedAt of their own, so
+    a stored "course version" would need every mutation path across two
+    services to remember to bump it — a single derived read here is safer
+    and touches none of that existing write code.
+
+    Not byte-perfect (e.g. renaming a lesson without adding/removing
+    anything changes no count and no tracked updatedAt), but it catches
+    every add/remove and every content/material/question edit, which is
+    what actually matters for cache correctness; a missed rename just
+    means the client shows last-known content one refresh cycle longer,
+    self-correcting whenever anything else about the course changes."""
+    course = await db.get(Course, course_id)
+    if not course:
+        return None
+
+    lesson_count = await db.scalar(select(func.count()).select_from(CourseLesson).where(CourseLesson.courseId == course_id))
+    vocab_count = await db.scalar(
+        select(func.count())
+        .select_from(VocabularyItem)
+        .join(CourseLesson, CourseLesson.id == VocabularyItem.lessonId)
+        .where(CourseLesson.courseId == course_id)
+    )
+    legacy_question_count = await db.scalar(select(func.count()).select_from(LessonQuestion).where(LessonQuestion.courseId == course_id))
+    block_count = await db.scalar(select(func.count()).select_from(LessonBlock).where(LessonBlock.courseId == course_id))
+    material_max_updated = await db.scalar(select(func.max(Material.updatedAt)).where(Material.courseId == course_id))
+    material_block_count = await db.scalar(
+        select(func.count())
+        .select_from(MaterialBlock)
+        .join(Material, Material.id == MaterialBlock.materialId)
+        .where(Material.courseId == course_id)
+    )
+    pool_question_query = (
+        select(func.max(Question.updatedAt), func.count())
+        .select_from(Question)
+        .join(QuestionPlacement, QuestionPlacement.questionId == Question.id)
+        .outerjoin(LessonBlock, LessonBlock.id == QuestionPlacement.lessonBlockId)
+        .outerjoin(MaterialBlock, MaterialBlock.id == QuestionPlacement.materialBlockId)
+        .outerjoin(Material, Material.id == MaterialBlock.materialId)
+        .where(or_(LessonBlock.courseId == course_id, Material.courseId == course_id))
+    )
+    pool_question_max_updated, pool_question_count = (await db.execute(pool_question_query)).one()
+
+    fingerprint = "|".join(
+        str(v)
+        for v in (
+            course.updatedAt,
+            lesson_count,
+            vocab_count,
+            legacy_question_count,
+            block_count,
+            material_max_updated,
+            material_block_count,
+            pool_question_max_updated,
+            pool_question_count,
+        )
+    )
+    return hashlib.sha256(fingerprint.encode()).hexdigest()
 
 
 async def create_course(db: AsyncSession, title: str, description: str | None, status, created_by_id: str) -> dict:
