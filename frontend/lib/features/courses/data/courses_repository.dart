@@ -65,8 +65,12 @@ class CoursesRepository {
 
   final ApiClient _api;
 
-  Future<List<BuilderCourseSummary>> fetchPublishedCourses() async {
-    final res = await _api.get('/api/courses/');
+  /// `languageId` (§ Home lesson list, 2026-08-29) scopes the result to one
+  /// Language's own courses, via the backend's existing
+  /// Course.levelId -> Level.languageId join — omitted, this is every
+  /// published course, same as before.
+  Future<List<BuilderCourseSummary>> fetchPublishedCourses({String? languageId}) async {
+    final res = await _api.get('/api/courses/', query: languageId == null ? null : {'languageId': languageId});
     return (res['courses'] as List<dynamic>).map((c) => BuilderCourseSummary.fromJson(c as Map<String, dynamic>)).toList();
   }
 

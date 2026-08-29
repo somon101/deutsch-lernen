@@ -53,7 +53,6 @@ class _NavItem {
 
 const _navItems = [
   _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Главная', path: '/'),
-  _NavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book, label: 'Курсы', path: '/courses'),
   _NavItem(icon: Icons.edit_note_outlined, activeIcon: Icons.edit_note, label: 'Конструктор курсов', path: '/admin/courses'),
   _NavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Пользователи', path: '/admin'),
   _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Профиль', path: '/profile'),

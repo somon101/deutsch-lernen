@@ -50,8 +50,15 @@ async def _owned_lesson(db: AsyncSession, course_id: str, lesson_id: str) -> str
 # ---------------------------------------------------------------------------
 
 
-async def list_courses(db: AsyncSession) -> list[dict]:
-    result = await db.execute(select(Course).order_by(Course.position))
+async def list_courses(db: AsyncSession, language_id: str | None = None) -> list[dict]:
+    """`language_id` (§ Home lesson list, 2026-08-29) scopes the result to
+    courses whose Level belongs to that Language, via the existing
+    Course.levelId -> Level.languageId chain — omitted, this is the
+    original, all-courses list every existing caller still gets."""
+    query = select(Course).order_by(Course.position)
+    if language_id:
+        query = query.join(Level, Level.id == Course.levelId).where(Level.languageId == language_id)
+    result = await db.execute(query)
     courses = result.scalars().all()
 
     lesson_counts_result = await db.execute(

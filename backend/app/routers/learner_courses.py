@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import require_auth
@@ -11,8 +11,8 @@ router = APIRouter(prefix="/api/courses", tags=["learner-courses"], dependencies
 
 
 @router.get("/")
-async def list_published_courses(db: AsyncSession = Depends(get_db)):
-    all_courses = await svc.list_courses(db)
+async def list_published_courses(languageId: str | None = Query(default=None), db: AsyncSession = Depends(get_db)):
+    all_courses = await svc.list_courses(db, language_id=languageId)
     return {"courses": [c for c in all_courses if c["status"] == "PUBLISHED"]}
 
 

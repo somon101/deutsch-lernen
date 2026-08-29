@@ -150,9 +150,17 @@ class EffectiveLanguage {
   final String? selectedId;
 }
 
+/// Every language with a published course — the same list feeds the
+/// Settings language picker, the profile-progress language, and (§ Home
+/// lesson list, 2026-08-29) the independent "which language's lessons am I
+/// browsing" switcher on the Главное screen. One fetch, three unrelated uses.
+final availableLanguagesProvider = FutureProvider.autoDispose<List<LanguageOption>>((ref) {
+  return ref.watch(profileRepositoryProvider).fetchAvailableLanguages();
+});
+
 final effectiveLanguageProvider = FutureProvider.autoDispose<EffectiveLanguage>((ref) async {
   final user = ref.watch(authProvider).value;
-  final languages = await ref.watch(profileRepositoryProvider).fetchAvailableLanguages();
+  final languages = await ref.watch(availableLanguagesProvider.future);
   final selectedId = user?.selectedLanguageId ?? (languages.length == 1 ? languages.single.id : null);
   return EffectiveLanguage(languages: languages, selectedId: selectedId);
 });

@@ -21,8 +21,6 @@ import 'features/admin/users/presentation/admin_user_detail_screen.dart';
 import 'features/admin/users/presentation/admin_users_screen.dart';
 import 'features/auth/presentation/forbidden_screen.dart';
 import 'features/auth/presentation/login_screen.dart';
-import 'features/courses/presentation/course_lessons_screen.dart';
-import 'features/courses/presentation/courses_screen.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/lesson_runner/presentation/lesson_runner_screen.dart';
 import 'features/profile/presentation/profile_qr_screen.dart';
@@ -85,7 +83,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(currentPath: state.matchedLocation, child: child),
         routes: [
           GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
-          GoRoute(path: '/courses', builder: (context, state) => const CoursesScreen()),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
           GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
           GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
@@ -101,10 +98,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           lessonId: state.pathParameters['lessonId']!,
           stage: state.pathParameters['stage']!,
         ),
-      ),
-      GoRoute(
-        path: '/courses/:courseId',
-        builder: (context, state) => CourseLessonsScreen(courseId: state.pathParameters['courseId']!),
       ),
       GoRoute(
         path: '/courses/:courseId/lesson/:lessonId/:stage',

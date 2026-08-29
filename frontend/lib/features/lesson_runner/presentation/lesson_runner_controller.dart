@@ -34,12 +34,12 @@ class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, Lesso
   LessonContentData _parseRawContent(LessonRunnerKey key, Map<String, dynamic> raw) =>
       key.courseId != null ? LessonContentData.fromBuilderJson(raw) : LessonContentData.fromLegacyJson(key.lessonId, raw);
 
-  /// A course's cache-busting version (see courses_overview.dart's
-  /// courseLessonsProvider) also covers every lesson inside it — reused
-  /// here so opening a lesson skips re-downloading its content the same
-  /// way opening the course-lessons list does. Legacy lessons have no such
-  /// endpoint (no owning course), so they fall back to Stage 1 only:
-  /// always refetch in the background, diff, and swap only if different.
+  /// A course's cache-busting version (CoursesRepository.fetchCourseVersion)
+  /// also covers every lesson inside it — reused here so opening a lesson
+  /// skips re-downloading its content when the course hasn't changed.
+  /// Legacy lessons have no such endpoint (no owning course), so they fall
+  /// back to Stage 1 only: always refetch in the background, diff, and swap
+  /// only if different.
   Future<String?> _fetchVersion(LessonRunnerKey key) async {
     if (key.courseId == null) return null;
     try {
