@@ -133,6 +133,7 @@ class AdminCourse {
     required this.coverUrl,
     required this.status,
     required this.position,
+    required this.levelId,
     required this.lessons,
   });
 
@@ -143,6 +144,7 @@ class AdminCourse {
     coverUrl: json['coverUrl'] as String?,
     status: json['status'] as String,
     position: json['position'] as int,
+    levelId: json['levelId'] as String?,
     lessons: (json['lessons'] as List<dynamic>)
         .map((l) => AdminLesson.fromJson(l as Map<String, dynamic>))
         .toList(),
@@ -154,6 +156,7 @@ class AdminCourse {
   final String? coverUrl;
   final String status;
   final int position;
+  final String? levelId;
   final List<AdminLesson> lessons;
 }
 
@@ -168,6 +171,7 @@ class AdminCourseSummary {
     required this.lessonCount,
     required this.wordCount,
     required this.questionCount,
+    required this.levelId,
   });
 
   factory AdminCourseSummary.fromJson(Map<String, dynamic> json) =>
@@ -181,6 +185,7 @@ class AdminCourseSummary {
         lessonCount: json['lessonCount'] as int,
         wordCount: json['wordCount'] as int,
         questionCount: json['questionCount'] as int,
+        levelId: json['levelId'] as String?,
       );
 
   final String id;
@@ -192,6 +197,7 @@ class AdminCourseSummary {
   final int lessonCount;
   final int wordCount;
   final int questionCount;
+  final String? levelId;
 }
 
 class WordLibraryEntry {

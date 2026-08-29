@@ -30,10 +30,11 @@ class BuilderRepository {
   Future<AdminCourse> createCourse({
     required String title,
     String? description,
+    String? levelId,
   }) async {
     final res = await _api.post(
       _base,
-      body: {'title': title, 'description': ?description},
+      body: {'title': title, 'description': ?description, 'levelId': ?levelId},
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
@@ -43,10 +44,11 @@ class BuilderRepository {
     String? title,
     String? description,
     String? status,
+    String? levelId,
   }) async {
     final res = await _api.patch(
       '$_base/${Uri.encodeComponent(courseId)}',
-      body: {'title': ?title, 'description': ?description, 'status': ?status},
+      body: {'title': ?title, 'description': ?description, 'status': ?status, 'levelId': ?levelId},
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
@@ -389,9 +391,22 @@ class BuilderRepository {
     return (res['languages'] as List<dynamic>).map((l) => AdminLanguage.fromJson(l as Map<String, dynamic>)).toList();
   }
 
+  /// Returns (language, existing) — `existing` is true when the server
+  /// found and returned an already-there Language with the same name
+  /// instead of creating a duplicate, same convention as createTopic below.
+  Future<(AdminLanguage, bool)> createLanguage(String name, {bool force = false}) async {
+    final res = await _api.post('/api/languages', body: {'name': name, 'force': force});
+    return (AdminLanguage.fromJson(res['language'] as Map<String, dynamic>), res['existing'] as bool);
+  }
+
   Future<List<AdminLevel>> listLevels({String? languageId}) async {
     final res = await _api.get('/api/levels', query: {'languageId': ?languageId});
     return (res['levels'] as List<dynamic>).map((l) => AdminLevel.fromJson(l as Map<String, dynamic>)).toList();
+  }
+
+  Future<AdminLevel> createLevel(String languageId, String code, String name, {int position = 0}) async {
+    final res = await _api.post('/api/levels', body: {'languageId': languageId, 'code': code, 'name': name, 'position': position});
+    return AdminLevel.fromJson(res['level'] as Map<String, dynamic>);
   }
 
   Future<List<AdminTopic>> listTopics({String? languageId}) async {

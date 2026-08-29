@@ -11,6 +11,8 @@ import '../../admin_widgets.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
 import '../domain/builder_domain.dart';
+import '../domain/taxonomy_domain.dart';
+import 'widgets/level_picker.dart';
 
 final _coursesHubProvider =
     FutureProvider.autoDispose<List<AdminCourseSummary>>(
@@ -24,6 +26,18 @@ final _autoSendOnNewLessonProvider = FutureProvider.autoDispose<bool>(
   (ref) => ref.watch(notificationSettingsRepositoryProvider).getAutoSendOnNewLesson(),
 );
 
+/// Language + Level lists, used only to group the (unchanged) course list
+/// below into Язык → Уровень → Курс for display — the courses themselves,
+/// their reorder/delete/create logic, and Course.position all stay exactly
+/// as they already worked; this only changes which heading a course's
+/// existing row renders under.
+final _languagesProvider = FutureProvider.autoDispose<List<AdminLanguage>>(
+  (ref) => ref.watch(builderRepositoryProvider).listLanguages(),
+);
+final _levelsProvider = FutureProvider.autoDispose<List<AdminLevel>>(
+  (ref) => ref.watch(builderRepositoryProvider).listLevels(),
+);
+
 /// Mirrors AdminCoursesHubPage.tsx: the static legacy-course row (linking
 /// to /admin/courses/legacy) plus every builder course, with reorder/
 /// delete/create.
@@ -33,6 +47,8 @@ class AdminCoursesHubScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final courses = ref.watch(_coursesHubProvider);
+    final languages = ref.watch(_languagesProvider).value ?? const [];
+    final levels = ref.watch(_levelsProvider).value ?? const [];
     final legacyCount = ref.watch(_legacyLessonCountProvider).value;
 
     return Scaffold(
@@ -89,10 +105,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
                 style: AdminTypography.body,
               ),
               data: (list) => Column(
-                children: [
-                  for (var i = 0; i < list.length; i++)
-                    _CourseRow(course: list[i], index: i, total: list.length),
-                ],
+                children: _groupedCourseWidgets(list, languages, levels),
               ),
             ),
           ],
@@ -100,6 +113,66 @@ class AdminCoursesHubScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Groups the (unmodified) course list into Язык → Уровень → Курс for
+/// display, per §2/§4 of the level-picker request — a course with no
+/// levelId (every course created before this feature existed) renders
+/// exactly as before, under a plain "Без уровня" heading, so nothing that
+/// already worked changes for existing courses that haven't been assigned
+/// a level yet. Reorder arrows still act on the full, flat course list —
+/// Course.position was always global, not per-level, and stays that way.
+List<Widget> _groupedCourseWidgets(
+  List<AdminCourseSummary> courses,
+  List<AdminLanguage> languages,
+  List<AdminLevel> levels,
+) {
+  final indexByCourseId = {for (var i = 0; i < courses.length; i++) courses[i].id: i};
+  final levelById = {for (final l in levels) l.id: l};
+  final coursesByLevelId = <String, List<AdminCourseSummary>>{};
+  final unleveled = <AdminCourseSummary>[];
+  for (final c in courses) {
+    if (c.levelId != null && levelById.containsKey(c.levelId)) {
+      coursesByLevelId.putIfAbsent(c.levelId!, () => []).add(c);
+    } else {
+      unleveled.add(c);
+    }
+  }
+
+  Widget courseRow(AdminCourseSummary c) => _CourseRow(course: c, index: indexByCourseId[c.id]!, total: courses.length);
+
+  final widgets = <Widget>[];
+  for (final language in languages) {
+    final languageLevels = levels.where((l) => l.languageId == language.id).toList()
+      ..sort((a, b) => a.position.compareTo(b.position));
+    final levelsWithCourses = languageLevels.where((l) => coursesByLevelId.containsKey(l.id)).toList();
+    if (levelsWithCourses.isEmpty) continue;
+
+    widgets.add(Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(language.name, style: AdminTypography.cardTitle)));
+    for (final level in levelsWithCourses) {
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 0, 6),
+          child: Text('${level.code} — ${level.name}', style: AdminTypography.stageTitle.copyWith(color: AdminColors.accent)),
+        ),
+      );
+      for (final course in coursesByLevelId[level.id]!) {
+        widgets.add(Padding(padding: const EdgeInsets.only(left: 16), child: courseRow(course)));
+      }
+    }
+    widgets.add(const SizedBox(height: AdminMetrics.cardGap));
+  }
+
+  if (unleveled.isNotEmpty) {
+    if (widgets.isNotEmpty) {
+      widgets.add(Padding(padding: const EdgeInsets.only(bottom: 6), child: Text('Без уровня', style: AdminTypography.cardTitle)));
+    }
+    for (final course in unleveled) {
+      widgets.add(courseRow(course));
+    }
+  }
+
+  return widgets;
 }
 
 class _CourseRow extends ConsumerWidget {
@@ -312,8 +385,13 @@ class _CreateCourseCard extends ConsumerStatefulWidget {
 class _CreateCourseCardState extends ConsumerState<_CreateCourseCard> {
   final _title = TextEditingController();
   final _description = TextEditingController();
+  String? _levelId;
   bool _busy = false;
   String? _error;
+  // Bumped after a successful create so LevelPickerField (which loads its
+  // own state once in initState) gets a fresh key and actually resets,
+  // instead of silently keeping the just-submitted language/level selected.
+  int _formGeneration = 0;
 
   @override
   void dispose() {
@@ -336,9 +414,14 @@ class _CreateCourseCardState extends ConsumerState<_CreateCourseCard> {
             description: _description.text.trim().isEmpty
                 ? null
                 : _description.text.trim(),
+            levelId: _levelId,
           );
       _title.clear();
       _description.clear();
+      setState(() {
+        _levelId = null;
+        _formGeneration++;
+      });
       ref.invalidate(_coursesHubProvider);
     } catch (e) {
       setState(() => _error = adminErrorMessage(e, 'Не удалось создать курс'));
@@ -358,6 +441,12 @@ class _CreateCourseCardState extends ConsumerState<_CreateCourseCard> {
           TextField(
             controller: _title,
             decoration: adminInputDecoration(label: 'Название'),
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          LevelPickerField(
+            key: ValueKey(_formGeneration),
+            initialLevelId: _levelId,
+            onChanged: (id) => setState(() => _levelId = id),
           ),
           const SizedBox(height: AdminMetrics.fieldGap),
           TextField(

@@ -10,6 +10,7 @@ import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
 import '../domain/builder_domain.dart';
 import 'widgets/lesson_editor_panel.dart';
+import 'widgets/level_picker.dart';
 
 final _courseProvider = FutureProvider.autoDispose.family<AdminCourse, String>(
   (ref, courseId) => ref.watch(builderRepositoryProvider).getCourse(courseId),
@@ -123,6 +124,7 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
   late final _description = TextEditingController(
     text: widget.course.description,
   );
+  late String? _levelId = widget.course.levelId;
   bool _busy = false;
 
   @override
@@ -141,6 +143,7 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
             widget.course.id,
             title: _title.text.trim(),
             description: _description.text.trim(),
+            levelId: _levelId,
           );
       ref.invalidate(_courseProvider(widget.course.id));
       if (mounted) showSuccessSnack(context);
@@ -222,6 +225,8 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
             controller: _title,
             decoration: adminInputDecoration(label: 'Название курса'),
           ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          LevelPickerField(initialLevelId: _levelId, onChanged: (id) => setState(() => _levelId = id)),
           const SizedBox(height: AdminMetrics.fieldGap),
           TextField(
             controller: _description,
