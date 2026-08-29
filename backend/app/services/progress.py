@@ -4,9 +4,11 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.activity_time import ActivityTime
 from app.models.answer_log import AnswerLog
 from app.models.course import Course
 from app.models.course_lesson import CourseLesson
+from app.models.language import Language
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_state import LessonAttempt
 from app.models.lesson_question import LessonQuestion
@@ -269,6 +271,48 @@ async def get_overall_progress(db: AsyncSession, user_id: str, language_id: str 
 
     percent = round((total_correct / total_all) * 100) if total_all else 0
     return {"correct": total_correct, "total": total_all, "percent": percent, "passed": percent >= settings.pass_threshold_percent, "levels": included}
+
+
+async def add_activity_time(db: AsyncSession, user_id: str, course_id: str | None, lesson_id: str, activity_type: str, seconds: int) -> None:
+    """Accumulates an already-capped delta (§ time tracking, 2026-08-29) —
+    upserts by (userId, lessonId, activityType), same "increment on report"
+    contract as attemptNumber counting in submit_answer above, not an
+    ever-growing event log."""
+    existing = (
+        await db.execute(
+            select(ActivityTime).where(ActivityTime.userId == user_id, ActivityTime.lessonId == lesson_id, ActivityTime.activityType == activity_type)
+        )
+    ).scalar_one_or_none()
+    if existing:
+        existing.seconds += seconds
+    else:
+        db.add(ActivityTime(userId=user_id, courseId=course_id, lessonId=lesson_id, activityType=activity_type, seconds=seconds))
+    await db.commit()
+
+
+async def get_total_time_seconds(db: AsyncSession, user_id: str, language_id: str) -> int:
+    """Sums every ActivityTime row that belongs to this language's own
+    courses (Course.levelId -> Level.languageId, same chain progress uses),
+    plus legacy (pre-Language/Level) lesson time when this language is
+    German by name — the same convention the Главное lesson list already
+    uses for showing those same legacy lessons only under Немецкий, so a
+    legacy lesson's time is attributed exactly where its content already
+    visibly lives, not to a new/separate bucket."""
+    language = await db.get(Language, language_id)
+    if not language:
+        return 0
+    course_ids = (await db.execute(select(Course.id).join(Level, Level.id == Course.levelId).where(Level.languageId == language_id))).scalars().all()
+
+    conditions = []
+    if course_ids:
+        conditions.append(ActivityTime.courseId.in_(course_ids))
+    if language.name.strip().lower() == "немецкий":
+        conditions.append(ActivityTime.courseId.is_(None))
+    if not conditions:
+        return 0
+
+    total = (await db.execute(select(func.sum(ActivityTime.seconds)).where(ActivityTime.userId == user_id, or_(*conditions)))).scalar_one()
+    return total or 0
 
 
 async def get_topic_progress(db: AsyncSession, user_id: str, topic_id: str) -> dict:

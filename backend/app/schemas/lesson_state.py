@@ -4,6 +4,23 @@ from pydantic import BaseModel, Field
 
 StageId = Literal["vocabulary", "material", "video", "minitest", "audio", "practice", "review", "complete"]
 
+# Every StageId except "complete" — that one isn't an activity a learner
+# spends time doing, just the results screen.
+ActivityType = Literal["vocabulary", "material", "video", "minitest", "audio", "practice", "review"]
+
+
+class ActivityTimeInput(BaseModel):
+    courseId: str | None = None
+    lessonId: str = Field(min_length=1)
+    activityType: ActivityType
+    # Defensive ceiling, not a new rule: 120s (2 minutes) is already the
+    # largest of the per-unit caps the client itself enforces (a material
+    # section) before ever reporting a delta, and video/audio segments are
+    # flushed at least that often while playing — so no single legitimate
+    # report should exceed it (§ time tracking, 2026-08-29 — "защита от
+    # искусственного накручивания времени").
+    seconds: int = Field(ge=1, le=120)
+
 
 class QuizResult(BaseModel):
     correct: int = Field(ge=0)

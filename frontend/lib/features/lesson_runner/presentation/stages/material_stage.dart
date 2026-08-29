@@ -52,8 +52,35 @@ class MaterialStage extends ConsumerStatefulWidget {
   ConsumerState<MaterialStage> createState() => _MaterialStageState();
 }
 
+/// Per-section time cap (§ time tracking, 2026-08-29) — a section left open
+/// longer than this contributes at most this many seconds, so it can't be
+/// artificially inflated by just leaving it open.
+const _materialSectionCapSeconds = 120;
+
 class _MaterialStageState extends ConsumerState<MaterialStage> {
   int _page = 0;
+  DateTime _sectionShownAt = DateTime.now();
+
+  /// Flushes the section being LEFT (still the current `_page` at call
+  /// time) before switching pages or leaving the stage entirely.
+  void _flushSection() {
+    final elapsed = DateTime.now().difference(_sectionShownAt).inSeconds.clamp(0, _materialSectionCapSeconds);
+    _sectionShownAt = DateTime.now();
+    if (elapsed > 0) {
+      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime('material', elapsed);
+    }
+  }
+
+  void _goToPage(int page) {
+    _flushSection();
+    setState(() => _page = page);
+  }
+
+  @override
+  void dispose() {
+    _flushSection();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,15 +134,16 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               OutlinedButton(
-                onPressed: page > 0 ? () => setState(() => _page = page - 1) : null,
+                onPressed: page > 0 ? () => _goToPage(page - 1) : null,
                 child: const Text('← Назад'),
               ),
               ElevatedButton(
                 onPressed: () {
                   if (isLast) {
+                    _flushSection();
                     widget.onComplete();
                   } else {
-                    setState(() => _page = page + 1);
+                    _goToPage(page + 1);
                   }
                 },
                 child: Text(isLast ? 'Перейти к видео' : 'Далее →'),

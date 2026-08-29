@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
@@ -5,6 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../lesson_runner_controller.dart';
+import '../widgets/playback_time_tracker.dart';
 
 String _basename(String url) {
   final path = Uri.tryParse(url)?.path ?? url;
@@ -35,9 +38,15 @@ class _VideoStageState extends ConsumerState<VideoStage> {
   VideoController? _controller;
   bool _watched = false;
   String? _openedUrl;
+  StreamSubscription<bool>? _playingSubscription;
+  late final _timeTracker = PlaybackTimeTracker(
+    onFlush: (seconds) => ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime('video', seconds),
+  );
 
   @override
   void dispose() {
+    _timeTracker.dispose();
+    _playingSubscription?.cancel();
     _player?.dispose();
     super.dispose();
   }
@@ -67,6 +76,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
       final player = Player();
       _player = player;
       _controller = VideoController(player);
+      _playingSubscription = player.stream.playing.listen(_timeTracker.setPlaying);
       player.stream.completed.listen((completed) {
         if (completed && mounted) setState(() => _watched = true);
       });

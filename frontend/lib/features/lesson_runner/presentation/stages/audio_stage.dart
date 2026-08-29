@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../lesson_runner_controller.dart';
+import '../widgets/playback_time_tracker.dart';
 
 String _basename(String url) {
   final path = Uri.tryParse(url)?.path ?? url;
@@ -49,6 +50,9 @@ class _AudioStageState extends ConsumerState<AudioStage> {
   bool _finished = false;
   String? _error;
   String? _openedUrl;
+  late final _timeTracker = PlaybackTimeTracker(
+    onFlush: (seconds) => ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime('audio', seconds),
+  );
 
   Player _ensurePlayer() {
     final existing = _player;
@@ -56,7 +60,10 @@ class _AudioStageState extends ConsumerState<AudioStage> {
     final player = Player();
     _player = player;
     _subscriptions.addAll([
-      player.stream.playing.listen((v) => mounted ? setState(() => _playing = v) : null),
+      player.stream.playing.listen((v) {
+        _timeTracker.setPlaying(v);
+        if (mounted) setState(() => _playing = v);
+      }),
       player.stream.position.listen((v) => mounted ? setState(() => _position = v) : null),
       player.stream.duration.listen((v) => mounted ? setState(() => _duration = v) : null),
       player.stream.completed.listen((v) {
@@ -71,6 +78,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
 
   @override
   void dispose() {
+    _timeTracker.dispose();
     for (final s in _subscriptions) {
       s.cancel();
     }

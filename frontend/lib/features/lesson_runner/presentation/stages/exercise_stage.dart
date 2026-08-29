@@ -14,6 +14,12 @@ import '../widgets/match_question.dart';
 import '../widgets/scramble_question.dart';
 import '../widgets/truefalse_question.dart';
 
+/// Per-exercise time caps (§ time tracking, 2026-08-29) — an exercise left
+/// open longer than this contributes at most this many seconds. Matching
+/// gets more time since it's inherently a multi-step task (several pairs),
+/// unlike every other kind here which is answered in one action.
+int _exerciseCapSeconds(Exercise e) => e is MatchExercise ? 90 : 60;
+
 String _kindLabel(Exercise e) => switch (e) {
       ChoiceQuestion() => 'Выбор ответа',
       TrueFalseQuestion() => 'Верно или неверно',
@@ -62,8 +68,23 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   bool _answered = false;
   bool _finished = false;
   final _focusNode = FocusNode();
+  DateTime _exerciseShownAt = DateTime.now();
 
   int get _correct => _results.where((r) => r).length;
+
+  /// Flushes the exercise being LEFT (still `_exercises[_index]` at call
+  /// time) before advancing to the next one or leaving the stage —
+  /// minitest/practice/review each keep their own time bucket via
+  /// `widget.stage.name`, per exercise, capped per §5 of the time spec.
+  void _flushExercise() {
+    if (_index >= _exercises.length) return;
+    final cap = _exerciseCapSeconds(_exercises[_index]);
+    final elapsed = DateTime.now().difference(_exerciseShownAt).inSeconds.clamp(0, cap);
+    _exerciseShownAt = DateTime.now();
+    if (elapsed > 0) {
+      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime(widget.stage.name, elapsed);
+    }
+  }
 
   Future<void> _handleAnswered(bool correct) async {
     if (_results.length > _index) {
@@ -88,6 +109,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   }
 
   void _next() {
+    _flushExercise();
     if (_index + 1 < _exercises.length) {
       setState(() {
         _index += 1;
@@ -122,6 +144,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
 
   @override
   void dispose() {
+    if (!_finished) _flushExercise();
     _focusNode.dispose();
     super.dispose();
   }

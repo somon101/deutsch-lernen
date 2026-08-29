@@ -5,6 +5,7 @@ from app.auth.deps import require_auth, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
+from app.schemas.lesson_state import ActivityTimeInput
 from app.schemas.taxonomy import (
     AnswerSubmitInput,
     LanguageInput,
@@ -19,7 +20,15 @@ from app.schemas.taxonomy import (
     TopicInput,
 )
 from app.services import taxonomy as svc
-from app.services.progress import get_lesson_progress_from_answers, get_level_progress, get_overall_progress, get_topic_progress, submit_answer
+from app.services.progress import (
+    add_activity_time,
+    get_lesson_progress_from_answers,
+    get_level_progress,
+    get_overall_progress,
+    get_topic_progress,
+    get_total_time_seconds,
+    submit_answer,
+)
 
 router = APIRouter(prefix="/api", tags=["taxonomy"])
 
@@ -302,6 +311,22 @@ async def overall_progress_route(
     original, all-levels behavior."""
     progress = await get_overall_progress(db, user.id, languageId)
     return {"progress": progress}
+
+
+@router.post("/me/activity-time", status_code=201)
+async def add_activity_time_route(body: ActivityTimeInput, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    await add_activity_time(db, user.id, body.courseId, body.lessonId, body.activityType, body.seconds)
+    return {"ok": True}
+
+
+@router.get("/me/time/overall")
+async def total_time_route(languageId: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """`languageId` is required here (unlike /me/progress/overall's optional
+    one) — time has no meaningful "every language at once" total the way
+    progress historically did before languages existed, so there's no
+    all-levels fallback to preserve."""
+    seconds = await get_total_time_seconds(db, user.id, languageId)
+    return {"seconds": seconds}
 
 
 @router.get("/me/progress/topic/{topic_id}")

@@ -137,6 +137,29 @@ model LessonAttempt {
   @@index([userId, lessonId])
 }
 
+// Accumulated, already-capped seconds a user spent on one activity type
+// within one lesson (§ time tracking, 2026-08-29) — incremented on every
+// client report rather than logged as an event stream, since nothing today
+// needs finer than "total seconds so far". activityType mirrors the
+// frontend's Stage enum names minus "complete" (vocabulary/material/video/
+// minitest/audio/practice/review). courseId is null for a legacy
+// (file-based) lesson, same loose-reference convention AnswerLog already
+// uses; lessonId alone anchors uniqueness since it's already unique on its
+// own. Per-unit caps (2 min/material section, 10s/word, 60s/exercise,
+// 90s/matching) are enforced client-side before a delta is ever reported —
+// nothing here re-derives or re-checks them.
+model ActivityTime {
+  id           String   @id @default(uuid())
+  userId       String
+  courseId     String?
+  lessonId     String
+  activityType String
+  seconds      Int      @default(0)
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, lessonId, activityType])
+}
+
 // ---------------------------------------------------------------------------
 // Admin-editable course content.
 //

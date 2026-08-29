@@ -101,6 +101,21 @@ class LessonRepository {
       body: {'questionId': questionId, 'placementId': ?placementId, 'answerData': {'correct': correct}, 'correct': correct},
     );
   }
+
+  /// Reports one already-capped time delta for one activity type within one
+  /// lesson (§ time tracking, 2026-08-29) — fire-and-forget from the
+  /// caller's point of view, same contract as submitAnswer above.
+  Future<void> submitActivityTime({
+    required String? courseId,
+    required String lessonId,
+    required String activityType,
+    required int seconds,
+  }) async {
+    await _api.post(
+      '/api/me/activity-time',
+      body: {'courseId': ?courseId, 'lessonId': lessonId, 'activityType': activityType, 'seconds': seconds},
+    );
+  }
 }
 
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) => LessonRepository(ref.watch(apiClientProvider)));

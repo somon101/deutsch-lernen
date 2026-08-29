@@ -7,7 +7,12 @@ import '../../domain/progress.dart';
 import '../../domain/stage.dart';
 import '../lesson_runner_controller.dart';
 
-int? _pct(QuizResult? result) => result != null && result.total > 0 ? ((result.correct / result.total) * 100).round() : null;
+/// Null only when the stage was never attempted at all (no QuizResult
+/// exists yet) — a real result with zero questions (an empty block) is
+/// genuine 0% progress, not "no data" (§ zero-progress display fix,
+/// 2026-08-29: a ring/percentage must show "0%", never a blank/dash, when
+/// there's nothing to show but the value really is zero).
+int? _pct(QuizResult? result) => result == null ? null : (result.total > 0 ? ((result.correct / result.total) * 100).round() : 0);
 
 /// Mirrors CompleteStage.tsx's substance (vocab-learned count + mini-test/
 /// practice/review percentages, marks the lesson complete exactly once,

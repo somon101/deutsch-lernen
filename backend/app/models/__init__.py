@@ -1,3 +1,4 @@
+from app.models.activity_time import ActivityTime
 from app.models.answer_log import AnswerLog
 from app.models.course import Course
 from app.models.course_lesson import CourseLesson

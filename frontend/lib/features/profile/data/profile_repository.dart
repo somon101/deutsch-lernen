@@ -134,6 +134,14 @@ class ProfileRepository {
     final res = await _api.get('/api/me/progress/overall', query: {'languageId': languageId});
     return (res['progress'] as Map<String, dynamic>)['percent'] as int;
   }
+
+  /// Total time spent (§ time tracking, 2026-08-29), scoped to one
+  /// language's own lessons — independent of every other language's time,
+  /// same isolation as fetchOverallProgressPercent above.
+  Future<int> fetchTotalTimeSeconds(String languageId) async {
+    final res = await _api.get('/api/me/time/overall', query: {'languageId': languageId});
+    return res['seconds'] as int;
+  }
 }
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) => ProfileRepository(ref.watch(apiClientProvider)));
@@ -174,4 +182,16 @@ final overallProgressProvider = FutureProvider.autoDispose<int?>((ref) async {
   final languageId = effective.selectedId;
   if (languageId == null) return null;
   return ref.watch(profileRepositoryProvider).fetchOverallProgressPercent(languageId);
+});
+
+/// The single number the profile's "Время" tile shows (§ time tracking,
+/// 2026-08-29) — same selected-language source as overallProgressProvider,
+/// deliberately NOT the Главное screen's own independent language switcher
+/// (see homeLanguageIdProvider's doc comment for why those two must never
+/// affect each other).
+final totalTimeSecondsProvider = FutureProvider.autoDispose<int?>((ref) async {
+  final effective = await ref.watch(effectiveLanguageProvider.future);
+  final languageId = effective.selectedId;
+  if (languageId == null) return null;
+  return ref.watch(profileRepositoryProvider).fetchTotalTimeSeconds(languageId);
 });

@@ -25,6 +25,8 @@ class LessonRunnerData {
 /// server-authoritative contract as the React version (no localStorage
 /// fallback).
 class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, LessonRunnerKey> {
+  late LessonRunnerKey _key;
+
   String _cacheKeyFor(LessonRunnerKey key) => key.courseId != null ? 'lesson_content_${key.courseId}_${key.lessonId}' : 'lesson_content_legacy_${key.lessonId}';
 
   Future<Map<String, dynamic>> _fetchRawContent(LessonRunnerKey key) => key.courseId != null
@@ -51,6 +53,7 @@ class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, Lesso
 
   @override
   Future<LessonRunnerData> build(LessonRunnerKey key) async {
+    _key = key;
     final repo = ref.read(lessonRepositoryProvider);
     final cacheKey = _cacheKeyFor(key);
     final cached = await CacheStore.instance.read(cacheKey);
@@ -165,6 +168,24 @@ class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, Lesso
         completedAt: DateTime.now().toUtc().toIso8601String(),
       ),
     );
+  }
+
+  /// Reports one already-capped time delta for one activity type (§ time
+  /// tracking, 2026-08-29) — best-effort, same "must never interrupt the
+  /// lesson" contract as submitAnswer's own caller has.
+  Future<void> recordActivityTime(String activityType, int seconds) async {
+    if (seconds <= 0) return;
+    try {
+      await ref.read(lessonRepositoryProvider).submitActivityTime(
+            courseId: _key.courseId,
+            lessonId: _key.lessonId,
+            activityType: activityType,
+            seconds: seconds,
+          );
+    } catch (_) {
+      // Losing one time report is harmless — the total just undercounts
+      // slightly, same tolerance the rest of this file already has.
+    }
   }
 
   /// Full reset for "Пройти ещё раз" — clears every stage back to

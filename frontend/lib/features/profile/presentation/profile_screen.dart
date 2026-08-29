@@ -89,6 +89,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     final c = context.profileColors;
     final overallProgress = ref.watch(overallProgressProvider);
+    final totalTime = ref.watch(totalTimeSecondsProvider);
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
@@ -130,11 +131,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     StatRowItem(value: '${overview.social.following}', label: 'Подписки'),
                   ]),
                   const SizedBox(height: 20),
-                  overallProgress.when(
-                    loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-                    error: (err, st) => Text('Не удалось загрузить прогресс: $err', style: ProfileTypography.body(context)),
-                    data: (percent) => _MetricsRow(overview: overview, progressPercent: percent),
-                  ),
+                  if (overallProgress.isLoading || totalTime.isLoading)
+                    const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
+                  else if (overallProgress.hasError || totalTime.hasError)
+                    Text(
+                      'Не удалось загрузить прогресс: ${overallProgress.error ?? totalTime.error}',
+                      style: ProfileTypography.body(context),
+                    )
+                  else
+                    _MetricsRow(overview: overview, progressPercent: overallProgress.value, timeSeconds: totalTime.value),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   LevelCard(level: overview.level),
                   const SizedBox(height: 24),
@@ -220,16 +225,22 @@ class _Header extends ConsumerWidget {
 /// label (not maxLines/ellipsis) so a long value like "24ч 30м" shrinks to
 /// fit a narrow column instead of wrapping or clipping, down to 360px.
 class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.overview, required this.progressPercent});
+  const _MetricsRow({required this.overview, required this.progressPercent, required this.timeSeconds});
 
   final ProfileGamificationOverview overview;
   final int? progressPercent;
 
+  /// Total time studying the profile's selected language (§ time tracking,
+  /// 2026-08-29) — null only while no language is selected yet (more than
+  /// one language exists and none has been chosen in Settings).
+  final int? timeSeconds;
+
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
-    final hours = overview.studyMinutes ~/ 60;
-    final minutes = overview.studyMinutes % 60;
+    final totalMinutes = (timeSeconds ?? 0) ~/ 60;
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
     final items = [
       (emoji: '🔥', icon: null, color: null, value: '${overview.streakDays}', label: 'Серия'),
       (
@@ -239,7 +250,13 @@ class _MetricsRow extends StatelessWidget {
         value: progressPercent == null ? '—' : '$progressPercent%',
         label: 'Прогресс',
       ),
-      (emoji: null, icon: Icons.schedule, color: c.accent, value: '$hoursч $minutesм', label: 'Время'),
+      (
+        emoji: null,
+        icon: Icons.schedule,
+        color: c.accent,
+        value: timeSeconds == null ? '—' : '$hoursч $minutesм',
+        label: 'Время',
+      ),
       (emoji: null, icon: Icons.star, color: c.warning, value: overview.level.score.toStringAsFixed(1), label: 'Уровень'),
     ];
 
