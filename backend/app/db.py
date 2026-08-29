@@ -49,7 +49,15 @@ def _to_asyncpg_url(url: str) -> tuple[str, dict]:
         context.verify_mode = ssl.CERT_NONE
         connect_args["ssl"] = context
     if use_pooler:
+        # statement_cache_size=0 only disables asyncpg's OWN cache.
+        # SQLAlchemy's asyncpg dialect keeps a separate, wrapper-level cache
+        # of named prepared statements (prepared_statement_cache_size,
+        # default 100) that must also be zeroed out, or it still issues
+        # named PREPARE statements the transaction-mode pooler doesn't scope
+        # per client — causing "prepared statement ... already exists" once
+        # a backend connection is handed to a second session.
         connect_args["statement_cache_size"] = 0
+        connect_args["prepared_statement_cache_size"] = 0
 
     return async_url, connect_args
 
