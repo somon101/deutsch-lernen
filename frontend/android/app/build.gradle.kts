@@ -2,6 +2,12 @@ plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Reads google-services.json and injects the Firebase config it needs —
+    // declared (with a version) in settings.gradle.kts, actually applied
+    // here. Without this line the plugin never runs, google-services.json
+    // is never processed, and Firebase.initializeApp() fails at runtime
+    // with "[core/no-app] No Firebase App '[DEFAULT]' has been created".
+    id("com.google.gms.google-services")
 }
 
 android {

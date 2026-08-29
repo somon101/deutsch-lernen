@@ -77,13 +77,22 @@ String? _deepLinkFrom(RemoteMessage message) {
 /// so this file has no UI-layer imports.
 Future<void> listenForNotificationTaps(void Function(String path) navigateTo) async {
   if (!_pushSupportedOnThisPlatform) return;
-  FirebaseMessaging.onMessageOpenedApp.listen((message) {
-    final path = _deepLinkFrom(message);
-    if (path != null) navigateTo(path);
-  });
-  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
-  if (initialMessage != null) {
-    final path = _deepLinkFrom(initialMessage);
-    if (path != null) navigateTo(path);
+  try {
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      final path = _deepLinkFrom(message);
+      if (path != null) navigateTo(path);
+    });
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) {
+      final path = _deepLinkFrom(initialMessage);
+      if (path != null) navigateTo(path);
+    }
+  } catch (e) {
+    // Called fire-and-forget from initState (see app.dart) — an uncaught
+    // error here becomes an unhandled Future rejection that crashes the
+    // whole app. If Firebase didn't actually initialize (e.g. no Google
+    // Play Services on this device), tap-to-open-lesson just silently
+    // doesn't work; nothing else should be at stake over it.
+    _log('listenForNotificationTaps failed: $e');
   }
 }
