@@ -33,6 +33,11 @@
   "aboutApp": "О приложении",
   "appVersion": "Версия {version}",
 
+  "clearCache": "Очистить кэш",
+  "clearCacheConfirmTitle": "Очистить сохранённые данные?",
+  "clearCacheConfirmBody": "Курсы и уроки при следующем открытии загрузятся заново с сервера.",
+  "clearCacheDone": "Кэш очищен",
+
   "logout": "Выйти из аккаунта",
   "logoutConfirmTitle": "Выйти из аккаунта?",
   "logoutConfirmBody": "Вы сможете снова войти в любой момент.",

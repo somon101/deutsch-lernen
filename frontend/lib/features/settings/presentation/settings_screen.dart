@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
+import '../../../core/cache/cache_store.dart';
 import '../../../core/locale/locale_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/back_guard.dart';
@@ -82,6 +83,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (confirmed ?? false) {
       ref.read(authProvider.notifier).logout();
+    }
+  }
+
+  /// "Очистить кэш" — wipes the local courses/lessons/progress cache (see
+  /// core/cache/). Doesn't touch auth or app settings, and the next open of
+  /// any screen just refetches from the server like a first-ever open.
+  Future<void> _clearCache() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(l10n.clearCacheConfirmTitle),
+        content: Text(l10n.clearCacheConfirmBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: Text(l10n.cancel)),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(true), child: Text(l10n.clearCache)),
+        ],
+      ),
+    );
+    if (confirmed ?? false) {
+      await CacheStore.instance.clearAll();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.clearCacheDone)));
     }
   }
 
@@ -238,6 +261,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SettingsNavTile(icon: Icons.help_outline, label: l10n.helpFaq, onTap: _comingSoon),
                       SettingsNavTile(icon: Icons.mail_outline, label: l10n.contactUs, onTap: _comingSoon),
                       SettingsNavTile(icon: Icons.info_outline, label: l10n.aboutApp, value: l10n.appVersion(_appVersion), onTap: _comingSoon),
+                      SettingsNavTile(icon: Icons.cleaning_services_outlined, label: l10n.clearCache, onTap: _clearCache),
                     ],
                   ),
                   const SizedBox(height: 24),

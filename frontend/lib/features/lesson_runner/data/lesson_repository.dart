@@ -15,19 +15,32 @@ class LessonRepository {
   final ApiClient _api;
 
   Future<LessonContentData> fetchLegacyContent(String lessonId) async {
-    final res = await _api.get('/api/content/${Uri.encodeComponent(lessonId)}');
-    return LessonContentData.fromLegacyJson(lessonId, res['content'] as Map<String, dynamic>);
+    final json = await fetchLegacyContentRaw(lessonId);
+    return LessonContentData.fromLegacyJson(lessonId, json);
   }
 
   /// Builder courses are fetched whole (same endpoint the course-lessons
   /// list screen uses) and the one lesson picked out — mirrors
   /// content/learnerCourses.ts + builderExercises.ts's toLessonContent().
   Future<LessonContentData> fetchBuilderLessonContent(String courseId, String lessonId) async {
+    final json = await fetchBuilderLessonContentRaw(courseId, lessonId);
+    return LessonContentData.fromBuilderJson(json);
+  }
+
+  /// Raw-JSON variants for the caching layer (see cached_json.dart) — same
+  /// data as the parsed methods above, just not run through
+  /// LessonContentData.fromXJson yet, so the cache can store/compare plain
+  /// JSON without the domain model needing a toJson.
+  Future<Map<String, dynamic>> fetchLegacyContentRaw(String lessonId) async {
+    final res = await _api.get('/api/content/${Uri.encodeComponent(lessonId)}');
+    return res['content'] as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> fetchBuilderLessonContentRaw(String courseId, String lessonId) async {
     final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}');
     final course = res['course'] as Map<String, dynamic>;
     final lessons = (course['lessons'] as List<dynamic>).cast<Map<String, dynamic>>();
-    final lesson = lessons.firstWhere((l) => l['id'] == lessonId, orElse: () => throw ApiException(404, 'Урок не найден'));
-    return LessonContentData.fromBuilderJson(lesson);
+    return lessons.firstWhere((l) => l['id'] == lessonId, orElse: () => throw ApiException(404, 'Урок не найден'));
   }
 
   /// All of the signed-in user's lesson states — mirrors
@@ -35,9 +48,14 @@ class LessonRepository {
   /// caller picks out the one lesson it needs (or gets nothing back for a
   /// lesson never started, exactly like the React version).
   Future<Map<String, LessonProgress>> fetchAllProgress() async {
-    final res = await _api.get('/api/me/lesson-state');
-    final states = (res['states'] as List<dynamic>).cast<Map<String, dynamic>>();
+    final states = await fetchAllProgressRaw();
     return {for (final s in states) s['lessonId'] as String: LessonProgress.fromJson(s)};
+  }
+
+  /// Raw-JSON variant for the caching layer — see fetchAllProgress.
+  Future<List<Map<String, dynamic>>> fetchAllProgressRaw() async {
+    final res = await _api.get('/api/me/lesson-state');
+    return (res['states'] as List<dynamic>).cast<Map<String, dynamic>>();
   }
 
   Future<LessonProgress> saveProgress(LessonProgress progress) async {

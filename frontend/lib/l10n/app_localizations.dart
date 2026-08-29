@@ -260,6 +260,30 @@ abstract class AppLocalizations {
   /// **'Версия {version}'**
   String appVersion(String version);
 
+  /// No description provided for @clearCache.
+  ///
+  /// In ru, this message translates to:
+  /// **'Очистить кэш'**
+  String get clearCache;
+
+  /// No description provided for @clearCacheConfirmTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Очистить сохранённые данные?'**
+  String get clearCacheConfirmTitle;
+
+  /// No description provided for @clearCacheConfirmBody.
+  ///
+  /// In ru, this message translates to:
+  /// **'Курсы и уроки при следующем открытии загрузятся заново с сервера.'**
+  String get clearCacheConfirmBody;
+
+  /// No description provided for @clearCacheDone.
+  ///
+  /// In ru, this message translates to:
+  /// **'Кэш очищен'**
+  String get clearCacheDone;
+
   /// No description provided for @logout.
   ///
   /// In ru, this message translates to:

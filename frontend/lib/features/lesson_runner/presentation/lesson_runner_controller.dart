@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/cache/cache_store.dart';
+import '../../../core/cache/cached_json.dart';
+import '../../courses/data/courses_repository.dart';
 import '../data/lesson_repository.dart';
 import '../domain/lesson_content.dart';
 import '../domain/progress.dart';
@@ -20,15 +25,76 @@ class LessonRunnerData {
 /// server-authoritative contract as the React version (no localStorage
 /// fallback).
 class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, LessonRunnerKey> {
+  String _cacheKeyFor(LessonRunnerKey key) => key.courseId != null ? 'lesson_content_${key.courseId}_${key.lessonId}' : 'lesson_content_legacy_${key.lessonId}';
+
+  Future<Map<String, dynamic>> _fetchRawContent(LessonRunnerKey key) => key.courseId != null
+      ? ref.read(lessonRepositoryProvider).fetchBuilderLessonContentRaw(key.courseId!, key.lessonId)
+      : ref.read(lessonRepositoryProvider).fetchLegacyContentRaw(key.lessonId);
+
+  LessonContentData _parseRawContent(LessonRunnerKey key, Map<String, dynamic> raw) =>
+      key.courseId != null ? LessonContentData.fromBuilderJson(raw) : LessonContentData.fromLegacyJson(key.lessonId, raw);
+
+  /// A course's cache-busting version (see courses_overview.dart's
+  /// courseLessonsProvider) also covers every lesson inside it — reused
+  /// here so opening a lesson skips re-downloading its content the same
+  /// way opening the course-lessons list does. Legacy lessons have no such
+  /// endpoint (no owning course), so they fall back to Stage 1 only:
+  /// always refetch in the background, diff, and swap only if different.
+  Future<String?> _fetchVersion(LessonRunnerKey key) async {
+    if (key.courseId == null) return null;
+    try {
+      return await ref.read(coursesRepositoryProvider).fetchCourseVersion(key.courseId!);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Future<LessonRunnerData> build(LessonRunnerKey key) async {
     final repo = ref.read(lessonRepositoryProvider);
-    final content = key.courseId != null
-        ? await repo.fetchBuilderLessonContent(key.courseId!, key.lessonId)
-        : await repo.fetchLegacyContent(key.lessonId);
+    final cacheKey = _cacheKeyFor(key);
+    final cached = await CacheStore.instance.read(cacheKey);
+    final cachedRaw = cached?['data'] as Map<String, dynamic>?;
+
+    if (cachedRaw != null) {
+      // Instant path: show what's on disk right away, and kick a
+      // background check that silently swaps `state` in later only if the
+      // server's version actually differs — never awaited here, so build()
+      // returns immediately with the cached content.
+      final content = _parseRawContent(key, cachedRaw);
+      final allProgress = await repo.fetchAllProgress();
+      final progress = allProgress[key.lessonId] ?? LessonProgress.empty(key.lessonId);
+      unawaited(_refreshContentInBackground(key, cacheKey, cachedRaw, cached?['version'] as String?));
+      return LessonRunnerData(content: content, progress: progress);
+    }
+
+    // Nothing cached yet — first-ever open of this lesson still has to wait
+    // for the network, exactly like before this caching layer existed.
+    final rawContent = await _fetchRawContent(key);
+    final version = await _fetchVersion(key);
+    await CacheStore.instance.write(cacheKey, {'data': rawContent, 'version': version});
+    final content = _parseRawContent(key, rawContent);
     final allProgress = await repo.fetchAllProgress();
     final progress = allProgress[key.lessonId] ?? LessonProgress.empty(key.lessonId);
     return LessonRunnerData(content: content, progress: progress);
+  }
+
+  Future<void> _refreshContentInBackground(LessonRunnerKey key, String cacheKey, Map<String, dynamic> cachedRaw, String? cachedVersion) async {
+    try {
+      final freshVersion = await _fetchVersion(key);
+      if (freshVersion != null && freshVersion == cachedVersion) return; // confirmed unchanged
+
+      final freshRaw = await _fetchRawContent(key);
+      await CacheStore.instance.write(cacheKey, {'data': freshRaw, 'version': freshVersion});
+      if (jsonValuesEqual(freshRaw, cachedRaw)) return;
+
+      final current = state.value;
+      if (current == null) return; // notifier was disposed/reset meanwhile
+      state = AsyncData(LessonRunnerData(content: _parseRawContent(key, freshRaw), progress: current.progress));
+    } catch (_) {
+      // A failed background refresh keeps showing the cached content —
+      // never surfaces as an error once something is already on screen.
+    }
   }
 
   Future<void> _persist(LessonProgress updated) async {

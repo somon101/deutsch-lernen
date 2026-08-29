@@ -74,6 +74,29 @@ class CoursesRepository {
     final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}');
     return BuilderCourseDetail.fromJson(res['course'] as Map<String, dynamic>);
   }
+
+  /// Raw-JSON variants for the caching layer (see cached_json.dart) — it
+  /// compares/stores plain JSON rather than parsed domain objects, so
+  /// BuilderCourseSummary/BuilderCourseDetail don't need toJson just for
+  /// this. The parsed fetch methods above are unchanged and still used
+  /// wherever caching doesn't apply.
+  Future<Map<String, dynamic>> fetchPublishedCoursesRaw() async {
+    final res = await _api.get('/api/courses/');
+    return {'courses': res['courses']};
+  }
+
+  Future<Map<String, dynamic>> fetchCourseRaw(String courseId) async {
+    final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}');
+    return res['course'] as Map<String, dynamic>;
+  }
+
+  /// A cheap fingerprint of the course's current content — lets the caching
+  /// layer confirm a cached copy is still current without downloading the
+  /// whole course again (backend: get_course_version, caching plan 2026-08-29).
+  Future<String?> fetchCourseVersion(String courseId) async {
+    final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}/version');
+    return res['version'] as String?;
+  }
 }
 
 final coursesRepositoryProvider = Provider<CoursesRepository>((ref) => CoursesRepository(ref.watch(apiClientProvider)));

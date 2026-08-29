@@ -95,6 +95,19 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get clearCache => 'Очистить кэш';
+
+  @override
+  String get clearCacheConfirmTitle => 'Очистить сохранённые данные?';
+
+  @override
+  String get clearCacheConfirmBody =>
+      'Курсы и уроки при следующем открытии загрузятся заново с сервера.';
+
+  @override
+  String get clearCacheDone => 'Кэш очищен';
+
+  @override
   String get logout => 'Выйти из аккаунта';
 
   @override

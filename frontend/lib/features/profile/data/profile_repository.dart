@@ -49,8 +49,14 @@ class ProfileRepository {
   final ApiClient _api;
 
   Future<List<LegacyLessonSummary>> fetchLegacyLessons() async {
+    final lessons = await fetchLegacyLessonsRaw();
+    return lessons.map(LegacyLessonSummary.fromJson).toList();
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<List<Map<String, dynamic>>> fetchLegacyLessonsRaw() async {
     final res = await _api.get('/api/content');
-    return (res['lessons'] as List<dynamic>).map((l) => LegacyLessonSummary.fromJson(l as Map<String, dynamic>)).toList();
+    return (res['lessons'] as List<dynamic>).cast<Map<String, dynamic>>();
   }
 
   Future<List<LessonProgressSummary>> fetchProgressSummaries() async {
