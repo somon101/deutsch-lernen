@@ -1,3 +1,4 @@
+import ssl
 from collections.abc import AsyncGenerator
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 
@@ -38,7 +39,15 @@ def _to_asyncpg_url(url: str) -> tuple[str, dict]:
 
     connect_args: dict = {"server_settings": {"timezone": "UTC"}}
     if use_ssl:
-        connect_args["ssl"] = True
+        # Bare ssl=True makes asyncpg demand a fully verifiable CA chain;
+        # Supabase's pooler chain fails that check from some networks
+        # (Cloud Run included) with "self-signed certificate in certificate
+        # chain" even though the connection is genuinely TLS-encrypted.
+        # This matches libpq's sslmode=require: encrypt, don't verify the CA.
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        connect_args["ssl"] = context
     if use_pooler:
         connect_args["statement_cache_size"] = 0
 
