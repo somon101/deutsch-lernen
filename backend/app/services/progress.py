@@ -242,12 +242,20 @@ async def get_level_progress(db: AsyncSession, user_id: str, level_id: str) -> d
     }
 
 
-async def get_overall_progress(db: AsyncSession, user_id: str) -> dict:
+async def get_overall_progress(db: AsyncSession, user_id: str, language_id: str | None = None) -> dict:
     """Only levels the user has actually started count (§22: "не учитывай
     будущие уровни, которые пользователь ещё не проходил") — a level whose
     lessons sum to zero answered questions is skipped entirely rather than
-    dragging the average down with an implicit 0%."""
-    levels = (await db.execute(select(Level))).scalars().all()
+    dragging the average down with an implicit 0%.
+
+    `language_id` (§ per-language overall progress, 2026-08-29) scopes the
+    whole sum to one Language's own levels, so answers under a different
+    language's courses never contribute — omitted, this is the original
+    all-levels total."""
+    query = select(Level)
+    if language_id:
+        query = query.where(Level.languageId == language_id)
+    levels = (await db.execute(query)).scalars().all()
     total_correct = 0
     total_all = 0
     included = []

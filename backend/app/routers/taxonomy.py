@@ -66,8 +66,10 @@ def _placement_dto(placement) -> dict:
 
 
 @router.get("/languages")
-async def list_languages(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
-    languages = await svc.list_languages(db)
+async def list_languages(
+    withCourses: bool = Query(default=False), user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
+):
+    languages = await svc.list_languages(db, with_courses_only=withCourses)
     return {"languages": [{"id": lang.id, "name": lang.name} for lang in languages]}
 
 
@@ -292,8 +294,13 @@ async def level_progress_route(level_id: str, user: User = Depends(require_auth)
 
 
 @router.get("/me/progress/overall")
-async def overall_progress_route(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
-    progress = await get_overall_progress(db, user.id)
+async def overall_progress_route(
+    languageId: str | None = Query(default=None), user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
+):
+    """`languageId` scopes the result to one language's own levels (§
+    per-language overall progress, 2026-08-29) — omitted, it keeps its
+    original, all-levels behavior."""
+    progress = await get_overall_progress(db, user.id, languageId)
     return {"progress": progress}
 
 

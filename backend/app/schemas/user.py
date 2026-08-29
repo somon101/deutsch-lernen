@@ -63,6 +63,10 @@ class UpdateProfileRequest(BaseModel):
     # the same from_iso() every other tz-naive timestamp field in this API
     # already goes through (see app/utils.py) — not a special case.
     birthDate: str | None = None
+    # Which Language the profile's overall-progress number is shown for —
+    # null is a valid, explicit "no language chosen" value, not "leave
+    # unchanged" (that's what omitting the field from the request does).
+    selectedLanguageId: str | None = None
 
     @field_validator("username")
     @classmethod

@@ -116,6 +116,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
     final c = context.profileColors;
     final settings = ref.watch(settingsProvider);
+    final effectiveLanguage = ref.watch(effectiveLanguageProvider).valueOrNull;
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
     final avatarUrl = ref.read(apiClientProvider).assetUrl(user.avatarUrl);
@@ -243,8 +244,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       SettingsNavTile(
                         icon: Icons.menu_book_outlined,
                         label: l10n.courseLanguage,
-                        value: settings.courseLanguage,
-                        onTap: () => _pickCourseLanguage(context, settings.courseLanguage),
+                        value: _courseLanguageLabel(effectiveLanguage),
+                        onTap: () => _pickCourseLanguage(context, ref, effectiveLanguage),
                       ),
                       SettingsNavTile(
                         icon: Icons.dark_mode_outlined,
@@ -311,15 +312,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (picked != null) await ref.read(settingsProvider.notifier).setLanguageLevel(picked);
   }
 
-  Future<void> _pickCourseLanguage(BuildContext context, String current) async {
+  /// The language the profile's overall-progress number is shown for (§
+  /// per-language overall progress, 2026-08-29) — a real, backend-tracked
+  /// preference (`AppUser.selectedLanguageId`), not the old local-only
+  /// placeholder this tile used to show.
+  String _courseLanguageLabel(EffectiveLanguage? effective) {
+    if (effective == null) return '…';
+    if (effective.selectedId == null) return 'Выбрать';
+    return effective.languages
+        .firstWhere((l) => l.id == effective.selectedId, orElse: () => const LanguageOption(id: '', name: '—'))
+        .name;
+  }
+
+  Future<void> _pickCourseLanguage(BuildContext context, WidgetRef ref, EffectiveLanguage? effective) async {
+    if (effective == null || effective.languages.isEmpty) return;
     final l10n = AppLocalizations.of(context);
     final picked = await _showOptionSheet<String>(
       context,
       title: l10n.courseLanguage,
-      options: const [(value: 'Русский', label: 'Русский'), (value: 'English', label: 'English')],
-      current: current,
+      options: [for (final lang in effective.languages) (value: lang.id, label: lang.name)],
+      current: effective.selectedId ?? '',
     );
-    if (picked != null) await ref.read(settingsProvider.notifier).setCourseLanguage(picked);
+    if (picked == null || picked == effective.selectedId) return;
+    final user = await ref.read(profileRepositoryProvider).setSelectedLanguage(picked);
+    await ref.read(authProvider.notifier).updateLocalUser(user);
   }
 
   Future<void> _pickTheme(BuildContext context, WidgetRef ref, ThemeMode current) async {

@@ -30,7 +30,6 @@ class SettingsPrefs {
     required this.lessonReminderHour,
     required this.lessonReminderMinute,
     required this.streakReminder,
-    required this.courseLanguage,
   });
 
   final int dailyGoalMinutes;
@@ -42,7 +41,6 @@ class SettingsPrefs {
   final int lessonReminderHour;
   final int lessonReminderMinute;
   final bool streakReminder;
-  final String courseLanguage;
 
   static const defaults = SettingsPrefs(
     dailyGoalMinutes: 20,
@@ -54,7 +52,6 @@ class SettingsPrefs {
     lessonReminderHour: 19,
     lessonReminderMinute: 0,
     streakReminder: true,
-    courseLanguage: 'Русский',
   );
 
   SettingsPrefs copyWith({
@@ -67,7 +64,6 @@ class SettingsPrefs {
     int? lessonReminderHour,
     int? lessonReminderMinute,
     bool? streakReminder,
-    String? courseLanguage,
   }) =>
       SettingsPrefs(
         dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
@@ -79,7 +75,6 @@ class SettingsPrefs {
         lessonReminderHour: lessonReminderHour ?? this.lessonReminderHour,
         lessonReminderMinute: lessonReminderMinute ?? this.lessonReminderMinute,
         streakReminder: streakReminder ?? this.streakReminder,
-        courseLanguage: courseLanguage ?? this.courseLanguage,
       );
 }
 
@@ -92,7 +87,6 @@ const _kLessonReminder = 'settings_lesson_reminder';
 const _kReminderHour = 'settings_reminder_hour';
 const _kReminderMinute = 'settings_reminder_minute';
 const _kStreakReminder = 'settings_streak_reminder';
-const _kCourseLanguage = 'settings_course_language';
 
 class SettingsNotifier extends Notifier<SettingsPrefs> {
   @override
@@ -114,7 +108,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
       lessonReminderHour: prefs.getInt(_kReminderHour) ?? d.lessonReminderHour,
       lessonReminderMinute: prefs.getInt(_kReminderMinute) ?? d.lessonReminderMinute,
       streakReminder: prefs.getBool(_kStreakReminder) ?? d.streakReminder,
-      courseLanguage: prefs.getString(_kCourseLanguage) ?? d.courseLanguage,
     );
   }
 
@@ -130,7 +123,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
     await prefs.setInt(_kReminderHour, next.lessonReminderHour);
     await prefs.setInt(_kReminderMinute, next.lessonReminderMinute);
     await prefs.setBool(_kStreakReminder, next.streakReminder);
-    await prefs.setString(_kCourseLanguage, next.courseLanguage);
   }
 
   Future<void> setDailyGoal(int minutes) => _apply(state.copyWith(dailyGoalMinutes: minutes));
@@ -142,7 +134,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
   Future<void> setLessonReminderTime(int hour, int minute) =>
       _apply(state.copyWith(lessonReminderHour: hour, lessonReminderMinute: minute));
   Future<void> setStreakReminder(bool value) => _apply(state.copyWith(streakReminder: value));
-  Future<void> setCourseLanguage(String value) => _apply(state.copyWith(courseLanguage: value));
 }
 
 final settingsProvider = NotifierProvider<SettingsNotifier, SettingsPrefs>(SettingsNotifier.new);

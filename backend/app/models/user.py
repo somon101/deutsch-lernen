@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -43,6 +43,11 @@ class User(Base):
     bio: Mapped[str | None] = mapped_column(String, nullable=True)
     birthDate: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     canEditProfile: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Which Language this user's profile progress is shown for (§ per-language
+    # overall progress, 2026-08-29) — a personal preference, not something a
+    # teacher/admin sets. SET NULL on delete: losing the referenced Language
+    # should never block deleting it or break this user's row.
+    selectedLanguageId: Mapped[str | None] = mapped_column(String, ForeignKey("Language.id", ondelete="SET NULL"), nullable=True)
     lastLoginAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     lastActiveAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     # createdAt has a real DB-level default (confirmed via information_schema:

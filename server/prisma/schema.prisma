@@ -61,6 +61,11 @@ model User {
   lastActiveAt   DateTime?
   createdAt      DateTime   @default(now())
   updatedAt      DateTime   @updatedAt
+  // Which Language the profile's overall-progress number is shown for — a
+  // personal preference the user picks in Settings, not a teacher/admin
+  // setting. Null until the user has ever picked one.
+  selectedLanguageId String?
+  selectedLanguage   Language? @relation(fields: [selectedLanguageId], references: [id], onDelete: SetNull)
 
   attempts     LessonAttempt[]
   lessonStates LessonState[]
@@ -252,6 +257,7 @@ model Language {
 
   levels Level[]
   topics Topic[]
+  users  User[]
 }
 
 model Level {

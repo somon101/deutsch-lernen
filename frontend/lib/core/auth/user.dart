@@ -32,6 +32,7 @@ class AppUser {
     required this.canEditProfile,
     required this.lastLoginAt,
     required this.lastActiveAt,
+    this.selectedLanguageId,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -53,6 +54,7 @@ class AppUser {
         canEditProfile: json['canEditProfile'] as bool? ?? true,
         lastLoginAt: json['lastLoginAt'] as String?,
         lastActiveAt: json['lastActiveAt'] as String?,
+        selectedLanguageId: json['selectedLanguageId'] as String?,
       );
 
   final String id;
@@ -70,6 +72,7 @@ class AppUser {
   final bool canEditProfile;
   final String? lastLoginAt;
   final String? lastActiveAt;
+  final String? selectedLanguageId;
 
   bool get isStaff => role == UserRole.admin || role == UserRole.teacher;
   bool get isAdmin => role == UserRole.admin;
@@ -90,5 +93,6 @@ class AppUser {
         'canEditProfile': canEditProfile,
         'lastLoginAt': lastLoginAt,
         'lastActiveAt': lastActiveAt,
+        'selectedLanguageId': selectedLanguageId,
       };
 }

@@ -5,7 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.errors import ApiError
+from app.models.course import Course
 from app.models.course_lesson import CourseLesson
+from app.models.enums import CourseStatus
 from app.models.language import Language
 from app.models.lesson_block import LessonBlock
 from app.models.level import Level
@@ -26,8 +28,23 @@ DUPLICATE_WARNING_THRESHOLD = 60
 # ---------------------------------------------------------------------------
 
 
-async def list_languages(db: AsyncSession) -> list[Language]:
-    return (await db.execute(select(Language).order_by(Language.name))).scalars().all()
+async def list_languages(db: AsyncSession, with_courses_only: bool = False) -> list[Language]:
+    """`with_courses_only` is what feeds the student-facing language picker
+    (§ per-language overall progress, 2026-08-29): a Language row can exist
+    with no course under it yet (just created via the builder), and such a
+    language has nothing for a learner to ever have progress in, so it's
+    filtered out there rather than shown as a dead-end choice."""
+    if not with_courses_only:
+        return (await db.execute(select(Language).order_by(Language.name))).scalars().all()
+    stmt = (
+        select(Language)
+        .join(Level, Level.languageId == Language.id)
+        .join(Course, Course.levelId == Level.id)
+        .where(Course.status == CourseStatus.PUBLISHED)
+        .distinct()
+        .order_by(Language.name)
+    )
+    return (await db.execute(stmt)).scalars().all()
 
 
 async def create_language(db: AsyncSession, body) -> tuple[Language, bool]:

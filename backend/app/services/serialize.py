@@ -26,6 +26,7 @@ def public_user(user: User) -> dict:
         "bio": user.bio,
         "birthDate": to_iso_z(user.birthDate),
         "canEditProfile": user.canEditProfile,
+        "selectedLanguageId": user.selectedLanguageId,
         "lastLoginAt": to_iso_z(user.lastLoginAt),
         "lastActiveAt": to_iso_z(user.lastActiveAt),
     }

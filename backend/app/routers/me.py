@@ -7,6 +7,7 @@ from app.auth.deps import require_auth
 from app.auth.hash import hash_password, verify_password
 from app.db import get_db
 from app.errors import ApiError
+from app.models.language import Language
 from app.models.lesson_state import LessonAttempt, LessonState
 from app.models.user import User
 from app.schemas.lesson_state import AttemptRequest, LessonStateRequest
@@ -38,6 +39,8 @@ async def update_me(
         raise ApiError(403, "Редактирование профиля отключено администратором")
 
     changes = body.model_dump(exclude_unset=True)
+    if changes.get("selectedLanguageId") is not None and not await db.get(Language, changes["selectedLanguageId"]):
+        raise ApiError(404, "Язык не найден")
     username_lower = normalize_username(changes["username"]) if "username" in changes else None
     if "birthDate" in changes:
         changes["birthDate"] = from_iso(changes["birthDate"])

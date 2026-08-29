@@ -10,7 +10,6 @@ import '../../../core/auth/user.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../data/profile_gamification_repository.dart';
 import '../data/profile_repository.dart';
-import 'profile_history.dart';
 import 'profile_tokens.dart';
 import 'widgets/achievement_badge.dart';
 import 'widgets/avatar_viewer.dart';
@@ -89,7 +88,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (user == null) return const SizedBox.shrink();
 
     final c = context.profileColors;
-    final history = ref.watch(profileHistoryProvider);
+    final overallProgress = ref.watch(overallProgressProvider);
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
@@ -131,10 +130,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     StatRowItem(value: '${overview.social.following}', label: 'Подписки'),
                   ]),
                   const SizedBox(height: 20),
-                  history.when(
+                  overallProgress.when(
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
                     error: (err, st) => Text('Не удалось загрузить прогресс: $err', style: ProfileTypography.body(context)),
-                    data: (data) => _MetricsRow(overview: overview, progressPercent: data.overallProgressPercent),
+                    data: (percent) => _MetricsRow(overview: overview, progressPercent: percent),
                   ),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   LevelCard(level: overview.level),
