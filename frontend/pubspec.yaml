@@ -62,6 +62,11 @@ dependencies:
   share_plus: ^13.3.0
   path_provider: ^2.1.5
   google_fonts: ^6.2.1
+  # Push notifications (Android only for now — no iOS/Windows target is
+  # built, so no native setup exists for those yet). firebase_core is the
+  # required bootstrap dependency any Firebase plugin needs.
+  firebase_core: ^3.10.1
+  firebase_messaging: ^15.2.1
 
 dev_dependencies:
   flutter_test:
