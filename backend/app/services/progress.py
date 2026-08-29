@@ -19,7 +19,7 @@ from app.models.material import Material
 from app.models.material_block import MaterialBlock
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
-from app.utils import to_iso_z
+from app.utils import to_iso_z, utcnow
 
 
 class AttemptInput:
