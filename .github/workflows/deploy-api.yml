@@ -34,6 +34,9 @@ jobs:
             CORS_ORIGINS=${{ secrets.CORS_ORIGINS }}
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_STORAGE_BUCKET=${{ secrets.SUPABASE_STORAGE_BUCKET }}
+            ADMIN_EMAIL=${{ secrets.ADMIN_EMAIL }}
+            ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}
+            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
           secrets: |
             DATABASE_URL=DATABASE_URL:latest
             JWT_SECRET=JWT_SECRET:latest
