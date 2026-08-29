@@ -27,7 +27,7 @@ async def list_courses(db: AsyncSession = Depends(get_db)):
 
 @router.post("/courses", status_code=201)
 async def create_course(body: CourseInput, user: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
-    course = await svc.create_course(db, body.title, body.description, body.status, user.id)
+    course = await svc.create_course(db, body.title, body.description, body.status, user.id, body.levelId)
     return {"course": course}
 
 

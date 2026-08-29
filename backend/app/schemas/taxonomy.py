@@ -9,6 +9,22 @@ from app.schemas.block import BlockQuestionInput
 # ---------------------------------------------------------------------------
 
 
+class LanguageInput(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    # If an existing Language with the same name is found, the endpoint
+    # returns it instead of creating a duplicate — unless the caller has
+    # already seen that and explicitly wants a new one anyway.
+    force: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _trim(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Название языка не может быть пустым")
+        return v
+
+
 class LevelInput(BaseModel):
     languageId: str
     code: str = Field(min_length=1, max_length=10)

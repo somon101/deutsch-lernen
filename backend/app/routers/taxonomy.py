@@ -7,6 +7,7 @@ from app.errors import ApiError
 from app.models.user import User
 from app.schemas.taxonomy import (
     AnswerSubmitInput,
+    LanguageInput,
     MaterialBlockInput,
     MaterialBlockReorderInput,
     MaterialInput,
@@ -68,6 +69,12 @@ def _placement_dto(placement) -> dict:
 async def list_languages(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     languages = await svc.list_languages(db)
     return {"languages": [{"id": lang.id, "name": lang.name} for lang in languages]}
+
+
+@router.post("/languages", status_code=201)
+async def create_language(body: LanguageInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    language, existing = await svc.create_language(db, body)
+    return {"language": {"id": language.id, "name": language.name}, "existing": existing}
 
 
 @router.get("/levels")

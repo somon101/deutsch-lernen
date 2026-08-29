@@ -1,3 +1,5 @@
+import uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +28,26 @@ DUPLICATE_WARNING_THRESHOLD = 60
 
 async def list_languages(db: AsyncSession) -> list[Language]:
     return (await db.execute(select(Language).order_by(Language.name))).scalars().all()
+
+
+async def create_language(db: AsyncSession, body) -> tuple[Language, bool]:
+    """Returns (language, existing) — same "reuse instead of duplicate"
+    convention as create_topic below: a language with this name (case-
+    insensitive) is returned as-is rather than creating a second row,
+    unless the caller has already seen that and explicitly wants a new one
+    anyway (force=True). Language.id has no DB-level default (unlike every
+    other model here) — it's generated explicitly."""
+    if not body.force:
+        found = (
+            await db.execute(select(Language).where(Language.name.ilike(body.name.strip())))
+        ).scalar_one_or_none()
+        if found:
+            return found, True
+    language = Language(id=str(uuid.uuid4()), name=body.name)
+    db.add(language)
+    await db.commit()
+    await db.refresh(language)
+    return language, False
 
 
 async def list_levels(db: AsyncSession, language_id: str | None) -> list[Level]:

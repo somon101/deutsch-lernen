@@ -12,12 +12,14 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.errors import ApiError
 from app.models.course import Course
 from app.models.enums import CourseStatus
 from app.models.course_lesson import CourseLesson
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
 from app.models.lesson_question import LessonQuestion
+from app.models.level import Level
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
 from app.models.question import Question
@@ -74,6 +76,7 @@ async def list_courses(db: AsyncSession) -> list[dict]:
             "wordCount": words_by.get(c.id, 0),
             "questionCount": questions_by.get(c.id, 0),
             "updatedAt": to_iso_z(c.updatedAt),
+            "levelId": c.levelId,
         }
         for c in courses
     ]
@@ -179,6 +182,7 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         "status": course.status.value,
         "position": course.position,
         "updatedAt": to_iso_z(course.updatedAt),
+        "levelId": course.levelId,
         "lessons": [lesson_dto(l) for l in lessons],
     }
 
@@ -248,7 +252,9 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
     return hashlib.sha256(fingerprint.encode()).hexdigest()
 
 
-async def create_course(db: AsyncSession, title: str, description: str | None, status, created_by_id: str) -> dict:
+async def create_course(db: AsyncSession, title: str, description: str | None, status, created_by_id: str, level_id: str | None = None) -> dict:
+    if level_id and not await db.get(Level, level_id):
+        raise ApiError(404, "Уровень не найден")
     last = await db.scalar(select(Course.position).order_by(Course.position.desc()).limit(1))
     course = Course(
         title=title,
@@ -256,6 +262,7 @@ async def create_course(db: AsyncSession, title: str, description: str | None, s
         status=status or CourseStatus.DRAFT,
         position=(last if last is not None else -1) + 1,
         createdById=created_by_id,
+        levelId=level_id,
     )
     db.add(course)
     await db.commit()
@@ -266,6 +273,8 @@ async def update_course(db: AsyncSession, course_id: str, changes: dict) -> dict
     course = await db.get(Course, course_id)
     if not course:
         return None
+    if changes.get("levelId") and not await db.get(Level, changes["levelId"]):
+        raise ApiError(404, "Уровень не найден")
     for field, value in changes.items():
         setattr(course, field, value)
     await db.commit()

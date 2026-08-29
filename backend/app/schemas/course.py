@@ -9,6 +9,10 @@ class CourseInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     status: CourseStatus | None = None
+    # Which Level (and, through it, Language) this course belongs to —
+    # optional so existing courses/callers that never set it keep working
+    # unchanged (course_builder gap analysis, 2026-08-29).
+    levelId: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -28,6 +32,7 @@ class CourseUpdateInput(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     status: CourseStatus | None = None
+    levelId: str | None = None
 
     @field_validator("title")
     @classmethod
