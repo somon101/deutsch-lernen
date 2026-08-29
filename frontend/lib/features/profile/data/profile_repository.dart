@@ -142,6 +142,61 @@ class ProfileRepository {
     final res = await _api.get('/api/me/time/overall', query: {'languageId': languageId});
     return res['seconds'] as int;
   }
+
+  /// Consecutive calendar days with a qualifying activity (§ streak mode,
+  /// 2026-08-29) — deliberately global across every language the learner
+  /// studies, not scoped to any one of them.
+  Future<int> fetchStreakDays() async {
+    final res = await _api.get('/api/me/streak');
+    return res['days'] as int;
+  }
+
+  Future<WeekActivitySummary> fetchWeekActivity() async {
+    final res = await _api.get('/api/me/activity/week');
+    return WeekActivitySummary.fromJson(res);
+  }
+}
+
+/// One calendar day's activity summary (§ streak mode, 2026-08-29).
+class DayActivity {
+  const DayActivity({required this.date, required this.active, required this.seconds});
+
+  factory DayActivity.fromJson(Map<String, dynamic> json) =>
+      DayActivity(date: json['date'] as String, active: json['active'] as bool, seconds: json['seconds'] as int);
+
+  final String date;
+  final bool active;
+  final int seconds;
+}
+
+/// The current Monday-Sunday week's per-day activity plus the average and
+/// today-vs-yesterday comparison the "Активность за неделю" card shows (§
+/// streak mode, 2026-08-29) — global across every language, same reasoning
+/// as fetchStreakDays above.
+class WeekActivitySummary {
+  const WeekActivitySummary({
+    required this.days,
+    required this.avgSecondsPerDay,
+    required this.todaySeconds,
+    required this.yesterdaySeconds,
+    required this.percentChangeVsYesterday,
+  });
+
+  factory WeekActivitySummary.fromJson(Map<String, dynamic> json) => WeekActivitySummary(
+        days: (json['days'] as List<dynamic>).map((d) => DayActivity.fromJson(d as Map<String, dynamic>)).toList(),
+        avgSecondsPerDay: json['avgSecondsPerDay'] as int,
+        todaySeconds: json['todaySeconds'] as int,
+        yesterdaySeconds: json['yesterdaySeconds'] as int,
+        // Null when yesterday had no time at all — a percentage change from
+        // zero is undefined, not a real number to display.
+        percentChangeVsYesterday: json['percentChangeVsYesterday'] as int?,
+      );
+
+  final List<DayActivity> days;
+  final int avgSecondsPerDay;
+  final int todaySeconds;
+  final int yesterdaySeconds;
+  final int? percentChangeVsYesterday;
 }
 
 final profileRepositoryProvider = Provider<ProfileRepository>((ref) => ProfileRepository(ref.watch(apiClientProvider)));
@@ -194,4 +249,16 @@ final totalTimeSecondsProvider = FutureProvider.autoDispose<int?>((ref) async {
   final languageId = effective.selectedId;
   if (languageId == null) return null;
   return ref.watch(profileRepositoryProvider).fetchTotalTimeSeconds(languageId);
+});
+
+/// The profile's "Серия" tile (§ streak mode, 2026-08-29) — global, so
+/// switching the Главное screen's language or the profile's progress
+/// language never changes it.
+final streakDaysProvider = FutureProvider.autoDispose<int>((ref) {
+  return ref.watch(profileRepositoryProvider).fetchStreakDays();
+});
+
+/// The "Активность за неделю" card's data (§ streak mode, 2026-08-29).
+final weekActivityProvider = FutureProvider.autoDispose<WeekActivitySummary>((ref) {
+  return ref.watch(profileRepositoryProvider).fetchWeekActivity();
 });

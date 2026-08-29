@@ -168,6 +168,12 @@ class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, Lesso
         completedAt: DateTime.now().toUtc().toIso8601String(),
       ),
     );
+    // A full completion — not just opening the lesson — is what counts as a
+    // streak day (§ streak mode, 2026-08-29). Best-effort: a failed report
+    // must never surface as an error on the lesson's results screen.
+    try {
+      await ref.read(lessonRepositoryProvider).recordDailyActivity('lesson_completed');
+    } catch (_) {}
   }
 
   /// Reports one already-capped time delta for one activity type (§ time

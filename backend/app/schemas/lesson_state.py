@@ -22,6 +22,17 @@ class ActivityTimeInput(BaseModel):
     seconds: int = Field(ge=1, le=120)
 
 
+# Every kind of "qualifying activity" that can complete a streak day (§
+# streak mode, 2026-08-29). Only lesson_completed is ever actually sent
+# today — the extra names are reserved so a future feature can start using
+# one without touching this file beyond adding its own literal here.
+DailyActivityType = Literal["lesson_completed"]
+
+
+class DailyActivityInput(BaseModel):
+    activityType: DailyActivityType
+
+
 class QuizResult(BaseModel):
     correct: int = Field(ge=0)
     total: int = Field(ge=0)

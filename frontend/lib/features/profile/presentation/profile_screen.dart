@@ -90,6 +90,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final c = context.profileColors;
     final overallProgress = ref.watch(overallProgressProvider);
     final totalTime = ref.watch(totalTimeSecondsProvider);
+    final streakDays = ref.watch(streakDaysProvider);
+    final weekActivity = ref.watch(weekActivityProvider);
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
@@ -131,15 +133,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     StatRowItem(value: '${overview.social.following}', label: 'Подписки'),
                   ]),
                   const SizedBox(height: 20),
-                  if (overallProgress.isLoading || totalTime.isLoading)
+                  if (overallProgress.isLoading || totalTime.isLoading || streakDays.isLoading)
                     const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-                  else if (overallProgress.hasError || totalTime.hasError)
+                  else if (overallProgress.hasError || totalTime.hasError || streakDays.hasError)
                     Text(
-                      'Не удалось загрузить прогресс: ${overallProgress.error ?? totalTime.error}',
+                      'Не удалось загрузить прогресс: ${overallProgress.error ?? totalTime.error ?? streakDays.error}',
                       style: ProfileTypography.body(context),
                     )
                   else
-                    _MetricsRow(overview: overview, progressPercent: overallProgress.value, timeSeconds: totalTime.value),
+                    _MetricsRow(
+                      overview: overview,
+                      progressPercent: overallProgress.value,
+                      timeSeconds: totalTime.value,
+                      streakDays: streakDays.value ?? 0,
+                    ),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   LevelCard(level: overview.level),
                   const SizedBox(height: 24),
@@ -157,7 +164,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 24),
                   RankCard(rank: overview.rank),
                   const SizedBox(height: ProfileMetrics.cardGap),
-                  WeekActivityCard(activity: overview.weeklyActivity),
+                  weekActivity.when(
+                    loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+                    error: (err, st) => Text('Не удалось загрузить активность: $err', style: ProfileTypography.body(context)),
+                    data: (summary) => WeekActivityCard(activity: summary),
+                  ),
                   const SizedBox(height: 24),
                 ],
               ),
@@ -225,7 +236,7 @@ class _Header extends ConsumerWidget {
 /// label (not maxLines/ellipsis) so a long value like "24ч 30м" shrinks to
 /// fit a narrow column instead of wrapping or clipping, down to 360px.
 class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.overview, required this.progressPercent, required this.timeSeconds});
+  const _MetricsRow({required this.overview, required this.progressPercent, required this.timeSeconds, required this.streakDays});
 
   final ProfileGamificationOverview overview;
   final int? progressPercent;
@@ -235,6 +246,10 @@ class _MetricsRow extends StatelessWidget {
   /// one language exists and none has been chosen in Settings).
   final int? timeSeconds;
 
+  /// Consecutive active calendar days (§ streak mode, 2026-08-29) — global,
+  /// not scoped to any one language.
+  final int streakDays;
+
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
@@ -242,7 +257,7 @@ class _MetricsRow extends StatelessWidget {
     final hours = totalMinutes ~/ 60;
     final minutes = totalMinutes % 60;
     final items = [
-      (emoji: '🔥', icon: null, color: null, value: '${overview.streakDays}', label: 'Серия'),
+      (emoji: '🔥', icon: null, color: null, value: '$streakDays', label: 'Серия'),
       (
         emoji: null,
         icon: Icons.trending_up,

@@ -5,7 +5,7 @@ from app.auth.deps import require_auth, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
-from app.schemas.lesson_state import ActivityTimeInput
+from app.schemas.lesson_state import ActivityTimeInput, DailyActivityInput
 from app.schemas.taxonomy import (
     AnswerSubmitInput,
     LanguageInput,
@@ -25,8 +25,11 @@ from app.services.progress import (
     get_lesson_progress_from_answers,
     get_level_progress,
     get_overall_progress,
+    get_streak_days,
     get_topic_progress,
     get_total_time_seconds,
+    get_week_activity_summary,
+    record_daily_activity,
     submit_answer,
 )
 
@@ -327,6 +330,25 @@ async def total_time_route(languageId: str, user: User = Depends(require_auth), 
     all-levels fallback to preserve."""
     seconds = await get_total_time_seconds(db, user.id, languageId)
     return {"seconds": seconds}
+
+
+@router.post("/me/activity", status_code=201)
+async def record_daily_activity_route(body: DailyActivityInput, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Marks today as an active streak day (§ streak mode, 2026-08-29) —
+    idempotent, safe to call every time the qualifying action happens."""
+    await record_daily_activity(db, user.id, body.activityType)
+    return {"ok": True}
+
+
+@router.get("/me/streak")
+async def streak_route(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    days = await get_streak_days(db, user.id)
+    return {"days": days}
+
+
+@router.get("/me/activity/week")
+async def week_activity_route(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    return await get_week_activity_summary(db, user.id)
 
 
 @router.get("/me/progress/topic/{topic_id}")

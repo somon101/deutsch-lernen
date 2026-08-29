@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import timedelta
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +9,7 @@ from app.models.activity_time import ActivityTime
 from app.models.answer_log import AnswerLog
 from app.models.course import Course
 from app.models.course_lesson import CourseLesson
+from app.models.daily_activity import DailyActivity
 from app.models.language import Language
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_state import LessonAttempt
@@ -274,19 +276,28 @@ async def get_overall_progress(db: AsyncSession, user_id: str, language_id: str 
 
 
 async def add_activity_time(db: AsyncSession, user_id: str, course_id: str | None, lesson_id: str, activity_type: str, seconds: int) -> None:
-    """Accumulates an already-capped delta (§ time tracking, 2026-08-29) —
-    upserts by (userId, lessonId, activityType), same "increment on report"
+    """Accumulates an already-capped delta into TODAY's row (§ time tracking,
+    2026-08-29; day granularity § streak mode, 2026-08-29) — upserts by
+    (userId, lessonId, activityType, today), same "increment on report"
     contract as attemptNumber counting in submit_answer above, not an
-    ever-growing event log."""
+    ever-growing event log. All-time totals (get_total_time_seconds) are
+    unaffected by this — summing across days gives the exact same number
+    summing one running total used to."""
+    today = utcnow().date()
     existing = (
         await db.execute(
-            select(ActivityTime).where(ActivityTime.userId == user_id, ActivityTime.lessonId == lesson_id, ActivityTime.activityType == activity_type)
+            select(ActivityTime).where(
+                ActivityTime.userId == user_id,
+                ActivityTime.lessonId == lesson_id,
+                ActivityTime.activityType == activity_type,
+                ActivityTime.activityDate == today,
+            )
         )
     ).scalar_one_or_none()
     if existing:
         existing.seconds += seconds
     else:
-        db.add(ActivityTime(userId=user_id, courseId=course_id, lessonId=lesson_id, activityType=activity_type, seconds=seconds))
+        db.add(ActivityTime(userId=user_id, courseId=course_id, lessonId=lesson_id, activityType=activity_type, activityDate=today, seconds=seconds))
     await db.commit()
 
 
@@ -313,6 +324,101 @@ async def get_total_time_seconds(db: AsyncSession, user_id: str, language_id: st
 
     total = (await db.execute(select(func.sum(ActivityTime.seconds)).where(ActivityTime.userId == user_id, or_(*conditions)))).scalar_one()
     return total or 0
+
+
+async def record_daily_activity(db: AsyncSession, user_id: str, activity_type: str) -> None:
+    """Marks today as having a qualifying activity of this type (§ streak
+    mode, 2026-08-29) — idempotent: completing three lessons today still
+    leaves exactly one row, since a streak only cares whether the day had
+    activity at all. Deliberately global, not language-scoped — a streak
+    rewards studying at all, regardless of which language, same reasoning
+    as get_week_activity_summary below."""
+    today = utcnow().date()
+    existing = (
+        await db.execute(
+            select(DailyActivity).where(DailyActivity.userId == user_id, DailyActivity.activityType == activity_type, DailyActivity.activityDate == today)
+        )
+    ).scalar_one_or_none()
+    if existing:
+        return
+    db.add(DailyActivity(userId=user_id, activityType=activity_type, activityDate=today))
+    await db.commit()
+
+
+async def get_streak_days(db: AsyncSession, user_id: str) -> int:
+    """Consecutive calendar days, ending today or yesterday, with at least
+    one DailyActivity row of any type (§ streak mode, 2026-08-29) — "ending
+    yesterday" gives today until it's over before breaking the streak,
+    same grace every habit-streak counter gives (a day isn't missed until
+    it's actually finished)."""
+    dates = set((await db.execute(select(DailyActivity.activityDate).where(DailyActivity.userId == user_id).distinct())).scalars().all())
+    if not dates:
+        return 0
+    today = utcnow().date()
+    cursor = today if today in dates else today - timedelta(days=1)
+    streak = 0
+    while cursor in dates:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+async def get_week_activity_summary(db: AsyncSession, user_id: str) -> dict:
+    """The current Monday-Sunday week's per-day activity (§ streak mode,
+    2026-08-29), plus the same-day-of-week average and a today-vs-yesterday
+    time comparison the profile's "Активность за неделю" card needs.
+    Deliberately global (every language summed together), same reasoning as
+    record_daily_activity/get_streak_days: a study streak/weekly total isn't
+    "for German" or "for English", it's for studying at all — switching the
+    profile's selected progress language must never change these numbers."""
+    today = utcnow().date()
+    monday = today - timedelta(days=today.weekday())
+    week_dates = [monday + timedelta(days=i) for i in range(7)]
+
+    active_dates = set(
+        (
+            await db.execute(
+                select(DailyActivity.activityDate).where(
+                    DailyActivity.userId == user_id, DailyActivity.activityDate >= monday, DailyActivity.activityDate <= week_dates[-1]
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    rows = (
+        await db.execute(
+            select(ActivityTime.activityDate, func.sum(ActivityTime.seconds))
+            .where(ActivityTime.userId == user_id, ActivityTime.activityDate >= monday, ActivityTime.activityDate <= week_dates[-1])
+            .group_by(ActivityTime.activityDate)
+        )
+    ).all()
+    seconds_by_date = {d: s for d, s in rows}
+
+    days = [{"date": d.isoformat(), "active": d in active_dates, "seconds": seconds_by_date.get(d, 0)} for d in week_dates]
+    avg_seconds_per_day = round(sum(day["seconds"] for day in days) / 7)
+
+    yesterday = today - timedelta(days=1)
+    today_seconds = seconds_by_date.get(today, 0)
+    if yesterday >= monday:
+        yesterday_seconds = seconds_by_date.get(yesterday, 0)
+    else:
+        # Today is Monday, so yesterday (Sunday) falls in last week — outside
+        # week_dates, needs its own lookup.
+        yesterday_seconds = (
+            await db.execute(select(func.sum(ActivityTime.seconds)).where(ActivityTime.userId == user_id, ActivityTime.activityDate == yesterday))
+        ).scalar_one() or 0
+
+    percent_change = None if yesterday_seconds == 0 else round(((today_seconds - yesterday_seconds) / yesterday_seconds) * 100)
+
+    return {
+        "days": days,
+        "avgSecondsPerDay": avg_seconds_per_day,
+        "todaySeconds": today_seconds,
+        "yesterdaySeconds": yesterday_seconds,
+        "percentChangeVsYesterday": percent_change,
+    }
 
 
 async def get_topic_progress(db: AsyncSession, user_id: str, topic_id: str) -> dict:

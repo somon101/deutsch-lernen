@@ -116,6 +116,13 @@ class LessonRepository {
       body: {'courseId': ?courseId, 'lessonId': lessonId, 'activityType': activityType, 'seconds': seconds},
     );
   }
+
+  /// Marks today as a streak day (§ streak mode, 2026-08-29) — idempotent
+  /// server-side, so calling this more than once for the same day (e.g.
+  /// completing a second lesson) is harmless.
+  Future<void> recordDailyActivity(String activityType) async {
+    await _api.post('/api/me/activity', body: {'activityType': activityType});
+  }
 }
 
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) => LessonRepository(ref.watch(apiClientProvider)));

@@ -138,26 +138,49 @@ model LessonAttempt {
 }
 
 // Accumulated, already-capped seconds a user spent on one activity type
-// within one lesson (§ time tracking, 2026-08-29) — incremented on every
-// client report rather than logged as an event stream, since nothing today
-// needs finer than "total seconds so far". activityType mirrors the
-// frontend's Stage enum names minus "complete" (vocabulary/material/video/
-// minitest/audio/practice/review). courseId is null for a legacy
-// (file-based) lesson, same loose-reference convention AnswerLog already
-// uses; lessonId alone anchors uniqueness since it's already unique on its
-// own. Per-unit caps (2 min/material section, 10s/word, 60s/exercise,
-// 90s/matching) are enforced client-side before a delta is ever reported —
-// nothing here re-derives or re-checks them.
+// within one lesson ON ONE CALENDAR DAY (§ time tracking, 2026-08-29; day
+// granularity added § streak mode, 2026-08-29) — incremented on every
+// client report rather than logged as an event stream. All-time,
+// all-language totals are just a SUM over every day's rows, so adding the
+// day dimension didn't change any existing total, only made "how much on
+// day X" answerable too. activityType mirrors the frontend's Stage enum
+// names minus "complete" (vocabulary/material/video/minitest/audio/
+// practice/review). courseId is null for a legacy (file-based) lesson, same
+// loose-reference convention AnswerLog already uses. Per-unit caps (2
+// min/material section, 10s/word, 60s/exercise, 90s/matching) are enforced
+// client-side before a delta is ever reported — nothing here re-derives or
+// re-checks them.
 model ActivityTime {
   id           String   @id @default(uuid())
   userId       String
   courseId     String?
   lessonId     String
   activityType String
+  activityDate DateTime @db.Date
   seconds      Int      @default(0)
   updatedAt    DateTime @updatedAt
 
-  @@unique([userId, lessonId, activityType])
+  @@unique([userId, lessonId, activityType, activityDate])
+}
+
+// One row per (user, activityType, calendar day) — the discrete "a
+// qualifying activity happened" signal streaks/weekly-activity are built
+// from (§ streak mode, 2026-08-29), deliberately separate from
+// ActivityTime: ActivityTime tracks continuous time regardless of whether
+// anything was ever finished, but a streak must not count a lesson that was
+// opened and abandoned, only a real completion. activityType is a free
+// string so a future feature (words_reviewed, exercise_completed,
+// test_completed, ...) can start recording its own qualifying events with
+// zero schema change — any row on a given day, of any type, makes that day
+// "active".
+model DailyActivity {
+  id           String   @id @default(uuid())
+  userId       String
+  activityType String
+  activityDate DateTime @db.Date
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, activityType, activityDate])
 }
 
 // ---------------------------------------------------------------------------
