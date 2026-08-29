@@ -27,7 +27,7 @@ jobs:
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: deutsch-lernen-api
-          region: europe-west1
+          region: asia-northeast1
           project_id: ${{ secrets.GCP_PROJECT_ID }}
           source: ./backend
           env_vars: |
