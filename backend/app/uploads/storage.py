@@ -1,14 +1,18 @@
-"""Exact port of server/src/upload.ts's 3 multer configurations. Writes to
-the SAME physical directory the Express server uses (server/uploads/), not
-a separate copy — so a file uploaded through either backend during the
-parallel-run migration period is immediately visible through the other,
-and nothing needs to be synced/copied between them."""
+"""Uploads for avatars, word audio, and course media.
+
+Locally (and during the Express/FastAPI parallel-run period) files live in
+server/uploads/. In production they go to a public Supabase Storage bucket
+when SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set — so the API can
+run on Fly/Cloud Run without a persistent disk.
+"""
 
 import uuid
 from pathlib import Path
 
+import httpx
 from fastapi import UploadFile
 
+from app.config import settings
 from app.errors import ApiError
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -54,9 +58,57 @@ COURSE_MEDIA_MIME = {
 COURSE_MEDIA_MAX_BYTES = 200 * 1024 * 1024
 
 
+def _object_path(folder: str, filename: str) -> str:
+    return f"{folder}/{filename}"
+
+
+def public_url(folder: str, filename: str) -> str:
+    if settings.supabase_storage_enabled:
+        base = settings.supabase_url.rstrip("/")
+        bucket = settings.supabase_storage_bucket
+        return f"{base}/storage/v1/object/public/{bucket}/{_object_path(folder, filename)}"
+    return f"/uploads/{folder}/{filename}"
+
+
+def _storage_headers() -> dict[str, str]:
+    key = settings.supabase_service_role_key
+    return {"Authorization": f"Bearer {key}", "apikey": key}
+
+
+async def ensure_storage_bucket() -> None:
+    """Creates the public uploads bucket if it is missing. Safe to call on
+    every boot — 409 (already exists) is ignored."""
+    if not settings.supabase_storage_enabled:
+        return
+    base = settings.supabase_url.rstrip("/")
+    bucket = settings.supabase_storage_bucket
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            f"{base}/storage/v1/bucket",
+            headers={**_storage_headers(), "Content-Type": "application/json"},
+            json={"id": bucket, "name": bucket, "public": True},
+        )
+        if response.status_code not in (200, 201, 409):
+            print(f"Supabase Storage bucket ensure failed: {response.status_code} {response.text}")
+
+
+async def _upload_bytes(folder: str, filename: str, content: bytes, content_type: str) -> None:
+    base = settings.supabase_url.rstrip("/")
+    bucket = settings.supabase_storage_bucket
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        response = await client.post(
+            f"{base}/storage/v1/object/{bucket}/{_object_path(folder, filename)}",
+            headers={**_storage_headers(), "Content-Type": content_type, "x-upsert": "true"},
+            content=content,
+        )
+        if response.status_code not in (200, 201):
+            raise ApiError(500, "Не удалось сохранить файл")
+
+
 async def _save(file: UploadFile, directory: Path, mime_map: dict[str, str], max_bytes: int, error_message: str) -> str:
-    """Reads, validates, and writes the upload; returns the generated
-    filename (not the full path — callers build the /uploads/... URL)."""
+    """Reads and validates the upload; returns the URL stored on the user /
+    course / word row (relative /uploads/... locally, or a public Supabase
+    URL in production)."""
     ext = mime_map.get(file.content_type or "")
     if ext is None:
         raise ApiError(400, error_message)
@@ -66,8 +118,12 @@ async def _save(file: UploadFile, directory: Path, mime_map: dict[str, str], max
         raise ApiError(400, "Файл слишком большой")
 
     filename = f"{uuid.uuid4()}{ext}"
-    (directory / filename).write_bytes(content)
-    return filename
+    folder = directory.name
+    if settings.supabase_storage_enabled:
+        await _upload_bytes(folder, filename, content, file.content_type or "application/octet-stream")
+    else:
+        (directory / filename).write_bytes(content)
+    return public_url(folder, filename)
 
 
 async def save_avatar(file: UploadFile) -> str:
@@ -85,8 +141,23 @@ async def save_course_media(file: UploadFile) -> str:
 def delete_file(directory: Path, filename_or_url: str) -> None:
     """Best-effort delete, mirroring the Node side's fs.unlink(...).catch(()
     => {}) — never raises."""
+    name = filename_or_url.rsplit("/", 1)[-1]
+    if not name:
+        return
+    if settings.supabase_storage_enabled:
+        try:
+            base = settings.supabase_url.rstrip("/")
+            bucket = settings.supabase_storage_bucket
+            path = _object_path(directory.name, name)
+            httpx.delete(
+                f"{base}/storage/v1/object/{bucket}/{path}",
+                headers=_storage_headers(),
+                timeout=30.0,
+            )
+        except httpx.HTTPError:
+            pass
+        return
     try:
-        name = filename_or_url.rsplit("/", 1)[-1]
         (directory / name).unlink(missing_ok=True)
     except OSError:
         pass

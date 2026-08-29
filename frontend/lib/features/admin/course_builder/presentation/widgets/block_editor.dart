@@ -239,7 +239,7 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
               ),
             ),
             const Divider(height: 32, color: AdminColors.border),
-            PoolQuestionsSection(lessonBlockId: widget.block.id),
+            PoolQuestionsSection(lessonBlockId: widget.block.id, lessonId: widget.lessonId),
           ],
         ],
       ),

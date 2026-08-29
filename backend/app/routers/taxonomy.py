@@ -171,10 +171,20 @@ async def reorder_material_blocks(material_id: str, body: MaterialBlockReorderIn
     return {"ok": True}
 
 
+def _attached_question_dto(row: dict) -> dict:
+    return {
+        "placementId": row["placementId"],
+        "topicName": row["topicName"],
+        "verifiesBlockId": row["verifiesBlockId"],
+        "verifiesBlockTitle": row["verifiesBlockTitle"],
+        **svc.question_dto(row["question"]),
+    }
+
+
 @router.get("/materials/blocks/{block_id}/questions")
 async def list_block_questions(block_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     rows = await svc.list_block_questions(db, material_block_id=block_id)
-    return {"questions": [{"placementId": p.id, **svc.question_dto(q)} for p, q in rows]}
+    return {"questions": [_attached_question_dto(r) for r in rows]}
 
 
 @router.get("/lesson-blocks/{block_id}/questions")
@@ -184,7 +194,17 @@ async def list_lesson_block_questions(block_id: str, user: User = Depends(requir
     quiz-block editor show/manage pool questions the same way the new
     material-block editor does."""
     rows = await svc.list_block_questions(db, lesson_block_id=block_id)
-    return {"questions": [{"placementId": p.id, **svc.question_dto(q)} for p, q in rows]}
+    return {"questions": [_attached_question_dto(r) for r in rows]}
+
+
+@router.get("/questions/{question_id}/placements")
+async def list_question_placements(question_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    """Full "where is this question actually shown" chain (§5/§6/§7 of the
+    approved rule, 2026-08-27) — every placement of this Question, resolved
+    to a lesson title + stage label + block title, regardless of where the
+    question itself was first created."""
+    placements = await svc.list_question_placements(db, question_id)
+    return {"placements": placements}
 
 
 @router.delete("/placements/{placement_id}")

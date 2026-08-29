@@ -100,7 +100,11 @@ async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: 
             await db.execute(
                 select(QuestionPlacement, Question)
                 .join(Question, Question.id == QuestionPlacement.questionId)
-                .where(QuestionPlacement.materialBlockId.in_(block_ids))
+                # lessonBlockId IS NULL excludes a placement that's actually
+                # shown in a quiz stage but merely tagged as "verifying" this
+                # reading block (§4 of the approved rule, 2026-08-27) — that
+                # tag must never make the question ALSO appear inline here.
+                .where(QuestionPlacement.materialBlockId.in_(block_ids), QuestionPlacement.lessonBlockId.is_(None))
                 .order_by(QuestionPlacement.materialBlockId, QuestionPlacement.position)
             )
         ).all()

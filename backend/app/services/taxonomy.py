@@ -3,14 +3,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.errors import ApiError
+from app.models.course_lesson import CourseLesson
 from app.models.language import Language
+from app.models.lesson_block import LessonBlock
 from app.models.level import Level
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
 from app.models.topic import Topic
-from app.services.courses import _block_question_to_row
+from app.services.content import LEGACY_COURSE_ID
+from app.services.courses import STAGE_TITLES, _block_question_to_row
 from app.services.material import to_question_dto
 from app.services.similarity import compare_similarity
 
@@ -291,20 +294,97 @@ def question_dto(question: Question) -> dict:
 
 async def list_block_questions(
     db: AsyncSession, *, material_block_id: str | None = None, lesson_block_id: str | None = None
-) -> list[tuple[QuestionPlacement, Question]]:
+) -> list[dict]:
     """Every question actually attached to one block, in placement order —
     the admin editor uses this to show the teacher what's already linked
     here. Works for either a MaterialBlock (the "Материал" stage) or a
     LessonBlock (minitest/practice/review) — same reusable-pool mechanism,
     just a different placement column, exactly like create/reuse already
-    accept either one."""
+    accept either one.
+
+    Also resolves the Topic name (§ approved rule, 2026-08-27: the teacher
+    must see the full chain, not just a bare id) and, for a LessonBlock
+    listing only, the title of the MaterialBlock this placement is tagged
+    as "verifying" (§4 of the same rule) — a quiz-stage placement can
+    optionally point at a reading-content block it tests, purely as a
+    label, independent of where it's actually shown."""
     condition = QuestionPlacement.materialBlockId == material_block_id if material_block_id else QuestionPlacement.lessonBlockId == lesson_block_id
     rows = (
         await db.execute(
             select(QuestionPlacement, Question).join(Question, Question.id == QuestionPlacement.questionId).where(condition).order_by(QuestionPlacement.position)
         )
     ).all()
-    return [(p, q) for p, q in rows]
+
+    topic_ids = {q.topicId for _, q in rows if q.topicId}
+    topics_by_id = {t.id: t.name for t in (await db.execute(select(Topic).where(Topic.id.in_(topic_ids)))).scalars().all()} if topic_ids else {}
+
+    verifies_titles: dict[str, str] = {}
+    if lesson_block_id:
+        verify_block_ids = {p.materialBlockId for p, _ in rows if p.materialBlockId}
+        if verify_block_ids:
+            verifies_titles = {
+                b.id: b.title for b in (await db.execute(select(MaterialBlock).where(MaterialBlock.id.in_(verify_block_ids)))).scalars().all()
+            }
+
+    return [
+        {
+            "placementId": p.id,
+            "question": q,
+            "topicName": topics_by_id.get(q.topicId),
+            "verifiesBlockId": p.materialBlockId if lesson_block_id else None,
+            "verifiesBlockTitle": verifies_titles.get(p.materialBlockId) if lesson_block_id and p.materialBlockId else None,
+        }
+        for p, q in rows
+    ]
+
+
+async def _resolve_lesson_title(db: AsyncSession, course_id: str, lesson_id: str) -> str:
+    if course_id == LEGACY_COURSE_ID:
+        return lesson_id
+    lesson = await db.get(CourseLesson, lesson_id)
+    return lesson.title if lesson else lesson_id
+
+
+async def list_question_placements(db: AsyncSession, question_id: str) -> list[dict]:
+    """Every place a Question is actually used, resolved to a human-readable
+    chain (§5/§6/§7 of the approved rule, 2026-08-27: "неважно, где вопрос
+    был создан — преподаватель должен видеть, где он фактически
+    показывается"). One question can appear here multiple times if it's
+    been reused."""
+    placements = (await db.execute(select(QuestionPlacement).where(QuestionPlacement.questionId == question_id))).scalars().all()
+    result = []
+    for p in placements:
+        # lessonBlockId determines WHERE it's shown even when materialBlockId
+        # is also set on the same row — that combination means "shown in
+        # this quiz stage, tagged as verifying that reading block" (§4),
+        # never "shown inline in the material". Check lessonBlockId first.
+        if p.lessonBlockId:
+            block = await db.get(LessonBlock, p.lessonBlockId)
+            result.append(
+                {
+                    "placementId": p.id,
+                    "location": "lessonBlock",
+                    "stage": block.stage if block else None,
+                    "stageLabel": STAGE_TITLES.get(block.stage) if block else None,
+                    "lessonTitle": await _resolve_lesson_title(db, block.courseId, block.lessonId) if block else None,
+                    "blockTitle": block.title if block else None,
+                    "verifiesBlockId": p.materialBlockId,
+                }
+            )
+        elif p.materialBlockId:
+            block = await db.get(MaterialBlock, p.materialBlockId)
+            material = await db.get(Material, block.materialId) if block else None
+            result.append(
+                {
+                    "placementId": p.id,
+                    "location": "material",
+                    "lessonTitle": await _resolve_lesson_title(db, material.courseId, material.lessonId) if material else None,
+                    "blockTitle": block.title if block else None,
+                }
+            )
+        elif p.legacyLessonId:
+            result.append({"placementId": p.id, "location": "legacy", "lessonTitle": p.legacyLessonId, "setName": p.legacySetName})
+    return result
 
 
 async def remove_placement(db: AsyncSession, placement_id: str) -> bool:

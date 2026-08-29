@@ -1,3 +1,9 @@
+# LEGACY. Production is moving off Render: Postgres + Storage on Supabase,
+# FastAPI on Google Cloud Run (see backend/Dockerfile and
+# .github/workflows/deploy-api.yml). Do not create new Render services from
+# this file; kept only so the current free-tier app can be torn down after
+# the cutover.
+#
 # Render Blueprint: provisions the FastAPI backend and its PostgreSQL
 # database for the Flutter (Android/Windows) app.
 # Deploy via Render -> New -> Blueprint -> pick this repository.

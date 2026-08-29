@@ -66,8 +66,8 @@ async def upload_cover(course_id: str, file: UploadFile = File(...), db: AsyncSe
     existing = await svc.get_course(db, course_id)
     if not existing:
         raise ApiError(404, "Курс не найден")
-    filename = await save_course_media(file)
-    course = await svc.set_course_cover(db, course_id, f"/uploads/courses/{filename}")
+    stored_url = await save_course_media(file)
+    course = await svc.set_course_cover(db, course_id, stored_url)
     # Covers are 1:1 with a course, never shared via the library — deleted
     # unconditionally, no "still in use" check needed.
     if existing["coverUrl"]:
@@ -141,8 +141,8 @@ async def upload_lesson_media(
         raise ApiError(404, "Урок не найден")
     previous_url = lesson["videoUrl"] if kind == "video" else lesson["audioUrl"]
 
-    filename = await save_course_media(file)
-    course = await svc.set_lesson_media(db, course_id, lesson_id, kind, f"/uploads/courses/{filename}")
+    stored_url = await save_course_media(file)
+    course = await svc.set_lesson_media(db, course_id, lesson_id, kind, stored_url)
     # Only delete the old file if no other lesson reuses it (see
     # list_media_library) — otherwise this would silently break playback
     # wherever else it's used.
@@ -250,10 +250,10 @@ async def upload_vocabulary_audio(
     audio: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-    filename = await save_word_audio(audio)
-    result = await svc.set_vocabulary_word_audio(db, course_id, lesson_id, word_id, f"/uploads/words/{filename}")
+    stored_url = await save_word_audio(audio)
+    result = await svc.set_vocabulary_word_audio(db, course_id, lesson_id, word_id, stored_url)
     if not result:
-        delete_file(WORD_AUDIO_DIR, filename)
+        delete_file(WORD_AUDIO_DIR, stored_url)
         raise ApiError(404, "Слово не найдено")
     if result["previousAudioUrl"]:
         delete_file(WORD_AUDIO_DIR, result["previousAudioUrl"])

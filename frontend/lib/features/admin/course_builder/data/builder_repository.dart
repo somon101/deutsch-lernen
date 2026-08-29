@@ -547,6 +547,14 @@ class BuilderRepository {
     );
     return AdminQuestionPlacement.fromJson(res['placement'] as Map<String, dynamic>);
   }
+
+  /// Full "where is this actually shown" chain for one Question, wherever
+  /// it was placed — regardless of where it was first created (§5/§6/§7 of
+  /// the approved rule, 2026-08-27).
+  Future<List<QuestionUsage>> listQuestionPlacements(String questionId) async {
+    final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/placements');
+    return (res['placements'] as List<dynamic>).map((p) => QuestionUsage.fromJson(p as Map<String, dynamic>)).toList();
+  }
 }
 
 final builderRepositoryProvider = Provider<BuilderRepository>(

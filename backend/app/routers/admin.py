@@ -196,8 +196,8 @@ async def upload_legacy_media(
     existing = await get_lesson_content(db, lesson_id)
     previous_url = existing["videoUrl"] if kind == "video" else existing["audioUrl"]
 
-    filename = await save_course_media(file)
-    content = await set_legacy_lesson_media(db, lesson_id, kind, f"/uploads/courses/{filename}")
+    stored_url = await save_course_media(file)
+    content = await set_legacy_lesson_media(db, lesson_id, kind, stored_url)
     # Only delete the old file if no other lesson reuses it.
     if previous_url and not await courses_svc.media_url_still_in_use(db, previous_url, legacy_lesson_id=lesson_id):
         delete_file(COURSE_MEDIA_DIR, previous_url)
@@ -263,10 +263,10 @@ async def upload_word_audio(
     if not word:
         raise ApiError(404, "Слово не найдено — сначала сохраните словарь")
 
-    filename = await save_word_audio(audio)
+    stored_url = await save_word_audio(audio)
     if word.audioUrl:
         delete_file(WORD_AUDIO_DIR, word.audioUrl)
-    word.audioUrl = f"/uploads/words/{filename}"
+    word.audioUrl = stored_url
     await db.commit()
     return {"german": word.german, "audioUrl": word.audioUrl}
 

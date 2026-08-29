@@ -11,11 +11,12 @@ from app.db import async_session
 from app.errors import ApiError
 from app.routers import admin, auth, builder, content, learner_courses, me, taxonomy
 from app.services.bootstrap import ensure_admin_exists
-from app.uploads.storage import UPLOADS_ROOT
+from app.uploads.storage import UPLOADS_ROOT, ensure_storage_bucket
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await ensure_storage_bucket()
     async with async_session() as session:
         await ensure_admin_exists(session)
     yield

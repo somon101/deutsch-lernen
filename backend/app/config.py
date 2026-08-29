@@ -18,9 +18,20 @@ class Settings(BaseSettings):
     # call site (per the approved content-taxonomy plan, 2026-08-26).
     pass_threshold_percent: int = 75
 
+    # Optional: when both are set, uploads go to a public Supabase Storage
+    # bucket instead of the local disk (needed once the API no longer runs
+    # on a host with a persistent volume).
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "uploads"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def supabase_storage_enabled(self) -> bool:
+        return bool(self.supabase_url.strip() and self.supabase_service_role_key.strip())
 
 
 settings = Settings()

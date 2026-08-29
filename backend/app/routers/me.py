@@ -74,9 +74,9 @@ async def upload_avatar(
     user: User = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    filename = await save_avatar(avatar)
+    stored_url = await save_avatar(avatar)
     previous_url = user.avatarUrl
-    user.avatarUrl = f"/uploads/avatars/{filename}"
+    user.avatarUrl = stored_url
     await db.commit()
     await db.refresh(user)
     if previous_url:

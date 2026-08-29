@@ -25,12 +25,20 @@ String poolQuestionPreviewText(QuestionDraft d) => switch (d) {
 /// the quiz-block editor for minitest/practice/review (pass
 /// [lessonBlockId]) — same reusable-pool mechanism either way, exactly one
 /// of the two ids must be given.
+///
+/// Every question gets its own Topic, independent of the block it's created
+/// in (§3 of the approved rule, 2026-08-27), and — only when placed in a
+/// quiz stage — can optionally be tagged as "verifying" a specific
+/// MaterialBlock (§4), purely a label with no effect on where it's shown.
 class PoolQuestionsSection extends ConsumerStatefulWidget {
-  const PoolQuestionsSection({super.key, this.materialBlockId, this.lessonBlockId, this.topicId})
+  const PoolQuestionsSection({super.key, this.materialBlockId, this.lessonBlockId, this.lessonId, this.topicId})
       : assert(materialBlockId != null || lessonBlockId != null, 'must scope to either a material or lesson block');
 
   final String? materialBlockId;
   final String? lessonBlockId;
+  // Needed only to offer the "verifies which reading block" picker for a
+  // lessonBlockId-scoped question — the lesson's own MaterialBlocks.
+  final String? lessonId;
   final String? topicId;
 
   @override
@@ -39,13 +47,21 @@ class PoolQuestionsSection extends ConsumerStatefulWidget {
 
 class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   QuestionDraft? _draft;
+  String? _draftTopicId;
+  String? _draftVerifiesBlockId;
   bool _saving = false;
   List<PoolQuestion>? _attached;
+  List<AdminTopic> _topics = [];
+  List<AdminMaterialBlock> _verifyBlocks = [];
+
+  bool get _showsVerifiesPicker => widget.lessonBlockId != null && widget.lessonId != null;
 
   @override
   void initState() {
     super.initState();
     _loadAttached();
+    _loadTopics();
+    if (_showsVerifiesPicker) _loadVerifyBlocks();
   }
 
   Future<void> _loadAttached() async {
@@ -56,6 +72,28 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
       if (mounted) setState(() => _attached = attached);
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось загрузить вопросы блока');
+    }
+  }
+
+  Future<void> _loadTopics() async {
+    try {
+      final topics = await ref.read(builderRepositoryProvider).listTopics(languageId: 'de');
+      if (mounted) setState(() => _topics = topics);
+    } catch (_) {
+      // Non-critical — the Topic picker just stays empty.
+    }
+  }
+
+  Future<void> _loadVerifyBlocks() async {
+    try {
+      final repo = ref.read(builderRepositoryProvider);
+      final materials = await repo.listMaterials(widget.lessonId!);
+      final material = materials.where((m) => m.materialType == 'text').cast<AdminMaterial?>().firstWhere((m) => m != null, orElse: () => null);
+      if (material == null) return;
+      final blocks = await repo.listMaterialBlocks(material.id);
+      if (mounted) setState(() => _verifyBlocks = blocks);
+    } catch (_) {
+      // Non-critical — the "verifies" picker just stays empty.
     }
   }
 
@@ -72,7 +110,11 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
     }
   }
 
-  void _startNew(QuestionDraft blank) => setState(() => _draft = blank);
+  void _startNew(QuestionDraft blank) => setState(() {
+        _draft = blank;
+        _draftTopicId = widget.topicId;
+        _draftVerifiesBlockId = null;
+      });
 
   Future<void> _submitDraft() async {
     final draft = _draft;
@@ -80,7 +122,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
     setState(() => _saving = true);
     try {
       final repo = ref.read(builderRepositoryProvider);
-      final similar = await repo.checkQuestionSimilarity(draft, topicId: widget.topicId);
+      final similar = await repo.checkQuestionSimilarity(draft, topicId: _draftTopicId);
       if (similar.isNotEmpty && mounted) {
         final force = await _showSimilarityWarning(context, similar);
         if (!force) {
@@ -90,8 +132,8 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
       }
       await repo.createPoolQuestion(
         draft,
-        topicId: widget.topicId,
-        materialBlockId: widget.materialBlockId,
+        topicId: _draftTopicId,
+        materialBlockId: widget.materialBlockId ?? _draftVerifiesBlockId,
         lessonBlockId: widget.lessonBlockId,
         force: true,
       );
@@ -160,27 +202,16 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
           for (final q in attached)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius)),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${questionKindLabel(q.draft)}: ${poolQuestionPreviewText(q.draft)}',
-                        style: AdminTypography.body,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    AdminDeleteLink(label: 'Открепить', onPressed: () => _unlink(q)),
-                  ],
-                ),
-              ),
+              child: _AttachedQuestionTile(question: q, onUnlink: () => _unlink(q)),
             ),
         const SizedBox(height: 6),
         if (draft == null) ...[
-          _PoolQuestionSearch(materialBlockId: widget.materialBlockId, lessonBlockId: widget.lessonBlockId, onReused: _loadAttached),
+          _PoolQuestionSearch(
+            materialBlockId: widget.materialBlockId,
+            lessonBlockId: widget.lessonBlockId,
+            verifyBlocks: _showsVerifiesPicker ? _verifyBlocks : const [],
+            onReused: _loadAttached,
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
@@ -201,6 +232,30 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _draftEditor(draft),
+                const SizedBox(height: AdminMetrics.fieldGap),
+                DropdownButtonFormField<String?>(
+                  initialValue: _draftTopicId,
+                  isExpanded: true,
+                  decoration: adminInputDecoration(label: 'Тема (Topic)'),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('Без темы')),
+                    for (final topic in _topics) DropdownMenuItem<String?>(value: topic.id, child: Text(topic.name)),
+                  ],
+                  onChanged: (v) => setState(() => _draftTopicId = v),
+                ),
+                if (_showsVerifiesPicker) ...[
+                  const SizedBox(height: AdminMetrics.fieldGap),
+                  DropdownButtonFormField<String?>(
+                    initialValue: _draftVerifiesBlockId,
+                    isExpanded: true,
+                    decoration: adminInputDecoration(label: 'Проверяет блок материала (необязательно)'),
+                    items: [
+                      const DropdownMenuItem<String?>(value: null, child: Text('Не привязывать')),
+                      for (final b in _verifyBlocks) DropdownMenuItem<String?>(value: b.id, child: Text(b.title)),
+                    ],
+                    onChanged: (v) => setState(() => _draftVerifiesBlockId = v),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -226,10 +281,133 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   }
 }
 
+/// One attached question, collapsed to a single-line summary by default —
+/// expands to show the real content (prompt/options/correct answer, §8),
+/// the resolved Topic, the "verifies" tag (if any), and the full "where
+/// it's actually shown" chain (§5/§6/§7), fetched lazily on first expand.
+class _AttachedQuestionTile extends ConsumerStatefulWidget {
+  const _AttachedQuestionTile({required this.question, required this.onUnlink});
+  final PoolQuestion question;
+  final VoidCallback onUnlink;
+
+  @override
+  ConsumerState<_AttachedQuestionTile> createState() => _AttachedQuestionTileState();
+}
+
+class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
+  bool _open = false;
+  List<QuestionUsage>? _usages;
+
+  Future<void> _toggle() async {
+    setState(() => _open = !_open);
+    if (_open && _usages == null) {
+      try {
+        final usages = await ref.read(builderRepositoryProvider).listQuestionPlacements(widget.question.id);
+        if (mounted) setState(() => _usages = usages);
+      } catch (_) {
+        // Non-critical — the chain just stays unresolved.
+      }
+    }
+  }
+
+  String _usageLine(QuestionUsage u) {
+    final lesson = u.lessonTitle ?? '?';
+    if (u.location == 'lessonBlock') return 'Урок «$lesson» → ${u.stageLabel ?? u.stage} → ${u.blockTitle}';
+    if (u.location == 'material') return 'Урок «$lesson» → Материал → ${u.blockTitle}';
+    return 'Урок «$lesson» (устаревший курс)';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = widget.question;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _toggle,
+                  child: Text(
+                    '${questionKindLabel(q.draft)}: ${poolQuestionPreviewText(q.draft)}',
+                    style: AdminTypography.body,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: Icon(_open ? Icons.expand_less : Icons.expand_more, size: 18),
+                visualDensity: VisualDensity.compact,
+                onPressed: _toggle,
+              ),
+              AdminDeleteLink(label: 'Открепить', onPressed: widget.onUnlink),
+            ],
+          ),
+          if (_open) ...[
+            const Divider(height: 16, color: AdminColors.border),
+            _ReadOnlyQuestionContent(draft: q.draft),
+            const SizedBox(height: 8),
+            Text('Тема: ${q.topicName ?? '—'}', style: AdminTypography.caption),
+            if (q.verifiesBlockId != null) Text('Проверяет блок материала: ${q.verifiesBlockTitle}', style: AdminTypography.caption),
+            const SizedBox(height: 8),
+            Text('Где используется:', style: AdminTypography.fieldLabel),
+            if (_usages == null)
+              const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator())
+            else
+              for (final u in _usages!) Text('• ${_usageLine(u)}', style: AdminTypography.caption),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Plain read-only rendering of a question's actual content — prompt,
+/// options with the correct one marked, or statement+answer for
+/// true/false — so a teacher can see what a question really says without
+/// having to reuse it just to check (§8 of the approved rule).
+class _ReadOnlyQuestionContent extends StatelessWidget {
+  const _ReadOnlyQuestionContent({required this.draft});
+  final QuestionDraft draft;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (draft) {
+      ChoiceDraft(:final prompt, :final options, :final correctIndex) || ClozeDraft(:final prompt, :final options, :final correctIndex) =>
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(prompt, style: AdminTypography.body),
+            const SizedBox(height: 4),
+            for (var i = 0; i < options.length; i++)
+              Text(
+                i == correctIndex ? '✓ ${options[i]}' : '• ${options[i]}',
+                style: i == correctIndex
+                    ? AdminTypography.body.copyWith(color: const Color(0xFF16A34A), fontWeight: FontWeight.w600)
+                    : AdminTypography.body,
+              ),
+          ],
+        ),
+      TrueFalseDraft(:final prompt, :final correct) => Text('$prompt — верно: ${correct ? 'да' : 'нет'}', style: AdminTypography.body),
+      ScrambleDraft(:final translation, :final correctPhrase) =>
+        Text('$translation → $correctPhrase', style: AdminTypography.body),
+      MatchDraft(:final pairs) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final p in pairs) Text('${p.left} — ${p.right}', style: AdminTypography.body)],
+        ),
+    };
+  }
+}
+
 class _PoolQuestionSearch extends ConsumerStatefulWidget {
-  const _PoolQuestionSearch({this.materialBlockId, this.lessonBlockId, required this.onReused});
+  const _PoolQuestionSearch({this.materialBlockId, this.lessonBlockId, this.verifyBlocks = const [], required this.onReused});
   final String? materialBlockId;
   final String? lessonBlockId;
+  final List<AdminMaterialBlock> verifyBlocks;
   final VoidCallback onReused;
 
   @override
@@ -239,6 +417,7 @@ class _PoolQuestionSearch extends ConsumerStatefulWidget {
 class _PoolQuestionSearchState extends ConsumerState<_PoolQuestionSearch> {
   final _query = TextEditingController();
   List<PoolQuestion>? _results;
+  String? _verifiesBlockId;
 
   @override
   void dispose() {
@@ -257,9 +436,11 @@ class _PoolQuestionSearchState extends ConsumerState<_PoolQuestionSearch> {
 
   Future<void> _reuse(PoolQuestion question) async {
     try {
-      await ref
-          .read(builderRepositoryProvider)
-          .reusePoolQuestion(question.id, materialBlockId: widget.materialBlockId, lessonBlockId: widget.lessonBlockId);
+      await ref.read(builderRepositoryProvider).reusePoolQuestion(
+            question.id,
+            materialBlockId: widget.materialBlockId ?? _verifiesBlockId,
+            lessonBlockId: widget.lessonBlockId,
+          );
       if (mounted) {
         showSuccessSnack(context, 'Вопрос привязан (без копирования)');
         setState(() {
@@ -279,6 +460,19 @@ class _PoolQuestionSearchState extends ConsumerState<_PoolQuestionSearch> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(controller: _query, decoration: adminInputDecoration(label: 'Найти существующий вопрос для переиспользования'), onChanged: _search),
+        if (widget.verifyBlocks.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String?>(
+            initialValue: _verifiesBlockId,
+            isExpanded: true,
+            decoration: adminInputDecoration(label: 'При привязке — проверяет блок материала (необязательно)'),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('Не привязывать')),
+              for (final b in widget.verifyBlocks) DropdownMenuItem<String?>(value: b.id, child: Text(b.title)),
+            ],
+            onChanged: (v) => setState(() => _verifiesBlockId = v),
+          ),
+        ],
         if (_results != null && _results!.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 6),

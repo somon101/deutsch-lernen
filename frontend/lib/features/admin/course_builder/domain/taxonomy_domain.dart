@@ -89,22 +89,78 @@ class AdminMaterialBlock {
 /// edit), this always has a stable `id` (the real question_id), since it's
 /// only ever constructed from something the server already has.
 class PoolQuestion {
-  const PoolQuestion({required this.id, required this.topicId, required this.draft, this.placementId});
+  const PoolQuestion({
+    required this.id,
+    required this.topicId,
+    required this.draft,
+    this.placementId,
+    this.topicName,
+    this.verifiesBlockId,
+    this.verifiesBlockTitle,
+  });
 
   factory PoolQuestion.fromJson(Map<String, dynamic> json) => PoolQuestion(
         id: json['id'] as String,
         topicId: json['topicId'] as String?,
         draft: questionDraftFromWire(json),
         placementId: json['placementId'] as String?,
+        topicName: json['topicName'] as String?,
+        verifiesBlockId: json['verifiesBlockId'] as String?,
+        verifiesBlockTitle: json['verifiesBlockTitle'] as String?,
       );
 
   final String id;
   final String? topicId;
   final QuestionDraft draft;
-  // Set only when this came from listing a MaterialBlock's attached
-  // questions (GET .../blocks/{id}/questions) — identifies the specific
-  // link so it can be removed without touching the shared Question itself.
+  // Set only when this came from listing a block's attached questions
+  // (GET .../blocks/{id}/questions) — identifies the specific link so it
+  // can be removed without touching the shared Question itself.
   final String? placementId;
+  // Resolved Topic name — the teacher should see the actual name, not just
+  // an id (§5 of the approved rule, 2026-08-27).
+  final String? topicName;
+  // Only meaningful for a lessonBlock-scoped listing: this quiz-stage
+  // placement is optionally tagged as testing a specific reading-content
+  // MaterialBlock, independent of where the question is actually shown
+  // (§4). Null when no such tag was set.
+  final String? verifiesBlockId;
+  final String? verifiesBlockTitle;
+}
+
+/// Every place one Question is actually shown to a learner, resolved to a
+/// human-readable chain — GET /api/questions/{id}/placements (§5/§6/§7).
+class QuestionUsage {
+  const QuestionUsage({
+    required this.placementId,
+    required this.location,
+    this.stage,
+    this.stageLabel,
+    this.lessonTitle,
+    this.blockTitle,
+    this.verifiesBlockId,
+    this.setName,
+  });
+
+  factory QuestionUsage.fromJson(Map<String, dynamic> json) => QuestionUsage(
+        placementId: json['placementId'] as String,
+        location: json['location'] as String,
+        stage: json['stage'] as String?,
+        stageLabel: json['stageLabel'] as String?,
+        lessonTitle: json['lessonTitle'] as String?,
+        blockTitle: json['blockTitle'] as String?,
+        verifiesBlockId: json['verifiesBlockId'] as String?,
+        setName: json['setName'] as String?,
+      );
+
+  final String placementId;
+  // "material" | "lessonBlock" | "legacy"
+  final String location;
+  final String? stage;
+  final String? stageLabel;
+  final String? lessonTitle;
+  final String? blockTitle;
+  final String? verifiesBlockId;
+  final String? setName;
 }
 
 class SimilarQuestionMatch {
