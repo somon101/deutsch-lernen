@@ -328,8 +328,9 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
           .reorderLessons(widget.courseId, ids);
       ref.invalidate(_courseProvider(widget.courseId));
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         showErrorSnack(context, e, 'Не удалось изменить порядок уроков');
+      }
     }
   }
 
@@ -428,12 +429,13 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
                         ref.invalidate(_courseProvider(widget.courseId));
                         if (context.mounted) showSuccessSnack(context);
                       } catch (e) {
-                        if (context.mounted)
+                        if (context.mounted) {
                           showErrorSnack(
                             context,
                             e,
                             'Не удалось загрузить файл',
                           );
+                        }
                       }
                     },
                     onRemoveMedia: (kind) async {
@@ -447,8 +449,9 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
                             );
                         ref.invalidate(_courseProvider(widget.courseId));
                       } catch (e) {
-                        if (context.mounted)
+                        if (context.mounted) {
                           showErrorSnack(context, e, 'Не удалось удалить файл');
+                        }
                       }
                     },
                     onReuseMedia: (kind, url) async {
@@ -463,8 +466,9 @@ class _LessonTileState extends ConsumerState<_LessonTile> {
                             );
                         ref.invalidate(_courseProvider(widget.courseId));
                       } catch (e) {
-                        if (context.mounted)
+                        if (context.mounted) {
                           showErrorSnack(context, e, 'Не удалось выбрать файл');
+                        }
                       }
                     },
                     onReload: () =>

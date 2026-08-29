@@ -90,7 +90,11 @@ class _ScrambleQuestionViewState extends State<ScrambleQuestionView> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.tonal(
-              onPressed: _placed.length == widget.exercise.answer.length ? _check : null,
+              // Compares against the token count, not the answer's word
+              // count — a multi-word option chunk (e.g. "every day" as one
+              // draggable token) means those two can differ, and the user
+              // only ever places whole tokens, never individual words.
+              onPressed: _placed.length == widget.exercise.tokens.length ? _check : null,
               child: const Text('Проверить'),
             ),
           ),

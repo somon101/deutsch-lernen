@@ -122,14 +122,14 @@ class AdminUsersRepository {
     final res = await _api.patch(
       '$_base/${Uri.encodeComponent(id)}',
       body: {
-        if (firstName != null) 'firstName': firstName,
-        if (lastName != null) 'lastName': lastName,
-        if (email != null) 'email': email,
-        if (phone != null) 'phone': phone,
-        if (username != null) 'username': username,
+        'firstName': ?firstName,
+        'lastName': ?lastName,
+        'email': ?email,
+        'phone': ?phone,
+        'username': ?username,
         if (role != null) 'role': _roleWire(role),
-        if (canEditProfile != null) 'canEditProfile': canEditProfile,
-        if (status != null) 'status': status,
+        'canEditProfile': ?canEditProfile,
+        'status': ?status,
       },
     );
     return AdminUser.fromJson(res['user'] as Map<String, dynamic>);

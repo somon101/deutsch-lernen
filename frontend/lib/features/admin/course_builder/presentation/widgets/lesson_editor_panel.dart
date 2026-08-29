@@ -82,6 +82,47 @@ class LessonEditorPanel extends ConsumerStatefulWidget {
   ConsumerState<LessonEditorPanel> createState() => _LessonEditorPanelState();
 }
 
+/// Manual send — always fires regardless of the auto-send setting (that
+/// toggle, in the courses hub, only gates the automatic call made when a
+/// lesson is added to an already-published course).
+class _NotifyButton extends ConsumerStatefulWidget {
+  const _NotifyButton({required this.courseId, required this.lessonId});
+  final String courseId;
+  final String lessonId;
+
+  @override
+  ConsumerState<_NotifyButton> createState() => _NotifyButtonState();
+}
+
+class _NotifyButtonState extends ConsumerState<_NotifyButton> {
+  bool _busy = false;
+
+  Future<void> _send() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(builderRepositoryProvider).notifyLessonCreated(widget.courseId, widget.lessonId);
+      if (mounted) showSuccessSnack(context, 'Уведомление отправлено');
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось отправить уведомление');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: _busy ? null : _send,
+        style: AdminButtonStyles.secondary(),
+        icon: const Icon(Icons.notifications_outlined, size: 18),
+        label: Text(_busy ? 'Отправляем…' : 'Отправить уведомление'),
+      ),
+    );
+  }
+}
+
 class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
   String? _open = 'vocabulary';
 
@@ -121,8 +162,9 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
           .reorderBlocks(widget.courseId, widget.lesson.id, stage, ids);
       widget.onReload();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         showErrorSnack(context, e, 'Не удалось изменить порядок блоков');
+      }
     }
   }
 
@@ -131,6 +173,13 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Legacy lessons predate courses/lessons as real Course rows, so
+        // there's no course to check "already published" against — the
+        // manual send only makes sense for a real builder course.
+        if (widget.courseId != 'legacy') ...[
+          _NotifyButton(courseId: widget.courseId, lessonId: widget.lesson.id),
+          const SizedBox(height: AdminMetrics.cardGap),
+        ],
         for (var i = 0; i < _chain.length; i++) ...[
           _section(context, i + 1, _chain[i]),
           if (i < _chain.length - 1) const AdminStepConnector(),

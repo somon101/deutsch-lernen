@@ -72,8 +72,8 @@ class ProfileRepository {
       'lastName': lastName,
       'email': email,
       'phone': phone,
-      if (username != null) 'username': username,
-      if (bio != null) 'bio': bio,
+      'username': ?username,
+      'bio': ?bio,
       if (birthDate != null) 'birthDate': birthDate.toUtc().toIso8601String(),
     });
     return AppUser.fromJson(res['user'] as Map<String, dynamic>);

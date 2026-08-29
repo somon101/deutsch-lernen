@@ -120,6 +120,14 @@ class BuilderRepository {
     return getCourse(courseId);
   }
 
+  /// Manual "Отправить уведомление" — sends regardless of the auto-send
+  /// setting (see NotificationSettingsRepository for that toggle).
+  Future<void> notifyLessonCreated(String courseId, String lessonId) async {
+    await _api.post(
+      '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/notify',
+    );
+  }
+
   Future<AdminCourse> reorderLessons(String courseId, List<String> ids) async {
     final res = await _api.post(
       '$_base/${Uri.encodeComponent(courseId)}/lessons/reorder',

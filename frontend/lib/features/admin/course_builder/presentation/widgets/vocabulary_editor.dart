@@ -117,8 +117,9 @@ class _WordRowState extends ConsumerState<_WordRow> {
   Future<void> _save() async {
     if (_german.text.trim().isEmpty ||
         _translation.text.trim().isEmpty ||
-        _pronunciation.text.trim().isEmpty)
+        _pronunciation.text.trim().isEmpty) {
       return;
+    }
     setState(() {
       _busy = true;
       _saved = false;

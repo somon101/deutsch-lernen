@@ -160,8 +160,9 @@ class _ProgressList extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final rows = data.lessonTitles.entries.toList();
-    if (rows.isEmpty)
+    if (rows.isEmpty) {
       return Text('Уроки не найдены.', style: TextStyle(color: c.textMuted));
+    }
     return Column(
       children: [
         for (var i = 0; i < rows.length; i++) ...[
@@ -198,11 +199,12 @@ class _LoginHistoryList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    if (logins.isEmpty)
+    if (logins.isEmpty) {
       return Text(
         'Ещё ни разу не входил(а).',
         style: TextStyle(color: c.textFaint),
       );
+    }
     return Column(
       children: [
         for (var i = 0; i < logins.length; i++) ...[

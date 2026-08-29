@@ -3,10 +3,12 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/api/api_client.dart';
 import 'core/api/router_refresh.dart';
 import 'core/auth/auth_state.dart';
 import 'core/auth/user.dart';
 import 'core/locale/locale_provider.dart';
+import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/widgets/app_lifecycle_heartbeat.dart';
@@ -136,14 +138,38 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class DeutschLernenApp extends ConsumerWidget {
+class DeutschLernenApp extends ConsumerStatefulWidget {
   const DeutschLernenApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DeutschLernenApp> createState() => _DeutschLernenAppState();
+}
+
+class _DeutschLernenAppState extends ConsumerState<DeutschLernenApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Tapping a push notification should jump straight to the lesson it's
+    // about — the GoRouter instance navigates directly, no BuildContext
+    // needed. Set up once; safe to fire before the first frame since
+    // GoRouter queues navigation until it's ready.
+    listenForNotificationTaps((path) => ref.read(routerProvider).go(path));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
+
+    // Registers (or refreshes) this device's push token whenever a user
+    // becomes available — a fresh login and a restored session both flow
+    // through the same authProvider transition to non-null, so one listener
+    // covers both without a separate "on login" hook.
+    ref.listen<AsyncValue<AppUser?>>(authProvider, (previous, next) {
+      final user = next.value;
+      if (user != null) registerPushTokenIfSupported(ref.read(apiClientProvider));
+    });
 
     return MaterialApp.router(
       title: 'Deutsch Lernen',

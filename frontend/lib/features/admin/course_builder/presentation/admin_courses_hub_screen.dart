@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../core/push/notification_settings_repository.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
@@ -18,6 +19,9 @@ final _coursesHubProvider =
 final _legacyLessonCountProvider = FutureProvider.autoDispose<int>(
   (ref) async =>
       (await ref.watch(profileRepositoryProvider).fetchLegacyLessons()).length,
+);
+final _autoSendOnNewLessonProvider = FutureProvider.autoDispose<bool>(
+  (ref) => ref.watch(notificationSettingsRepositoryProvider).getAutoSendOnNewLesson(),
 );
 
 /// Mirrors AdminCoursesHubPage.tsx: the static legacy-course row (linking
@@ -74,6 +78,8 @@ class AdminCoursesHubScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: AdminMetrics.cardGap),
+            const _NotificationSettingsCard(),
+            const SizedBox(height: AdminMetrics.cardGap),
             const _CreateCourseCard(),
             const SizedBox(height: AdminMetrics.cardGap),
             courses.when(
@@ -119,8 +125,9 @@ class _CourseRow extends ConsumerWidget {
       await ref.read(builderRepositoryProvider).reorderCourses(ids);
       ref.invalidate(_coursesHubProvider);
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         showErrorSnack(context, e, 'Не удалось изменить порядок');
+      }
     }
   }
 
@@ -135,8 +142,9 @@ class _CourseRow extends ConsumerWidget {
       await ref.read(builderRepositoryProvider).deleteCourse(course.id);
       ref.invalidate(_coursesHubProvider);
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         showErrorSnack(context, e, 'Не удалось удалить курс');
+      }
     }
   }
 
@@ -229,6 +237,67 @@ class _CourseRow extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Generic push mechanism (§ any future event type reuses the same
+/// send path), only "lesson_created" wired up today: ON sends
+/// automatically when a lesson is added to an already-published course;
+/// OFF leaves it to the "Отправить уведомление" button on the lesson itself.
+class _NotificationSettingsCard extends ConsumerStatefulWidget {
+  const _NotificationSettingsCard();
+  @override
+  ConsumerState<_NotificationSettingsCard> createState() => _NotificationSettingsCardState();
+}
+
+class _NotificationSettingsCardState extends ConsumerState<_NotificationSettingsCard> {
+  bool _busy = false;
+
+  Future<void> _toggle(bool value) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(notificationSettingsRepositoryProvider).setAutoSendOnNewLesson(value);
+      ref.invalidate(_autoSendOnNewLessonProvider);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось изменить настройку');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final autoSend = ref.watch(_autoSendOnNewLessonProvider);
+    return AdminCard(
+      child: Row(
+        children: [
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Автоматическая отправка уведомлений', style: AdminTypography.cardTitle),
+                SizedBox(height: 2),
+                Text(
+                  'Когда включено: уведомление о новом уроке уходит сразу после его создания (если курс уже опубликован). '
+                  'Когда выключено: уведомление можно отправить вручную кнопкой у урока.',
+                  style: AdminTypography.caption,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          autoSend.when(
+            loading: () => const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+            error: (err, st) => const Icon(Icons.error_outline, color: AdminColors.danger),
+            data: (value) => Switch(
+              value: value,
+              onChanged: _busy ? null : _toggle,
+              activeThumbColor: AdminColors.accent,
+            ),
+          ),
+        ],
       ),
     );
   }

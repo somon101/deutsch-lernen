@@ -9,6 +9,11 @@
          image_picker has no Windows desktop implementation so that option
          doesn't exist there. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Android 13+ requires this declared for the runtime notification
+         permission prompt (triggered by FirebaseMessaging.requestPermission
+         in push_service.dart) to do anything at all — without it, push
+         notifications silently never show on those devices. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:label="deutsch_lernen"
         android:name="${applicationName}"

@@ -82,8 +82,9 @@ class AdminLessonEditScreen extends ConsumerWidget {
                     reload();
                     if (context.mounted) showSuccessSnack(context);
                   } catch (e) {
-                    if (context.mounted)
+                    if (context.mounted) {
                       showErrorSnack(context, e, 'Не удалось загрузить файл');
+                    }
                   }
                 },
                 onRemoveMedia: (kind) async {
@@ -91,8 +92,9 @@ class AdminLessonEditScreen extends ConsumerWidget {
                     await repo.removeMedia(lessonId, l.title, kind);
                     reload();
                   } catch (e) {
-                    if (context.mounted)
+                    if (context.mounted) {
                       showErrorSnack(context, e, 'Не удалось удалить файл');
+                    }
                   }
                 },
                 onReuseMedia: (kind, url) async {
@@ -100,8 +102,9 @@ class AdminLessonEditScreen extends ConsumerWidget {
                     await repo.reuseMedia(lessonId, l.title, kind, url);
                     reload();
                   } catch (e) {
-                    if (context.mounted)
+                    if (context.mounted) {
                       showErrorSnack(context, e, 'Не удалось выбрать файл');
+                    }
                   }
                 },
                 onReload: reload,

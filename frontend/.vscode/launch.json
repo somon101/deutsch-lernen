@@ -16,10 +16,10 @@
       "args": ["--dart-define=API_URL=http://localhost:8000"]
     },
     {
-      "name": "Android device (USB) — Render backend",
+      "name": "Android device (USB) — Cloud Run backend",
       "request": "launch",
       "type": "dart",
-      "args": ["--dart-define=API_URL=https://deutsch-lernen-fastapi-pgxi.onrender.com"]
+      "args": ["--dart-define=API_URL=https://deutsch-lernen-api-n3ss7qmkpa-an.a.run.app"]
     },
     {
       "name": "Android device (USB) — local backend via adb reverse",
