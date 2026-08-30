@@ -4,14 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/widgets/back_guard.dart';
 import '../../profile/presentation/profile_tokens.dart';
+import '../../profile/presentation/widgets/metrics_row.dart';
+import '../../profile/presentation/widgets/rank_card.dart';
 import '../../profile/presentation/widgets/stat_row.dart';
+import '../../profile/presentation/widgets/week_activity.dart';
 import '../data/social_repository.dart';
 
-/// Another user's public profile (§ subscriptions, 2026-08-30) — reached by
-/// tapping someone in the Рейтинг list or a search result. Deliberately
-/// minimal: identity + follow counts + the subscribe action, not the full
-/// own-profile screen's learning stats (progress/time/streak/rank), which
-/// stay private to the account they belong to.
+/// Another user's public profile (§ subscriptions, 2026-08-30; extended §
+/// subscriptions follow-up, 2026-08-30 to show the same real stats a user
+/// sees about themselves) — reached by tapping someone in the Рейтинг list
+/// or a search result. Identity + follow counts + the subscribe action, plus
+/// the same real Серия/Прогресс/Время/Очки row, rank card and weekly
+/// activity their own profile shows — everything that's real, per-user data.
+/// Deliberately excludes the still-mocked "Ваш уровень" card and achievements
+/// (project owner's own profile explicitly keeps those as unfinished
+/// placeholders, not real per-user data worth surfacing about someone else).
 class UserProfileScreen extends ConsumerWidget {
   const UserProfileScreen({super.key, required this.userId});
 
@@ -52,8 +59,29 @@ class UserProfileScreen extends ConsumerWidget {
                     StatRowItem(value: '${p.mutualCount}', label: 'Взаимные'),
                     StatRowItem(value: '${p.followingCount}', label: 'Подписки'),
                   ]),
-                  const SizedBox(height: 24),
-                  if (!p.isSelf) _FollowButton(userId: p.id, isFollowing: p.isFollowing),
+                  const SizedBox(height: 20),
+                  if (!p.isSelf) ...[
+                    _FollowButton(userId: p.id, isFollowing: p.isFollowing),
+                    const SizedBox(height: 20),
+                  ],
+                  ref.watch(userStatsProvider(p.id)).when(
+                        loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+                        error: (err, st) => Text('Не удалось загрузить статистику: $err', style: ProfileTypography.body(context)),
+                        data: (s) => Column(
+                          children: [
+                            MetricsRow(
+                              progressPercent: s.overallProgressPercent,
+                              timeSeconds: s.totalTimeSeconds,
+                              streakDays: s.streakDays,
+                              points: s.rank.points,
+                            ),
+                            const SizedBox(height: 16),
+                            RankCard(summary: s.rank),
+                            const SizedBox(height: 16),
+                            WeekActivityCard(activity: s.weekActivity),
+                          ],
+                        ),
+                      ),
                 ],
               ),
             );

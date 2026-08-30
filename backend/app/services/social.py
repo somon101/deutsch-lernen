@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.errors import ApiError
 from app.models.follow import Follow
 from app.models.user import User
+from app.services.leaderboard import get_my_rank_summary
+from app.services.progress import get_overall_progress, get_streak_days, get_total_time_seconds, get_week_activity_summary
 
 _SEARCH_LIMIT = 20
 
@@ -20,7 +22,10 @@ _SEARCH_LIMIT = 20
 def _public_user_dto(user: User) -> dict:
     """Safe-to-show-to-anyone fields — deliberately NOT serialize.public_user
     (that one includes email/phone/birthDate, fine for a user reading their
-    own account, never appropriate to hand back about a different user)."""
+    own account, never appropriate to hand back about a different user).
+    `selectedLanguageId` is included on purpose (like `publicId`) — it's
+    which language someone studies, not private data, and the profile screen
+    needs it to scope their progress/time the same way it scopes its own."""
     return {
         "id": user.id,
         "publicId": user.publicId,
@@ -28,6 +33,7 @@ def _public_user_dto(user: User) -> dict:
         "lastName": user.lastName,
         "username": user.username,
         "avatarUrl": user.avatarUrl,
+        "selectedLanguageId": user.selectedLanguageId,
     }
 
 
@@ -90,6 +96,26 @@ async def follow_user(db: AsyncSession, follower_id: str, following_id: str) -> 
         await db.commit()
 
     return await get_user_profile(db, following_id, follower_id)
+
+
+async def get_user_stats(db: AsyncSession, user_id: str, language_id: str | None) -> dict:
+    """The same real stats a user sees about themselves on their own profile
+    (§ subscriptions follow-up, 2026-08-30: "должен увидеть всю статистику
+    как у себя") — reused verbatim from services/progress.py and
+    services/leaderboard.py, just pointed at `user_id` instead of the
+    caller, since every one of those functions already takes a plain user id
+    rather than assuming "me". `language_id` is the target user's own
+    effective language (resolved client-side the same way their own profile
+    resolves it) — time has no meaningful all-languages total, so it's null
+    without one, same as the "me" endpoint's behavior."""
+    overall = await get_overall_progress(db, user_id, language_id)
+    return {
+        "streakDays": await get_streak_days(db, user_id),
+        "overallProgressPercent": overall["percent"],
+        "totalTimeSeconds": await get_total_time_seconds(db, user_id, language_id) if language_id else None,
+        "rank": await get_my_rank_summary(db, user_id),
+        "weekActivity": await get_week_activity_summary(db, user_id),
+    }
 
 
 async def search_users(db: AsyncSession, query: str) -> list[dict]:

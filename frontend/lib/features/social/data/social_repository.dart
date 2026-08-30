@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../leaderboard/data/leaderboard_repository.dart';
+import '../../profile/data/profile_repository.dart';
 
 /// A public-safe view of one user (§ subscriptions, 2026-08-30) — never
 /// includes email/phone/birthDate, unlike AppUser's own full shape, since
@@ -14,6 +16,7 @@ class UserProfile {
     required this.lastName,
     required this.username,
     required this.avatarUrl,
+    required this.selectedLanguageId,
     required this.followersCount,
     required this.followingCount,
     required this.mutualCount,
@@ -28,6 +31,7 @@ class UserProfile {
         lastName: json['lastName'] as String,
         username: json['username'] as String,
         avatarUrl: json['avatarUrl'] as String?,
+        selectedLanguageId: json['selectedLanguageId'] as String?,
         followersCount: json['followersCount'] as int,
         followingCount: json['followingCount'] as int,
         mutualCount: json['mutualCount'] as int,
@@ -41,11 +45,40 @@ class UserProfile {
   final String lastName;
   final String username;
   final String? avatarUrl;
+  final String? selectedLanguageId;
   final int followersCount;
   final int followingCount;
   final int mutualCount;
   final bool isSelf;
   final bool isFollowing;
+}
+
+/// The same real stats a user sees about their own profile (§ subscriptions
+/// follow-up, 2026-08-30: "должен увидеть всю статистику как у себя") —
+/// reuses MyRankSummary/WeekActivitySummary as-is so RankCard/WeekActivityCard
+/// work unmodified for someone else's id too.
+class UserStats {
+  const UserStats({
+    required this.streakDays,
+    required this.overallProgressPercent,
+    required this.totalTimeSeconds,
+    required this.rank,
+    required this.weekActivity,
+  });
+
+  factory UserStats.fromJson(Map<String, dynamic> json) => UserStats(
+        streakDays: json['streakDays'] as int,
+        overallProgressPercent: json['overallProgressPercent'] as int?,
+        totalTimeSeconds: json['totalTimeSeconds'] as int?,
+        rank: MyRankSummary.fromJson(json['rank'] as Map<String, dynamic>),
+        weekActivity: WeekActivitySummary.fromJson(json['weekActivity'] as Map<String, dynamic>),
+      );
+
+  final int streakDays;
+  final int? overallProgressPercent;
+  final int? totalTimeSeconds;
+  final MyRankSummary rank;
+  final WeekActivitySummary weekActivity;
 }
 
 class SocialRepository {
@@ -63,6 +96,14 @@ class SocialRepository {
   Future<UserProfile> followUser(String userId) async {
     final res = await _api.post('/api/users/${Uri.encodeComponent(userId)}/follow');
     return UserProfile.fromJson(res);
+  }
+
+  Future<UserStats> fetchUserStats(String userId, {String? languageId}) async {
+    final res = await _api.get(
+      '/api/users/${Uri.encodeComponent(userId)}/stats',
+      query: languageId == null ? null : {'languageId': languageId},
+    );
+    return UserStats.fromJson(res);
   }
 
   Future<List<UserProfile>> searchUsers(String query) async {
@@ -88,4 +129,15 @@ final socialRepositoryProvider = Provider<SocialRepository>((ref) => SocialRepos
 
 final userProfileProvider = FutureProvider.autoDispose.family<UserProfile, String>((ref, userId) {
   return ref.watch(socialRepositoryProvider).fetchUserProfile(userId);
+});
+
+/// Stats for the given user id, scoped to whichever language is "in effect"
+/// for THAT user — their own `selectedLanguageId`, falling back (same rule
+/// `effectiveLanguageProvider` uses for "me") to the one language with
+/// published content when there's only one and they haven't picked one.
+final userStatsProvider = FutureProvider.autoDispose.family<UserStats, String>((ref, userId) async {
+  final profile = await ref.watch(userProfileProvider(userId).future);
+  final languages = await ref.watch(availableLanguagesProvider.future);
+  final languageId = profile.selectedLanguageId ?? (languages.length == 1 ? languages.single.id : null);
+  return ref.watch(socialRepositoryProvider).fetchUserStats(userId, languageId: languageId);
 });

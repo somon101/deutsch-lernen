@@ -5,7 +5,7 @@ from app.auth.deps import require_auth
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
-from app.services.social import follow_user, get_user_profile, search_users
+from app.services.social import follow_user, get_user_profile, get_user_stats, search_users
 
 router = APIRouter(prefix="/api/users", tags=["social"])
 
@@ -29,3 +29,20 @@ async def get_user_profile_route(user_id: str, user: User = Depends(require_auth
 @router.post("/{user_id}/follow", status_code=201)
 async def follow_user_route(user_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     return await follow_user(db, follower_id=user.id, following_id=user_id)
+
+
+@router.get("/{user_id}/stats")
+async def get_user_stats_route(
+    user_id: str,
+    languageId: str | None = Query(default=None),
+    user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """The same real progress/time/streak/points/activity a profile shows
+    about its own owner (§ subscriptions follow-up, 2026-08-30) — available
+    for any user id since it's the same data the leaderboard/search already
+    make visible, just gathered into one place for a profile screen."""
+    target = await db.get(User, user_id)
+    if not target:
+        raise ApiError(404, "Пользователь не найден")
+    return await get_user_stats(db, user_id, languageId)
