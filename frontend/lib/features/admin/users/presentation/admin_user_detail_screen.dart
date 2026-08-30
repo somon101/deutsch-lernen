@@ -6,6 +6,7 @@ import '../../../../core/api/api_client.dart';
 import '../../../../core/auth/auth_state.dart';
 import '../../../../core/auth/user.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/back_guard.dart';
 import '../../../../core/widgets/status_pill.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../widgets/admin_feedback.dart';
@@ -67,7 +68,9 @@ class AdminUserDetailScreen extends ConsumerWidget {
     final me = ref.watch(authProvider).value;
     final isSelf = me?.id == userId;
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/admin',
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Пользователь'),
         leading: IconButton(
@@ -108,6 +111,7 @@ class AdminUserDetailScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

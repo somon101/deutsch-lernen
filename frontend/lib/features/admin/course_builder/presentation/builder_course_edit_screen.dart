@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../core/widgets/back_guard.dart';
 import '../../admin_tokens.dart';
 import '../../admin_widgets.dart';
 import '../../widgets/admin_feedback.dart';
@@ -40,7 +41,9 @@ class BuilderCourseEditScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final course = ref.watch(_courseProvider(courseId));
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/admin/courses',
+      child: Scaffold(
       backgroundColor: AdminColors.bg,
       appBar: AppBar(
         backgroundColor: AdminColors.card,
@@ -105,6 +108,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

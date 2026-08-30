@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/auth/user.dart';
 import '../../../../core/cache/cached_json.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/back_guard.dart';
 import '../../../../core/widgets/status_pill.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../widgets/admin_feedback.dart';
@@ -47,7 +48,9 @@ class AdminUsersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final users = ref.watch(adminUsersListProvider);
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/',
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Пользователи'),
         leading: IconButton(
@@ -84,6 +87,7 @@ class AdminUsersScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

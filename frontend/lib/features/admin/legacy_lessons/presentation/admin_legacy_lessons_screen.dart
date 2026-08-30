@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../data/legacy_admin_repository.dart';
 import '../../course_builder/domain/builder_domain.dart';
@@ -38,7 +39,9 @@ class AdminLegacyLessonsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rows = ref.watch(_legacyLessonsAdminProvider);
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/admin/courses',
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('Немецкий с нуля'),
         leading: IconButton(
@@ -59,6 +62,7 @@ class AdminLegacyLessonsScreen extends ConsumerWidget {
             children: [for (final row in list) _LessonCard(row: row)],
           );
         },
+      ),
       ),
     );
   }

@@ -8,6 +8,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/widgets/back_guard.dart';
 import '../data/profile_gamification_repository.dart';
 import '../data/profile_repository.dart';
 import 'profile_tokens.dart';
@@ -95,7 +96,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/',
+      child: Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
         child: Align(
@@ -175,6 +178,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/push/notification_settings_repository.dart';
+import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
@@ -51,7 +52,9 @@ class AdminCoursesHubScreen extends ConsumerWidget {
     final levels = ref.watch(_levelsProvider).value ?? const [];
     final legacyCount = ref.watch(_legacyLessonCountProvider).value;
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/',
+      child: Scaffold(
       backgroundColor: AdminColors.bg,
       appBar: AppBar(
         backgroundColor: AdminColors.card,
@@ -110,6 +113,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

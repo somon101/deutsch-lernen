@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/back_guard.dart';
 import '../domain/stage.dart';
 import 'lesson_runner_controller.dart';
 import 'stages/audio_stage.dart';
@@ -29,7 +30,9 @@ class LessonRunnerScreen extends ConsumerWidget {
     final key = (courseId: courseId, lessonId: lessonId);
     final async = ref.watch(lessonRunnerControllerProvider(key));
 
-    return async.when(
+    return BackGuard(
+      fallbackPath: '/',
+      child: async.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, st) => Scaffold(
         appBar: AppBar(title: const Text('Урок')),
@@ -63,6 +66,7 @@ class LessonRunnerScreen extends ConsumerWidget {
           ),
         );
       },
+      ),
     );
   }
 }

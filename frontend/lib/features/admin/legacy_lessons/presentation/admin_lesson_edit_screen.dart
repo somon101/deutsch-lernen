@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../admin_tokens.dart';
 import '../../course_builder/data/builder_repository.dart';
@@ -36,7 +37,9 @@ class AdminLessonEditScreen extends ConsumerWidget {
 
     void reload() => ref.invalidate(_legacyLessonProvider(lessonId));
 
-    return Scaffold(
+    return BackGuard(
+      fallbackPath: '/admin/courses/legacy',
+      child: Scaffold(
       backgroundColor: AdminColors.bg,
       appBar: AppBar(
         backgroundColor: AdminColors.card,
@@ -112,6 +115,7 @@ class AdminLessonEditScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
