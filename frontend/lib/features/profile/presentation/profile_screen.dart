@@ -138,11 +138,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     StatRowItem(value: '${overview.social.following}', label: 'Подписки'),
                   ]),
                   const SizedBox(height: 20),
-                  if (overallProgress.isLoading || totalTime.isLoading || streakDays.isLoading)
+                  if (overallProgress.isLoading || totalTime.isLoading || streakDays.isLoading || myRank.isLoading)
                     const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
-                  else if (overallProgress.hasError || totalTime.hasError || streakDays.hasError)
+                  else if (overallProgress.hasError || totalTime.hasError || streakDays.hasError || myRank.hasError)
                     Text(
-                      'Не удалось загрузить прогресс: ${overallProgress.error ?? totalTime.error ?? streakDays.error}',
+                      'Не удалось загрузить прогресс: ${overallProgress.error ?? totalTime.error ?? streakDays.error ?? myRank.error}',
                       style: ProfileTypography.body(context),
                     )
                   else
@@ -151,6 +151,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       progressPercent: overallProgress.value,
                       timeSeconds: totalTime.value,
                       streakDays: streakDays.value ?? 0,
+                      points: myRank.value?.points ?? 0,
                     ),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   LevelCard(level: overview.level),
@@ -246,7 +247,13 @@ class _Header extends ConsumerWidget {
 /// label (not maxLines/ellipsis) so a long value like "24ч 30м" shrinks to
 /// fit a narrow column instead of wrapping or clipping, down to 360px.
 class _MetricsRow extends StatelessWidget {
-  const _MetricsRow({required this.overview, required this.progressPercent, required this.timeSeconds, required this.streakDays});
+  const _MetricsRow({
+    required this.overview,
+    required this.progressPercent,
+    required this.timeSeconds,
+    required this.streakDays,
+    required this.points,
+  });
 
   final ProfileGamificationOverview overview;
   final int? progressPercent;
@@ -259,6 +266,13 @@ class _MetricsRow extends StatelessWidget {
   /// Consecutive active calendar days (§ streak mode, 2026-08-29) — global,
   /// not scoped to any one language.
   final int streakDays;
+
+  /// Total points (§ rating system, 2026-08-30) — same number the
+  /// leaderboard/rank card use, global across every language. Replaces the
+  /// old mock "Уровень" tile in this row specifically; the separate "Ваш
+  /// уровень" card below stays untouched/still mocked, per the project
+  /// owner's explicit request not to touch it.
+  final int points;
 
   @override
   Widget build(BuildContext context) {
@@ -282,7 +296,7 @@ class _MetricsRow extends StatelessWidget {
         value: timeSeconds == null ? '—' : '$hoursч $minutesм',
         label: 'Время',
       ),
-      (emoji: null, icon: Icons.star, color: c.warning, value: overview.level.score.toStringAsFixed(1), label: 'Уровень'),
+      (emoji: null, icon: Icons.star, color: c.warning, value: '$points', label: 'Очки'),
     ];
 
     return ProfileCard(
