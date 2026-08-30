@@ -15,7 +15,7 @@ import '../data/profile_repository.dart';
 import 'profile_tokens.dart';
 import 'widgets/achievement_badge.dart';
 import 'widgets/avatar_viewer.dart';
-import 'widgets/level_card.dart';
+import 'widgets/points_card.dart';
 import 'widgets/profile_card.dart';
 import 'widgets/rank_card.dart';
 import 'widgets/stat_row.dart';
@@ -153,7 +153,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       streakDays: streakDays.value ?? 0,
                     ),
                   const SizedBox(height: ProfileMetrics.cardGap),
-                  LevelCard(level: overview.level),
+                  myRank.when(
+                    loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+                    error: (err, st) => Text('Не удалось загрузить очки: $err', style: ProfileTypography.body(context)),
+                    data: (summary) => PointsCard(points: summary.points),
+                  ),
                   const SizedBox(height: 24),
                   _SectionHeader(title: 'Достижения', onSeeAll: () {}),
                   const SizedBox(height: 12),
