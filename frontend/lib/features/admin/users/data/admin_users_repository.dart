@@ -146,6 +146,16 @@ class AdminUsersRepository {
     );
   }
 
+  /// One ad-hoc push straight to this user's device (§ individual push,
+  /// 2026-08-30) — not saved as message history anywhere. Returns whether
+  /// at least one of their devices was actually delivered to (they may have
+  /// no push token registered at all, in which case this is still a
+  /// successful call, just nothing arrived).
+  Future<bool> notifyUser(String id, String message) async {
+    final res = await _api.post('$_base/${Uri.encodeComponent(id)}/notify', body: {'message': message});
+    return res['delivered'] as bool;
+  }
+
   Future<List<LoginEventRow>> loginHistory(String id) async {
     final res = await _api.get('$_base/${Uri.encodeComponent(id)}/logins');
     return (res['logins'] as List<dynamic>)

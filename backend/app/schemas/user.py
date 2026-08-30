@@ -40,6 +40,23 @@ class ResetPasswordRequest(BaseModel):
     newPassword: str = Field(min_length=6)
 
 
+class NotifyUserRequest(BaseModel):
+    """One ad-hoc push message an admin sends straight to one user (§
+    individual push, 2026-08-30) — deliberately not persisted as a
+    Notification row (no message history), unlike the broadcast
+    notifications send_notification() records."""
+
+    message: str = Field(min_length=1, max_length=500)
+
+    @field_validator("message")
+    @classmethod
+    def _trim(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Сообщение не может быть пустым")
+        return v
+
+
 class ChangePasswordRequest(BaseModel):
     """Self-service password change — unlike ResetPasswordRequest (admin
     resetting someone else's password, no proof of identity needed beyond

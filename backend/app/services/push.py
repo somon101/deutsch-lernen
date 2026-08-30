@@ -203,6 +203,42 @@ async def send_notification(
     return _notification_dto(record)
 
 
+async def send_push_to_user(db: AsyncSession, *, user_id: str, title: str, body: str, deep_link: str | None = None) -> bool:
+    """An ad-hoc push straight to one user's registered device(s), with NO
+    Notification row written (§ individual push, 2026-08-30) — for one-off
+    messages (an admin messaging one user, a system task-completion alert)
+    that were never meant to be part of the broadcast notification history
+    send_notification() keeps. Reuses the exact same FCM delivery path
+    (_get_fcm_access_token/_send_to_token) as send_notification; only who
+    it's sent to and whether it's recorded differ — deliberately generic on
+    `user_id`/`title`/`body`/`deep_link` so any future individual-push
+    scenario is just another call to this same function, not a new
+    mechanism.
+
+    Returns True if at least one of the user's devices was delivered to
+    (False on no push config, no registered device, or every send failing)
+    — never raises, same "a push failure must never break the caller"
+    contract as send_notification."""
+    if not settings.push_enabled:
+        return False
+    tokens = (await db.execute(select(PushToken.token).where(PushToken.userId == user_id))).scalars().all()
+    if not tokens:
+        return False
+    try:
+        access_token = await _get_fcm_access_token()
+        if not access_token:
+            return False
+        delivered = False
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            for device_token in tokens:
+                ok = await _send_to_token(client, access_token, device_token, title, body, deep_link)
+                delivered = delivered or ok
+        return delivered
+    except Exception as exc:  # noqa: BLE001 — a push failure must never bubble up
+        print(f"Push: send_push_to_user failed: {exc!r}")
+        return False
+
+
 async def notify_lesson_created(db: AsyncSession, *, course_id: str, course_title: str, lesson_id: str, lesson_title: str, created_by_id: str | None) -> dict:
     """The one event wired up today — called either automatically (from
     courses.create_lesson, gated on the settings toggle) or via the admin's

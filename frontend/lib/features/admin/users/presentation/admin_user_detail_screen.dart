@@ -88,6 +88,8 @@ class AdminUserDetailScreen extends ConsumerWidget {
                   children: [
                     _ProfileCard(userId: userId, user: d.user, isSelf: isSelf),
                     const SizedBox(height: 20),
+                    _SendMessageCard(userId: userId),
+                    const SizedBox(height: 20),
                     _ResetPasswordCard(userId: userId),
                     const SizedBox(height: 20),
                     _SectionCard(
@@ -607,6 +609,84 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One-off individual push message (§ individual push, 2026-08-30) — sent
+/// immediately through the existing push mechanism, straight to this one
+/// user, never saved anywhere (no message history/chat).
+class _SendMessageCard extends ConsumerStatefulWidget {
+  const _SendMessageCard({required this.userId});
+  final String userId;
+
+  @override
+  ConsumerState<_SendMessageCard> createState() => _SendMessageCardState();
+}
+
+class _SendMessageCardState extends ConsumerState<_SendMessageCard> {
+  final _message = TextEditingController();
+  bool _busy = false;
+  String? _feedback;
+  bool _ok = false;
+
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _busy = true;
+      _feedback = null;
+    });
+    try {
+      final delivered = await ref.read(adminUsersRepositoryProvider).notifyUser(widget.userId, _message.text.trim());
+      _message.clear();
+      setState(() {
+        _feedback = delivered ? 'Отправлено' : 'Отправлено, но у пользователя нет активных устройств для push-уведомлений';
+        _ok = delivered;
+      });
+    } catch (e) {
+      setState(() {
+        _feedback = adminErrorMessage(e, 'Не удалось отправить сообщение');
+        _ok = false;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return _SectionCard(
+      title: 'Сообщение',
+      subtitle: 'Придёт пользователю обычным push-уведомлением. Никуда не сохраняется.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _Field(label: 'Текст сообщения', controller: _message),
+          if (_feedback != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: _ok ? c.successSoft : c.dangerSoft,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(_feedback!, style: TextStyle(fontSize: 14.5, color: _ok ? c.success : c.danger)),
+            ),
+          ],
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _busy ? null : _submit,
+            child: Text(_busy ? 'Отправляем…' : 'Отправить'),
+          ),
+        ],
       ),
     );
   }

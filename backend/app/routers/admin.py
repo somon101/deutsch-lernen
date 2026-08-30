@@ -12,8 +12,9 @@ from app.models.login_event import LoginEvent
 from app.models.user import User
 from app.models.vocabulary_item import VocabularyItem
 from app.schemas.content import ContentPayload
-from app.schemas.user import CreateUserRequest, ResetPasswordRequest, UpdateUserRequest
+from app.schemas.user import CreateUserRequest, NotifyUserRequest, ResetPasswordRequest, UpdateUserRequest
 from app.services import courses as courses_svc
+from app.services import push as push_svc
 from app.services.content import DuplicateWordError, get_lesson_content, normalize_word, save_lesson_content, set_legacy_lesson_media
 from app.services.progress import get_progress_summary_for_user
 from app.services.public_id import generate_public_id
@@ -114,6 +115,23 @@ async def update_user(
         raise ApiError(409, await conflict_message(db, changes.get("email"), username_lower, user_id))
     await db.refresh(target)
     return {"user": with_online_status(target)}
+
+
+@router.post("/users/{user_id}/notify")
+async def notify_user(
+    user_id: str,
+    body: NotifyUserRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sends the admin's message straight to this user's device as a normal
+    push (§ individual push, 2026-08-30) — not saved anywhere, per the
+    requirement that this stays a one-off message, not a message history."""
+    target = await db.get(User, user_id)
+    if not target:
+        raise ApiError(404, "Пользователь не найден")
+    delivered = await push_svc.send_push_to_user(db, user_id=user_id, title="Сообщение от администратора", body=body.message)
+    return {"delivered": delivered}
 
 
 @router.post("/users/{user_id}/reset-password")
