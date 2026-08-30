@@ -10,6 +10,7 @@ import '../../../core/auth/user.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/back_guard.dart';
 import '../../leaderboard/data/leaderboard_repository.dart';
+import '../../social/data/social_repository.dart';
 import '../data/profile_gamification_repository.dart';
 import '../data/profile_repository.dart';
 import 'profile_tokens.dart';
@@ -95,6 +96,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final streakDays = ref.watch(streakDaysProvider);
     final weekActivity = ref.watch(weekActivityProvider);
     final myRank = ref.watch(myRankProvider);
+    final myFollowStats = ref.watch(userProfileProvider(user.id));
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
@@ -132,11 +134,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     onExpandedChanged: (expanded) => setState(() => _avatarExpanded = expanded),
                   ),
                   const SizedBox(height: 20),
-                  StatRow(items: [
-                    StatRowItem(value: '${overview.social.followers}', label: 'Подписчики'),
-                    StatRowItem(value: '${overview.social.mutual}', label: 'Взаимные'),
-                    StatRowItem(value: '${overview.social.following}', label: 'Подписки'),
-                  ]),
+                  myFollowStats.when(
+                    loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+                    error: (err, st) => Text('Не удалось загрузить подписки: $err', style: ProfileTypography.body(context)),
+                    data: (stats) => StatRow(items: [
+                      StatRowItem(value: '${stats.followersCount}', label: 'Подписчики'),
+                      StatRowItem(value: '${stats.mutualCount}', label: 'Взаимные'),
+                      StatRowItem(value: '${stats.followingCount}', label: 'Подписки'),
+                    ]),
+                  ),
                   const SizedBox(height: 20),
                   if (overallProgress.isLoading || totalTime.isLoading || streakDays.isLoading || myRank.isLoading)
                     const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))

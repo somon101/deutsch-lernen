@@ -183,6 +183,20 @@ model DailyActivity {
   @@unique([userId, activityType, activityDate])
 }
 
+// One directed follow edge per row (§ subscriptions, 2026-08-30).
+// Follower/following/mutual counts are always computed fresh from this
+// table, never stored redundantly, same convention progress/time/streak/
+// points already use.
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
 // ---------------------------------------------------------------------------
 // Admin-editable course content.
 //
