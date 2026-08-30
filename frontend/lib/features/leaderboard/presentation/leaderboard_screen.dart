@@ -38,7 +38,12 @@ class LeaderboardScreen extends ConsumerWidget {
                 itemCount: board.entries.length,
                 itemBuilder: (context, i) {
                   final entry = board.entries[i];
-                  return _LeaderboardRow(entry: entry, isMe: entry.userId == me?.id);
+                  // A stable per-user key (not just position) — without it
+                  // Flutter can reuse a row's Element/image state across
+                  // refreshes when the list is rebuilt, which visibly swaps
+                  // avatars between users while a new image is still
+                  // loading.
+                  return _LeaderboardRow(key: ValueKey(entry.userId), entry: entry, isMe: entry.userId == me?.id);
                 },
               ),
             );
@@ -50,7 +55,7 @@ class LeaderboardScreen extends ConsumerWidget {
 }
 
 class _LeaderboardRow extends StatelessWidget {
-  const _LeaderboardRow({required this.entry, required this.isMe});
+  const _LeaderboardRow({super.key, required this.entry, required this.isMe});
   final LeaderboardEntry entry;
   final bool isMe;
 
