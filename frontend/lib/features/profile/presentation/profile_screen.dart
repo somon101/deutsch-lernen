@@ -9,6 +9,7 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/back_guard.dart';
+import '../../leaderboard/data/leaderboard_repository.dart';
 import '../data/profile_gamification_repository.dart';
 import '../data/profile_repository.dart';
 import 'profile_tokens.dart';
@@ -93,6 +94,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final totalTime = ref.watch(totalTimeSecondsProvider);
     final streakDays = ref.watch(streakDaysProvider);
     final weekActivity = ref.watch(weekActivityProvider);
+    final myRank = ref.watch(myRankProvider);
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
 
@@ -165,7 +167,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  RankCard(rank: overview.rank),
+                  myRank.when(
+                    loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
+                    error: (err, st) => Text('Не удалось загрузить рейтинг: $err', style: ProfileTypography.body(context)),
+                    data: (summary) => RankCard(summary: summary),
+                  ),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   weekActivity.when(
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),

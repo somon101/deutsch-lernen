@@ -22,6 +22,7 @@ import 'features/admin/users/presentation/admin_users_screen.dart';
 import 'features/auth/presentation/forbidden_screen.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'features/leaderboard/presentation/leaderboard_screen.dart';
 import 'features/lesson_runner/presentation/lesson_runner_screen.dart';
 import 'features/profile/presentation/profile_qr_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
@@ -84,6 +85,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/leaderboard', builder: (context, state) => const LeaderboardScreen()),
           GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
           GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
         ],

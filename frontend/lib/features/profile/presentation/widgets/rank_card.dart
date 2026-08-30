@@ -1,17 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../data/profile_gamification_repository.dart';
+import '../../../leaderboard/data/leaderboard_repository.dart';
 import '../profile_tokens.dart';
 import 'profile_card.dart';
 
+/// Real data (§ rating system, 2026-08-30) — global points rank, independent
+/// of whichever language is selected for progress/time or shown on
+/// Главное. `summary.weeklyChange` is null when there's no meaningful
+/// "7 days ago" rank to compare yet, rendered as no badge at all rather
+/// than a fabricated number.
 class RankCard extends StatelessWidget {
-  const RankCard({super.key, required this.rank});
+  const RankCard({super.key, required this.summary});
 
-  final RankInfo rank;
+  final MyRankSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
+    final topPercent = summary.totalParticipants > 0
+        ? (summary.rank / summary.totalParticipants * 100).ceil().clamp(1, 100)
+        : 100;
+    final change = summary.weeklyChange;
+
     final header = Row(
       children: [
         Container(
@@ -27,10 +37,20 @@ class RankCard extends StatelessWidget {
             children: [
               Text('Ваш рейтинг', style: ProfileTypography.caption(context)),
               const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text('#${rank.place}', maxLines: 1, style: ProfileTypography.bigNumber(context)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text('#${summary.rank}', maxLines: 1, style: ProfileTypography.bigNumber(context)),
+                  ),
+                  if (change != null && change != 0) ...[
+                    const SizedBox(width: 8),
+                    Icon(change > 0 ? Icons.arrow_upward : Icons.arrow_downward, size: 14, color: change > 0 ? c.success : c.danger),
+                    Text('${change.abs()}', style: ProfileTypography.caption(context).copyWith(color: change > 0 ? c.success : c.danger)),
+                  ],
+                ],
               ),
             ],
           ),
@@ -56,8 +76,8 @@ class RankCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _RankFact(value: 'Топ ${rank.topPercent}%', label: rank.periodLabel, alignEnd: false),
-                    _RankFact(value: 'из ${rank.totalStudents}', label: 'Среди всех студентов', alignEnd: true),
+                    _RankFact(value: 'Топ $topPercent%', label: 'Глобально', alignEnd: false),
+                    _RankFact(value: 'из ${summary.totalParticipants}', label: 'Среди всех студентов', alignEnd: true),
                   ],
                 ),
               ],
@@ -67,9 +87,9 @@ class RankCard extends StatelessWidget {
             children: [
               Expanded(child: header),
               const SizedBox(width: 12),
-              _RankFact(value: 'Топ ${rank.topPercent}%', label: rank.periodLabel, alignEnd: true),
+              _RankFact(value: 'Топ $topPercent%', label: 'Глобально', alignEnd: true),
               const SizedBox(width: 20),
-              _RankFact(value: 'из ${rank.totalStudents}', label: 'Среди всех студентов', alignEnd: true),
+              _RankFact(value: 'из ${summary.totalParticipants}', label: 'Среди всех студентов', alignEnd: true),
             ],
           );
         },
