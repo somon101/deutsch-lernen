@@ -84,8 +84,8 @@ class CoursesRepository {
   /// BuilderCourseSummary/BuilderCourseDetail don't need toJson just for
   /// this. The parsed fetch methods above are unchanged and still used
   /// wherever caching doesn't apply.
-  Future<Map<String, dynamic>> fetchPublishedCoursesRaw() async {
-    final res = await _api.get('/api/courses/');
+  Future<Map<String, dynamic>> fetchPublishedCoursesRaw({String? languageId}) async {
+    final res = await _api.get('/api/courses/', query: languageId == null ? null : {'languageId': languageId});
     return {'courses': res['courses']};
   }
 

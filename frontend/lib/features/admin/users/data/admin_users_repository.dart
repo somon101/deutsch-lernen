@@ -71,10 +71,14 @@ class AdminUsersRepository {
   static const _base = '/api/admin/users';
 
   Future<List<AdminUser>> listUsers() async {
+    final res = await listUsersRaw();
+    return res.map(AdminUser.fromJson).toList();
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<List<Map<String, dynamic>>> listUsersRaw() async {
     final res = await _api.get(_base);
-    return (res['users'] as List<dynamic>)
-        .map((u) => AdminUser.fromJson(u as Map<String, dynamic>))
-        .toList();
+    return (res['users'] as List<dynamic>).cast<Map<String, dynamic>>();
   }
 
   Future<AdminUser> getUser(String id) async {

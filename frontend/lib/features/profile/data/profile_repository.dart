@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
+import '../../../core/cache/cached_json.dart';
 
 /// Mirrors ProfilePage.tsx's LessonProgressSummary — the wire shape
 /// GET /api/me/progress returns per lesson the learner has attempted.
@@ -118,8 +119,14 @@ class ProfileRepository {
   /// learner can actually see/answer, so the picker never offers a language
   /// with nothing to show progress for.
   Future<List<LanguageOption>> fetchAvailableLanguages() async {
+    final raw = await fetchAvailableLanguagesRaw();
+    return raw.map(LanguageOption.fromJson).toList();
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<List<Map<String, dynamic>>> fetchAvailableLanguagesRaw() async {
     final res = await _api.get('/api/languages', query: {'withCourses': true});
-    return (res['languages'] as List<dynamic>).map((l) => LanguageOption.fromJson(l as Map<String, dynamic>)).toList();
+    return (res['languages'] as List<dynamic>).cast<Map<String, dynamic>>();
   }
 
   Future<AppUser> setSelectedLanguage(String? languageId) async {
@@ -131,29 +138,49 @@ class ProfileRepository {
   /// to one language's own courses/levels — independent of every other
   /// language's progress.
   Future<int> fetchOverallProgressPercent(String languageId) async {
-    final res = await _api.get('/api/me/progress/overall', query: {'languageId': languageId});
+    final res = await fetchOverallProgressRaw(languageId);
     return (res['progress'] as Map<String, dynamic>)['percent'] as int;
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<Map<String, dynamic>> fetchOverallProgressRaw(String languageId) {
+    return _api.get('/api/me/progress/overall', query: {'languageId': languageId});
   }
 
   /// Total time spent (§ time tracking, 2026-08-29), scoped to one
   /// language's own lessons — independent of every other language's time,
   /// same isolation as fetchOverallProgressPercent above.
   Future<int> fetchTotalTimeSeconds(String languageId) async {
-    final res = await _api.get('/api/me/time/overall', query: {'languageId': languageId});
+    final res = await fetchTotalTimeRaw(languageId);
     return res['seconds'] as int;
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<Map<String, dynamic>> fetchTotalTimeRaw(String languageId) {
+    return _api.get('/api/me/time/overall', query: {'languageId': languageId});
   }
 
   /// Consecutive calendar days with a qualifying activity (§ streak mode,
   /// 2026-08-29) — deliberately global across every language the learner
   /// studies, not scoped to any one of them.
   Future<int> fetchStreakDays() async {
-    final res = await _api.get('/api/me/streak');
+    final res = await fetchStreakDaysRaw();
     return res['days'] as int;
   }
 
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<Map<String, dynamic>> fetchStreakDaysRaw() {
+    return _api.get('/api/me/streak');
+  }
+
   Future<WeekActivitySummary> fetchWeekActivity() async {
-    final res = await _api.get('/api/me/activity/week');
+    final res = await fetchWeekActivityRaw();
     return WeekActivitySummary.fromJson(res);
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<Map<String, dynamic>> fetchWeekActivityRaw() {
+    return _api.get('/api/me/activity/week');
   }
 }
 
@@ -217,8 +244,18 @@ class EffectiveLanguage {
 /// Settings language picker, the profile-progress language, and (§ Home
 /// lesson list, 2026-08-29) the independent "which language's lessons am I
 /// browsing" switcher on the Главное screen. One fetch, three unrelated uses.
-final availableLanguagesProvider = FutureProvider.autoDispose<List<LanguageOption>>((ref) {
-  return ref.watch(profileRepositoryProvider).fetchAvailableLanguages();
+///
+/// Cached (caching plan, 2026-08-29 — extended to profile screens): shows
+/// the last-known list instantly, then silently swaps in fresh data only if
+/// something actually changed.
+final availableLanguagesProvider = StreamProvider.autoDispose<List<LanguageOption>>((ref) async* {
+  final repo = ref.watch(profileRepositoryProvider);
+  await for (final raw in cachedJsonStream(
+    key: 'available_languages',
+    fetchFresh: () async => {'languages': await repo.fetchAvailableLanguagesRaw()},
+  )) {
+    yield (raw['languages'] as List<dynamic>).map((l) => LanguageOption.fromJson(l as Map<String, dynamic>)).toList();
+  }
 });
 
 final effectiveLanguageProvider = FutureProvider.autoDispose<EffectiveLanguage>((ref) async {
@@ -232,33 +269,56 @@ final effectiveLanguageProvider = FutureProvider.autoDispose<EffectiveLanguage>(
 /// language is in effect yet (more than one language exists and the user
 /// hasn't picked one), which the UI renders the same way it already does
 /// for "no data yet" (a dash, not 0%).
-final overallProgressProvider = FutureProvider.autoDispose<int?>((ref) async {
+///
+/// Cached (caching plan, 2026-08-29 — extended to profile screens), keyed
+/// per language so switching the profile's selected language never shows
+/// the wrong language's cached number even for an instant.
+final overallProgressProvider = StreamProvider.autoDispose<int?>((ref) async* {
   final effective = await ref.watch(effectiveLanguageProvider.future);
   final languageId = effective.selectedId;
-  if (languageId == null) return null;
-  return ref.watch(profileRepositoryProvider).fetchOverallProgressPercent(languageId);
+  if (languageId == null) {
+    yield null;
+    return;
+  }
+  final repo = ref.watch(profileRepositoryProvider);
+  await for (final raw in cachedJsonStream(key: 'progress_overall_$languageId', fetchFresh: () => repo.fetchOverallProgressRaw(languageId))) {
+    yield (raw['progress'] as Map<String, dynamic>)['percent'] as int;
+  }
 });
 
 /// The single number the profile's "Время" tile shows (§ time tracking,
 /// 2026-08-29) — same selected-language source as overallProgressProvider,
 /// deliberately NOT the Главное screen's own independent language switcher
 /// (see homeLanguageIdProvider's doc comment for why those two must never
-/// affect each other).
-final totalTimeSecondsProvider = FutureProvider.autoDispose<int?>((ref) async {
+/// affect each other). Cached the same way, per language.
+final totalTimeSecondsProvider = StreamProvider.autoDispose<int?>((ref) async* {
   final effective = await ref.watch(effectiveLanguageProvider.future);
   final languageId = effective.selectedId;
-  if (languageId == null) return null;
-  return ref.watch(profileRepositoryProvider).fetchTotalTimeSeconds(languageId);
+  if (languageId == null) {
+    yield null;
+    return;
+  }
+  final repo = ref.watch(profileRepositoryProvider);
+  await for (final raw in cachedJsonStream(key: 'time_overall_$languageId', fetchFresh: () => repo.fetchTotalTimeRaw(languageId))) {
+    yield raw['seconds'] as int;
+  }
 });
 
 /// The profile's "Серия" tile (§ streak mode, 2026-08-29) — global, so
 /// switching the Главное screen's language or the profile's progress
-/// language never changes it.
-final streakDaysProvider = FutureProvider.autoDispose<int>((ref) {
-  return ref.watch(profileRepositoryProvider).fetchStreakDays();
+/// language never changes it. Cached (caching plan, 2026-08-29).
+final streakDaysProvider = StreamProvider.autoDispose<int>((ref) async* {
+  final repo = ref.watch(profileRepositoryProvider);
+  await for (final raw in cachedJsonStream(key: 'streak_days', fetchFresh: () => repo.fetchStreakDaysRaw())) {
+    yield raw['days'] as int;
+  }
 });
 
 /// The "Активность за неделю" card's data (§ streak mode, 2026-08-29).
-final weekActivityProvider = FutureProvider.autoDispose<WeekActivitySummary>((ref) {
-  return ref.watch(profileRepositoryProvider).fetchWeekActivity();
+/// Cached (caching plan, 2026-08-29).
+final weekActivityProvider = StreamProvider.autoDispose<WeekActivitySummary>((ref) async* {
+  final repo = ref.watch(profileRepositoryProvider);
+  await for (final raw in cachedJsonStream(key: 'week_activity', fetchFresh: () => repo.fetchWeekActivityRaw())) {
+    yield WeekActivitySummary.fromJson(raw);
+  }
 });

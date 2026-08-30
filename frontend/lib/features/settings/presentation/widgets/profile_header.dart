@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
@@ -41,7 +42,9 @@ class ProfileHeader extends StatelessWidget {
                 CircleAvatar(
                   radius: size / 2,
                   backgroundColor: c.card,
-                  backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+                  // Disk-persisted (caching plan, 2026-08-29) — shows the
+                  // last-downloaded avatar instantly, even offline.
+                  backgroundImage: avatarUrl.isNotEmpty ? CachedNetworkImageProvider(avatarUrl) : null,
                   child: avatarUrl.isEmpty
                       ? Text(user.firstName.isNotEmpty ? user.firstName[0].toUpperCase() : '?', style: ProfileTypography.username(context))
                       : null,

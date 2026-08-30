@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -104,6 +105,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (confirmed ?? false) {
       await CacheStore.instance.clearAll();
+      // Avatar images (caching plan, 2026-08-29) live in a separate,
+      // package-managed disk cache — clearing "the cache" should mean all
+      // of it, not just the JSON half.
+      await DefaultCacheManager().emptyCache();
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.clearCacheDone)));
     }
   }

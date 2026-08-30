@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -235,12 +236,16 @@ class _AvatarCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     if (avatarUrl.isEmpty) return _placeholder(context);
     return ClipOval(
-      child: Image.network(
-        avatarUrl,
+      child: CachedNetworkImage(
+        imageUrl: avatarUrl,
         width: size,
         height: size,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
+        // Shows the last-downloaded copy from disk instantly, even offline
+        // (caching plan, 2026-08-29) — Image.network only ever cached in
+        // memory, gone the moment the app restarted.
+        placeholder: (context, url) => _placeholder(context),
+        errorWidget: (context, url, error) {
           WidgetsBinding.instance.addPostFrameCallback((_) => onError());
           return _placeholder(context);
         },
@@ -380,10 +385,11 @@ class _ExpandedBanner extends ConsumerWidget {
             children: [
               Hero(
                 tag: heroTag,
-                child: Image.network(
-                  avatarUrl,
+                child: CachedNetworkImage(
+                  imageUrl: avatarUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
+                  placeholder: (context, url) => ColoredBox(color: c.card),
+                  errorWidget: (context, url, error) {
                     WidgetsBinding.instance.addPostFrameCallback((_) => onImageError());
                     return ColoredBox(color: c.card);
                   },
@@ -562,7 +568,7 @@ class _FullscreenAvatarViewState extends State<_FullscreenAvatarView> {
                     child: InteractiveViewer(
                       minScale: 1,
                       maxScale: 4,
-                      child: Image.network(widget.imageUrl, fit: BoxFit.contain),
+                      child: CachedNetworkImage(imageUrl: widget.imageUrl, fit: BoxFit.contain),
                     ),
                   ),
                 ),

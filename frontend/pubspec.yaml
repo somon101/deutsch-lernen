@@ -67,6 +67,13 @@ dependencies:
   # required bootstrap dependency any Firebase plugin needs.
   firebase_core: ^3.10.1
   firebase_messaging: ^15.2.1
+  # Disk-persisted avatar images (caching plan, 2026-08-29) — shows the
+  # last-downloaded avatar instantly, even offline, instead of Image.network's
+  # in-memory-only cache that's gone the moment the app restarts.
+  cached_network_image: ^3.4.1
+  # cached_network_image's own disk cache manager — a direct dependency
+  # because Settings' "Очистить кэш" clears it explicitly (DefaultCacheManager).
+  flutter_cache_manager: ^3.4.1
 
 dev_dependencies:
   flutter_test:

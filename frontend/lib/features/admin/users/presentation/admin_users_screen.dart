@@ -3,15 +3,29 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/auth/user.dart';
+import '../../../../core/cache/cached_json.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/status_pill.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/admin_users_repository.dart';
 
-final adminUsersListProvider = FutureProvider.autoDispose<List<AdminUser>>(
-  (ref) => ref.watch(adminUsersRepositoryProvider).listUsers(),
-);
+/// Cached (caching plan, 2026-08-29 — extended to admin/profile screens):
+/// shows the last-known list instantly, then silently swaps in fresh data
+/// only if something actually changed. A block/create/reset action still
+/// calls ref.invalidate(adminUsersListProvider) same as before — the only
+/// visible difference is the stream briefly re-yields the (now stale)
+/// cached list before the fresh one arrives, rather than a blank loading
+/// spinner.
+final adminUsersListProvider = StreamProvider.autoDispose<List<AdminUser>>((ref) async* {
+  final repo = ref.watch(adminUsersRepositoryProvider);
+  await for (final raw in cachedJsonStream(
+    key: 'admin_users_list',
+    fetchFresh: () async => {'users': await repo.listUsersRaw()},
+  )) {
+    yield (raw['users'] as List<dynamic>).map((u) => AdminUser.fromJson(u as Map<String, dynamic>)).toList();
+  }
+});
 
 /// "19.08.2026, 14:32" — mirrors src/lib/formatDate.ts's formatDateTime.
 String _formatDateTime(String iso) {
