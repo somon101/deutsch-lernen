@@ -17,9 +17,15 @@ class RankCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
-    final topPercent = summary.totalParticipants > 0
-        ? (summary.rank / summary.totalParticipants * 100).ceil().clamp(1, 100)
-        : 100;
+    // Rank 1 always reads as "Топ 1%" — the single best position shouldn't
+    // show a worse-looking number just because the pool is still small
+    // (e.g. 1st of 8 is mathematically the "top 13%", which reads as wrong
+    // even though it's technically accurate).
+    final topPercent = summary.rank <= 1
+        ? 1
+        : summary.totalParticipants > 0
+            ? (summary.rank / summary.totalParticipants * 100).ceil().clamp(1, 100)
+            : 100;
     final change = summary.weeklyChange;
 
     final header = Row(
