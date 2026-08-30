@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -92,7 +91,14 @@ class _LeaderboardRow extends StatelessWidget {
           CircleAvatar(
             radius: 18,
             backgroundColor: c.accentSoft,
-            backgroundImage: entry.avatarUrl != null && entry.avatarUrl!.isNotEmpty ? CachedNetworkImageProvider(entry.avatarUrl!) : null,
+            // Plain NetworkImage on purpose here, not CachedNetworkImage —
+            // offline caching was only ever asked for the signed-in user's
+            // own avatar (shown alone, never in a list); showing many
+            // different users' avatars together is exactly the case where
+            // that package's web image-identity handling proved unreliable
+            // (avatars visibly swapping between rows after leaving and
+            // returning to this screen).
+            backgroundImage: entry.avatarUrl != null && entry.avatarUrl!.isNotEmpty ? NetworkImage(entry.avatarUrl!) : null,
             child: entry.avatarUrl == null || entry.avatarUrl!.isEmpty
                 ? Text(initials, style: ProfileTypography.caption(context).copyWith(fontWeight: FontWeight.w700))
                 : null,
