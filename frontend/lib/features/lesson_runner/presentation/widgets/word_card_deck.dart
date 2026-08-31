@@ -103,7 +103,14 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
   static const _duration = Duration(milliseconds: 420);
   static const _curve = Cubic(0.2, 0.85, 0.25, 1);
   static const _nextThresholdPx = 90.0;
+  // Decision threshold — how far a release must have dragged to COMMIT
+  // backward at all. Distinct from _prevTravelPx below (how far the
+  // incoming-card animation visually travels once committed) — conflating
+  // the two was the original bug: the commit animation used to jump the
+  // whole 1.15x deck-height offscreen in one frame instead of animating
+  // through this same travel distance, so it never visibly played.
   static const _prevThresholdPx = 70.0;
+  static const _prevTravelPx = 170.0;
   static const _velocityThreshold = 700.0; // logical px/s, matches the prototype's flick threshold
 
   late final AnimationController _controller;
@@ -170,11 +177,14 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
 
   Future<void> _commitPrev() async {
     if (_index <= 0) return;
-    // The card returning slides in from above — approach it from an
-    // offscreen-above starting offset rather than from wherever a keyboard
-    // press left _dragDy (which is 0), so it always visibly "arrives".
-    setState(() => _dragDy = -_deckHeight * 1.15);
-    await _animateDragTo(0);
+    // Animates _dragDy from wherever it is (a live drag release, or 0 for a
+    // keyboard press) up to _prevTravelPx — the same distance
+    // _positionedCard's/_incomingPrevCard's own `t = dragDy / _prevTravelPx`
+    // math already uses, so the incoming card visibly plays through the
+    // whole arrival animation instead of only the fraction the drag itself
+    // covered.
+    setState(() => _dragDir = 1);
+    await _animateDragTo(_prevTravelPx);
     if (!mounted) return;
     setState(() {
       _index--;
@@ -291,40 +301,54 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
     // Only the visible cards plus one buffer beyond the stack depth this
     // deck ever shows (§ performance — never build all of a long deck).
     final visibleCount = math.min(widget.words.length - _index, 5);
+    final showIncomingPrev = _dragDir == 1 && _index > 0;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         for (var k = visibleCount - 1; k >= 0; k--) _positionedCard(context, width, k),
+        if (showIncomingPrev) Positioned.fill(child: _incomingPrevCard(width, widget.words[_index - 1])),
       ],
     );
   }
 
-  /// The done screen, plus — while the learner is mid-drag pulling the
-  /// previous card back down over it — that last word card sliding in on
-  /// top, exactly like any other backward transition.
+  /// The done screen, plus — while the learner is mid-drag/mid-commit
+  /// pulling the previous card back down over it — that last word card
+  /// sliding in on top, exactly like any other backward transition (same
+  /// [_incomingPrevCard] the normal in-deck case uses, not a second,
+  /// divergent implementation of the same effect).
   Widget _buildDoneWithPeek(BuildContext context, double width) {
-    final pulling = _dragDir == 1 && _dragDy > 0;
+    final pulling = _dragDir == 1 && widget.words.isNotEmpty;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         _DoneScreen(onContinue: widget.onComplete),
-        if (pulling && widget.words.isNotEmpty)
-          Positioned.fill(
-            child: Transform.translate(
-              offset: Offset(0, -_deckHeight * 1.15 * (1 - (_dragDy / _prevThresholdPx).clamp(0, 1))),
-              child: Opacity(
-                opacity: (_dragDy / _prevThresholdPx).clamp(0.0, 1.0),
-                child: _WordCardFace(
-                  card: widget.words.last,
-                  width: width,
-                  imageUrl: _resolvedImage(widget.words.last),
-                  playing: false,
-                  onPlayAudio: () {},
-                ),
-              ),
+        if (pulling) Positioned.fill(child: _incomingPrevCard(width, widget.words.last)),
+      ],
+    );
+  }
+
+  /// The previous card sliding in from above as the learner drags/commits
+  /// backward — `t` is 0 at the start of the gesture/commit and 1 once
+  /// fully arrived, driving translateY/scale/rotation/opacity together the
+  /// same way the prototype's own "prev" transition does.
+  Widget _incomingPrevCard(double width, WordDeckCard card) {
+    final t = (_dragDy / _prevTravelPx).clamp(0.0, 1.0);
+    return IgnorePointer(
+      child: Transform.translate(
+        offset: Offset(0, -_deckHeight * 1.15 * (1 - t)),
+        child: Transform.scale(
+          scale: 0.9 + t * 0.1,
+          alignment: const Alignment(0, 0.8),
+          child: Transform.rotate(
+            angle: -3 * (1 - t) * math.pi / 180,
+            alignment: const Alignment(0, 0.8),
+            child: Opacity(
+              opacity: t,
+              child: _WordCardFace(card: card, width: width, imageUrl: _resolvedImage(card), playing: false, onPlayAudio: () {}),
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 
@@ -350,7 +374,7 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
       scale = 1;
       opacity = 1;
     } else if (isFront && _dragDir == 1) {
-      final t = (_dragDy / 170).clamp(0.0, 1.0);
+      final t = (_dragDy / _prevTravelPx).clamp(0.0, 1.0);
       dy = -16 * t;
       scale = 1 - t * 0.05;
       opacity = 1;
@@ -540,12 +564,7 @@ class _DoneScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [_blue, _rose])),
-            child: const Icon(Icons.celebration_outlined, color: Colors.white, size: 52),
-          ),
+          Image.asset('assets/images/word_deck_done.png', width: 150, height: 150),
           const SizedBox(height: 18),
           const Text('Все слова пройдены', style: TextStyle(fontSize: 16, color: _mute)),
           const SizedBox(height: 18),
