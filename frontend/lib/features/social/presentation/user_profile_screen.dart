@@ -16,17 +16,20 @@ import '../data/social_repository.dart';
 
 /// Another user's public profile (§ subscriptions, 2026-08-30; extended §
 /// subscriptions follow-up, 2026-08-30 to show the same stats a user sees
-/// about themselves) — reached by tapping someone in the Рейтинг list or a
-/// search result. Identity + follow counts + the subscribe action, the real
-/// Серия/Прогресс/Время/Очки row, rank card and weekly activity, plus the
-/// same "Ваш уровень" card the owner's own profile shows (that card is still
-/// backed by the one shared mock value everywhere it appears, not real
-/// per-user data yet — but the owner's own profile shows it too, so leaving
-/// it out here would just be an inconsistency, not more honest).
-/// An explicit `leading` back arrow is needed on the AppBar (not just
-/// [BackGuard]'s system-back handling) since this route is reached via
-/// `context.go(...)`, which leaves nothing on the Navigator stack for
-/// Flutter's automatic back button to detect.
+/// about themselves) — reached by tapping someone in the Рейтинг list, a
+/// search result (`context.go(...)`, replaces the stack), OR now a
+/// followers/following/mutual list (`context.push(...)`, § subscriptions
+/// follow-up, 2026-08-31 — a real page stays underneath). Identity + follow
+/// counts + the subscribe action, the real Серия/Прогресс/Время/Очки row,
+/// rank card and weekly activity, plus the same "Ваш уровень" card the
+/// owner's own profile shows (that card is still backed by the one shared
+/// mock value everywhere it appears, not real per-user data yet — but the
+/// owner's own profile shows it too, so leaving it out here would just be
+/// an inconsistency, not more honest).
+///
+/// The back arrow has to handle both reach paths: pop back to the real page
+/// when there is one, or fall back to Рейтинг (matching [BackGuard]'s own
+/// fallback) when reached via `go()` and there's nothing to pop.
 class UserProfileScreen extends ConsumerWidget {
   const UserProfileScreen({super.key, required this.userId});
 
@@ -37,13 +40,23 @@ class UserProfileScreen extends ConsumerWidget {
     final c = context.profileColors;
     final profile = ref.watch(userProfileProvider(userId));
 
+    // canPop is true when this screen was pushed on top of something real
+    // (§ subscriptions follow-up, 2026-08-31 — reached from a followers/
+    // following/mutual list, itself pushed) — the visible back arrow must
+    // pop back there, not always jump to Рейтинг the way the original
+    // go()-only leaderboard tap-through needed.
+    final canPop = Navigator.of(context).canPop();
+
     return BackGuard(
       fallbackPath: '/leaderboard',
       child: Scaffold(
         backgroundColor: c.bg,
         appBar: AppBar(
           title: const Text('Профиль'),
-          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/leaderboard')),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: canPop ? () => context.pop() : () => context.go('/leaderboard'),
+          ),
         ),
         body: profile.when(
           loading: () => const Center(child: CircularProgressIndicator()),
