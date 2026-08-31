@@ -34,7 +34,32 @@ def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_a
         return {"kind": "scramble", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
     if kind == "match":
         return {"kind": "match", "prompt": prompt, "pairs": data or []}
+    if kind == "auto_blank":
+        # Admin-facing single-row view only (question_dto/list_block_questions/
+        # similarity check) — the teacher sees every phrase they entered, not
+        # a blanked/generated version (nothing is generated at authoring
+        # time). The learner-facing expansion is to_question_dtos below.
+        return {"kind": "auto_blank", "phrases": (data or {}).get("phrases", [])}
     return {"kind": "choice", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
+
+
+def to_question_dtos(question: Question, placement_id: str) -> list[dict]:
+    """Same shape to_question_dto returns, wrapped with id/placementId —
+    except an "auto_blank" question (§ auto blank, 2026-08-31) expands into
+    one lightweight placeholder entry PER PHRASE instead of one entry for
+    the whole question: the learner should see one exercise slot per phrase
+    the teacher entered (always in the same phrase order — §10/clarified in
+    conversation: phrase selection per slot is sequential, not random),
+    each resolved into an actual blanked question + options only when the
+    learner reaches it (GET /api/questions/{id}/blank/{phraseIndex}) —
+    nothing about the blank/options exists yet at content-fetch time."""
+    if question.kind == "auto_blank":
+        phrases = (question.data or {}).get("phrases", [])
+        return [
+            {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_blank", "questionId": question.id, "phraseIndex": i}
+            for i in range(len(phrases))
+        ]
+    return [{"id": question.id, "placementId": placement_id, **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data)}]
 
 
 def parse_material(material_text: str, vocabulary: list[dict]) -> dict:
@@ -109,13 +134,7 @@ async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: 
             )
         ).all()
         for placement, question in placement_rows:
-            questions_by_block.setdefault(placement.materialBlockId, []).append(
-                {
-                    "id": question.id,
-                    "placementId": placement.id,
-                    **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data),
-                }
-            )
+            questions_by_block.setdefault(placement.materialBlockId, []).extend(to_question_dtos(question, placement.id))
 
     result: dict[str, list[dict]] = {m.lessonId: [] for m in materials}
     for b in rows:
@@ -146,13 +165,7 @@ async def get_pool_questions_for_lesson_blocks(db: AsyncSession, lesson_block_id
     ).all()
     result: dict[str, list[dict]] = {}
     for placement, question in placement_rows:
-        result.setdefault(placement.lessonBlockId, []).append(
-            {
-                "id": question.id,
-                "placementId": placement.id,
-                **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data),
-            }
-        )
+        result.setdefault(placement.lessonBlockId, []).extend(to_question_dtos(question, placement.id))
     return result
 
 

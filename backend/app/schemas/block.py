@@ -170,8 +170,27 @@ class MatchQuestionInput(BaseModel):
         return v.strip() if v else ""
 
 
+class AutoBlankQuestionInput(BaseModel):
+    """Teacher saves only full sentences (§ auto blank, 2026-08-31) - no
+    blank marker, no options, no correct answer. Distinct kind from "cloze"
+    above (which already owns the "Пропущенное слово" label/mechanism, and
+    is fully author-provided) - this one lets the system pick the blanked
+    word and wrong-answer options at serve time, per learner."""
+
+    kind: Literal["auto_blank"]
+    phrases: list[str] = Field(min_length=1)
+
+    @field_validator("phrases")
+    @classmethod
+    def _trim_phrases(cls, v: list[str]) -> list[str]:
+        trimmed = [p.strip() for p in v]
+        if any(not p for p in trimmed):
+            raise ValueError("Фраза не может быть пустой")
+        return trimmed
+
+
 BlockQuestionInput = Annotated[
-    Union[ChoiceQuestionInput, TrueFalseQuestionInput, ClozeQuestionInput, ScrambleQuestionInput, MatchQuestionInput],
+    Union[ChoiceQuestionInput, TrueFalseQuestionInput, ClozeQuestionInput, ScrambleQuestionInput, MatchQuestionInput, AutoBlankQuestionInput],
     Field(discriminator="kind"),
 ]
 

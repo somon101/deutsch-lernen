@@ -10,6 +10,8 @@ row words point at, and a user's "learned" state is a bare (userId, wordId)
 link, never a copy of the word itself.
 """
 
+import random
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,3 +145,30 @@ async def get_my_words(db: AsyncSession, user_id: str) -> list[dict]:
     categories - never one query per word."""
     word_ids = (await db.execute(select(UserWordProgress.wordId).where(UserWordProgress.userId == user_id))).scalars().all()
     return await get_words(db, list(word_ids))
+
+
+async def get_random_learned_words(db: AsyncSession, user_id: str, count: int, language_id: str | None = None, exclude_text: str | None = None) -> list[dict]:
+    """Random wrong-answer candidates for an auto-generated exercise (§
+    auto blank, 2026-08-31) — up to `count` of the user's learned words,
+    same language, deduplicated by normalized text (two cards that render
+    as the same word never both become options), never including
+    `exclude_text` (the correct answer). Returns FEWER than `count` if the
+    user hasn't learned enough distinct words yet — never pads with
+    duplicates, never errors; the caller decides whether that's still
+    enough to show a valid exercise."""
+    all_words = await get_my_words(db, user_id)
+    exclude_key = normalize_word(exclude_text) if exclude_text else None
+    seen: set[str] = set()
+    candidates = []
+    for w in all_words:
+        if language_id and w["languageId"] not in (language_id, None):
+            continue
+        key = normalize_word(w["word"])
+        if exclude_key and key == exclude_key:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(w)
+    random.shuffle(candidates)
+    return candidates[:count]

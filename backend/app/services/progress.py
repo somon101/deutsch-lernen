@@ -160,11 +160,28 @@ async def _lesson_progress_scope(db: AsyncSession, lesson_id: str) -> tuple[set[
         conditions.append(QuestionPlacement.materialBlockId.in_(material_block_ids))
     if lesson_block_ids:
         conditions.append(QuestionPlacement.lessonBlockId.in_(lesson_block_ids))
-    placement_rows = (await db.execute(select(QuestionPlacement.id, QuestionPlacement.questionId).where(or_(*conditions)))).all()
+    placement_rows = (
+        await db.execute(
+            select(QuestionPlacement.id, QuestionPlacement.questionId, Question.kind, Question.data)
+            .join(Question, Question.id == QuestionPlacement.questionId)
+            .where(or_(*conditions))
+        )
+    ).all()
 
     placement_ids_by_question: dict[str, list[str]] = defaultdict(list)
-    for placement_id, question_id in placement_rows:
-        placement_ids_by_question[question_id].append(placement_id)
+    for placement_id, question_id, kind, data in placement_rows:
+        if kind == "auto_blank":
+            # One placement, N independent learner-facing phrase slots (§
+            # auto blank, 2026-08-31) - each phrase is its own denominator
+            # entry, keyed the same way to_question_dtos already keys its
+            # per-phrase DTO ids, so a 5-phrase question is worth 5 here,
+            # not 1 (see _weighted_progress_for_scope for how the shared
+            # placementId gets disambiguated back to a single phrase).
+            phrase_count = len((data or {}).get("phrases", []))
+            for i in range(phrase_count):
+                placement_ids_by_question[f"{question_id}::{i}"].append(placement_id)
+        else:
+            placement_ids_by_question[question_id].append(placement_id)
 
     quiz_question_ids = set((await db.execute(select(LessonQuestion.id).where(LessonQuestion.lessonId == lesson_id))).scalars().all())
     return quiz_question_ids, dict(placement_ids_by_question)
@@ -178,15 +195,27 @@ async def _weighted_progress_for_scope(
     answer given under a different lesson's placement of the same question
     never counts here (§ approved rule 6). Quiz questions are matched by
     `questionId` with `placementId IS NULL` (they never carry a placement,
-    since they're not reusable to begin with)."""
+    since they're not reusable to begin with).
+
+    An auto_blank Question's phrases (§ auto blank, 2026-08-31) all share
+    ONE placement, so `placement_ids_by_question` keys them as N separate
+    "{questionId}::{phraseIndex}" scoring units that all resolve to the SAME
+    placementId — the one place that's ambiguous, disambiguated below using
+    the phraseIndex every auto_blank AnswerLog.answerData already carries.
+    Every other kind still has exactly one scoring unit per placementId, so
+    this collapses back to the original direct lookup for them."""
     total = len(quiz_question_ids) + len(placement_ids_by_question)
     if total == 0:
         return {"correct": 0, "total": 0, "answered": 0, "percent": 0, "passed": False}
 
-    placement_to_question = {pid: qid for qid, pids in placement_ids_by_question.items() for pid in pids}
+    placement_to_subquestions: dict[str, list[str]] = defaultdict(list)
+    for sub_id, pids in placement_ids_by_question.items():
+        for pid in pids:
+            placement_to_subquestions[pid].append(sub_id)
+
     conditions = []
-    if placement_to_question:
-        conditions.append(AnswerLog.placementId.in_(list(placement_to_question)))
+    if placement_to_subquestions:
+        conditions.append(AnswerLog.placementId.in_(list(placement_to_subquestions)))
     if quiz_question_ids:
         conditions.append(and_(AnswerLog.questionId.in_(quiz_question_ids), AnswerLog.placementId.is_(None)))
 
@@ -196,8 +225,15 @@ async def _weighted_progress_for_scope(
             select(AnswerLog).where(AnswerLog.userId == user_id, or_(*conditions)).order_by(AnswerLog.createdAt.asc())
         )
         for log in result.scalars().all():
-            if log.placementId in placement_to_question:
-                latest_by_question[placement_to_question[log.placementId]] = log.correct
+            subs = placement_to_subquestions.get(log.placementId)
+            if subs:
+                if len(subs) == 1:
+                    latest_by_question[subs[0]] = log.correct
+                else:
+                    phrase_index = log.answerData.get("phraseIndex") if isinstance(log.answerData, dict) else None
+                    sub_id = next((s for s in subs if s.endswith(f"::{phrase_index}")), None)
+                    if sub_id is not None:
+                        latest_by_question[sub_id] = log.correct
             elif log.questionId in quiz_question_ids:
                 latest_by_question[log.questionId] = log.correct
 

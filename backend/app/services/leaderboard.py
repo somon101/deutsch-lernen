@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.answer_log import AnswerLog
 from app.models.lesson_state import LessonState
+from app.models.question import Question
 from app.models.user import User
 from app.utils import utcnow
 
@@ -38,18 +39,30 @@ _POINTS_PER_COMPLETED_LESSON = 50
 
 
 async def _points_by_user(db: AsyncSession, as_of: datetime | None = None) -> dict[str, int]:
-    answer_query = select(AnswerLog.userId, AnswerLog.placementId, AnswerLog.questionId, AnswerLog.correct).order_by(AnswerLog.createdAt.asc())
+    answer_query = select(AnswerLog.userId, AnswerLog.placementId, AnswerLog.questionId, AnswerLog.correct, AnswerLog.answerData).order_by(
+        AnswerLog.createdAt.asc()
+    )
     if as_of is not None:
         answer_query = answer_query.where(AnswerLog.createdAt <= as_of)
     answer_rows = (await db.execute(answer_query)).all()
+
+    # An auto_blank Question's phrases (§ auto blank, 2026-08-31) all share
+    # ONE placement, so `placement_id or question_id` alone would collapse
+    # every phrase of the same question into a single scoring unit - fold
+    # in the phraseIndex every auto_blank AnswerLog.answerData carries so
+    # each phrase still earns its own points, same as any other question.
+    auto_blank_ids = set((await db.execute(select(Question.id).where(Question.kind == "auto_blank"))).scalars().all())
 
     # Latest answer per (user, scoring unit) wins — same principle
     # _weighted_progress_for_scope uses per lesson, just applied globally:
     # a placement is already scoped to exactly one lesson on its own, so
     # this gives the identical count a per-lesson loop would, without one.
     latest: dict[tuple[str, str], bool] = {}
-    for user_id, placement_id, question_id, correct in answer_rows:
-        key = (user_id, placement_id or question_id)
+    for user_id, placement_id, question_id, correct, answer_data in answer_rows:
+        unit = placement_id or question_id
+        if question_id in auto_blank_ids and isinstance(answer_data, dict):
+            unit = f"{unit}::{answer_data.get('phraseIndex')}"
+        key = (user_id, unit)
         latest[key] = correct
 
     correct_counts: dict[str, int] = {}

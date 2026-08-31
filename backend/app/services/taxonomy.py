@@ -241,7 +241,16 @@ def _question_row_fields(question_input: dict) -> dict:
 async def check_similarity(db: AsyncSession, draft: dict, topic_id: str | None, material_id: str | None) -> list[dict]:
     """Returns existing questions scoring >= DUPLICATE_WARNING_THRESHOLD,
     highest first — the caller decides what to do with the warning (§29/§30),
-    this never blocks creation by itself."""
+    this never blocks creation by itself.
+
+    Skipped entirely for "auto_blank" (§ auto blank, 2026-08-31) — that
+    kind has no author-provided prompt/correctAnswer at all (both are
+    always ""), so compare_similarity's text/answer signals would compare
+    "" against every other auto_blank question's "" and read as a near-
+    perfect match regardless of what phrases either one actually holds —
+    a guaranteed false positive, not a real duplicate signal."""
+    if draft.get("kind") == "auto_blank":
+        return []
     row = _question_row_fields(draft)
     candidates = (await db.execute(select(Question))).scalars().all()
     scored = []

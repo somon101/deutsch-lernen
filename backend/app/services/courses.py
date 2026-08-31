@@ -550,7 +550,7 @@ async def search_word_library(db: AsyncSession, query: str) -> list[dict]:
     return list(by_key.values())[:20]
 
 
-async def _derive_language_id(db: AsyncSession, course_id: str) -> str | None:
+async def derive_language_id(db: AsyncSession, course_id: str) -> str | None:
     """Same "legacy = German" backfill rule the word-cards migration used
     for existing rows (§ word cards, 2026-08-31) — a new word gets a real
     languageId the same way, not left null just because it's new."""
@@ -571,7 +571,7 @@ async def add_vocabulary_word(
         raise DuplicateWordError(_clash_message(clashes))
 
     category_id = (await get_or_create_category(db, category_name)).id if category_name else None
-    language_id = await _derive_language_id(db, course_id)
+    language_id = await derive_language_id(db, course_id)
 
     last = await db.scalar(select(VocabularyItem.position).where(VocabularyItem.lessonId == lesson_id).order_by(VocabularyItem.position.desc()).limit(1))
     db.add(
@@ -908,6 +908,14 @@ def _block_question_to_row(q: dict) -> dict:
     if kind == "match":
         pairs = [{"left": p["left"], "right": p["right"]} for p in q["pairs"]]
         return {"prompt": q.get("prompt") or "", "options": [], "correctAnswer": "", "data": pairs}
+    if kind == "auto_blank":
+        # No author-provided prompt/options/correctAnswer at all (§ auto
+        # blank, 2026-08-31) - just the phrases the blank/options get
+        # generated from per-user, per-request. Stored in the existing
+        # `data` JSONB (already used for "match"'s pairs) rather than a new
+        # column or a child table.
+        phrases = [p.strip() for p in q["phrases"] if p.strip()]
+        return {"prompt": "", "options": [], "correctAnswer": "", "data": {"phrases": phrases}}
     # choice / cloze / scramble all fit prompt + options + correctAnswer as-is.
     return {"prompt": q["prompt"], "options": q["options"], "correctAnswer": q["correctAnswer"], "data": None}
 
