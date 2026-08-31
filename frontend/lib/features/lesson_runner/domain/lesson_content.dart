@@ -6,9 +6,12 @@ List<Exercise> _blockQuestions(dynamic json) => ((json as List<dynamic>?) ?? con
     .map((q) => toExercise(q, q.id!))
     .toList();
 
-/// Mirrors src/content/types.ts's VocabularyEntry.
+/// Mirrors src/content/types.ts's VocabularyEntry. `imageUrl` (§ word cards,
+/// 2026-08-31) mirrors the same field the backend's word-card DTO already
+/// sends everywhere else — was missing here specifically since this stage
+/// predates that feature.
 class VocabularyEntry {
-  const VocabularyEntry({required this.id, required this.german, required this.translation, this.pronunciation, this.audioUrl});
+  const VocabularyEntry({required this.id, required this.german, required this.translation, this.pronunciation, this.audioUrl, this.imageUrl});
 
   factory VocabularyEntry.fromJson(Map<String, dynamic> json) => VocabularyEntry(
         id: json['id'] as String,
@@ -16,6 +19,7 @@ class VocabularyEntry {
         translation: json['translation'] as String,
         pronunciation: json['pronunciation'] as String?,
         audioUrl: json['audioUrl'] as String?,
+        imageUrl: json['imageUrl'] as String?,
       );
 
   final String id;
@@ -23,6 +27,7 @@ class VocabularyEntry {
   final String translation;
   final String? pronunciation;
   final String? audioUrl;
+  final String? imageUrl;
 }
 
 /// Mirrors src/content/types.ts's LessonBlock discriminated union — one
