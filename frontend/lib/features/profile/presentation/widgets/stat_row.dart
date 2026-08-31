@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 import '../profile_tokens.dart';
 
 class StatRowItem {
-  const StatRowItem({required this.value, required this.label});
+  const StatRowItem({required this.value, required this.label, this.onTap});
   final String value;
   final String label;
+
+  /// When set (§ subscriptions follow-up, 2026-08-31), tapping this stat
+  /// opens its full list (followers/following/mutual) — null keeps a plain,
+  /// non-interactive stat exactly as before.
+  final VoidCallback? onTap;
 }
 
 /// Followers / mutual / following row — three stats separated by hairline
@@ -37,12 +42,19 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final column = Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(item.value, style: ProfileTypography.bigNumber(context)),
         const SizedBox(height: 2),
         Text(item.label, style: ProfileTypography.caption(context)),
       ],
+    );
+    if (item.onTap == null) return column;
+    return InkWell(
+      onTap: item.onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), child: column),
     );
   }
 }

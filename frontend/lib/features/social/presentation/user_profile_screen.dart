@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/back_guard.dart';
 import '../../profile/data/profile_gamification_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
@@ -66,9 +67,9 @@ class UserProfileScreen extends ConsumerWidget {
                   Text('@${p.username}', style: ProfileTypography.caption(context)),
                   const SizedBox(height: 20),
                   StatRow(items: [
-                    StatRowItem(value: '${p.followersCount}', label: 'Подписчики'),
-                    StatRowItem(value: '${p.mutualCount}', label: 'Взаимные'),
-                    StatRowItem(value: '${p.followingCount}', label: 'Подписки'),
+                    StatRowItem(value: '${p.followersCount}', label: 'Подписчики', onTap: () => context.push('/users/${p.id}/followers')),
+                    StatRowItem(value: '${p.mutualCount}', label: 'Взаимные', onTap: () => context.push('/users/${p.id}/mutual')),
+                    StatRowItem(value: '${p.followingCount}', label: 'Подписки', onTap: () => context.push('/users/${p.id}/following')),
                   ]),
                   const SizedBox(height: 20),
                   if (!p.isSelf) ...[
@@ -120,16 +121,32 @@ class _FollowButtonState extends ConsumerState<_FollowButton> {
 
   bool get _following => _optimistic ?? widget.isFollowing;
 
-  Future<void> _follow() async {
-    if (_following) return; // already following — idempotent server-side too, but no need to re-send
+  Future<void> _toggle() async {
     setState(() => _busy = true);
+    final wasFollowing = _following;
     try {
-      final updated = await ref.read(socialRepositoryProvider).followUser(widget.userId);
+      final repo = ref.read(socialRepositoryProvider);
+      final updated = wasFollowing ? await repo.unfollowUser(widget.userId) : await repo.followUser(widget.userId);
       ref.invalidate(userProfileProvider(widget.userId));
+      ref.invalidate(followListProvider((FollowListKind.followers, widget.userId)));
+      ref.invalidate(followListProvider((FollowListKind.mutual, widget.userId)));
+      // My own counts changed too — not just the target's — since this
+      // screen can now be reached via a pushed route stacked on top of my
+      // own ProfileScreen (Подписки/Подписчики/Взаимные → a list → someone's
+      // profile), which stays mounted and watching its own provider the
+      // whole time, unlike the old go()-only navigation this screen used to
+      // be reached through exclusively.
+      final myId = ref.read(authProvider).value?.id;
+      if (myId != null) {
+        ref.invalidate(userProfileProvider(myId));
+        ref.invalidate(followListProvider((FollowListKind.following, myId)));
+        ref.invalidate(followListProvider((FollowListKind.mutual, myId)));
+      }
       if (mounted) setState(() => _optimistic = updated.isFollowing);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось подписаться: $e')));
+        final action = wasFollowing ? 'отписаться' : 'подписаться';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось $action: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -138,12 +155,18 @@ class _FollowButtonState extends ConsumerState<_FollowButton> {
 
   @override
   Widget build(BuildContext context) {
+    final following = _following;
     return SizedBox(
       width: double.infinity,
-      child: FilledButton(
-        onPressed: _following || _busy ? null : _follow,
-        child: Text(_busy ? 'Подписываемся…' : (_following ? 'Подписан' : 'Подписаться')),
-      ),
+      child: following
+          ? OutlinedButton(
+              onPressed: _busy ? null : _toggle,
+              child: Text(_busy ? 'Отписываемся…' : 'Отписаться'),
+            )
+          : FilledButton(
+              onPressed: _busy ? null : _toggle,
+              child: Text(_busy ? 'Подписываемся…' : 'Подписаться'),
+            ),
     );
   }
 }

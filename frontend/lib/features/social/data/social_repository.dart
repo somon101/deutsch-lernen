@@ -98,6 +98,28 @@ class SocialRepository {
     return UserProfile.fromJson(res);
   }
 
+  /// Idempotent, mirroring followUser — unfollowing someone already not
+  /// followed just returns the current state, never an error.
+  Future<UserProfile> unfollowUser(String userId) async {
+    final res = await _api.deleteExpectingBody('/api/users/${Uri.encodeComponent(userId)}/follow');
+    return UserProfile.fromJson(res);
+  }
+
+  Future<List<UserProfile>> fetchFollowers(String userId) async {
+    final res = await _api.get('/api/users/${Uri.encodeComponent(userId)}/followers');
+    return (res['users'] as List<dynamic>).map((u) => UserProfile.fromJson(_withDefaults(u as Map<String, dynamic>))).toList();
+  }
+
+  Future<List<UserProfile>> fetchFollowing(String userId) async {
+    final res = await _api.get('/api/users/${Uri.encodeComponent(userId)}/following');
+    return (res['users'] as List<dynamic>).map((u) => UserProfile.fromJson(_withDefaults(u as Map<String, dynamic>))).toList();
+  }
+
+  Future<List<UserProfile>> fetchMutual(String userId) async {
+    final res = await _api.get('/api/users/${Uri.encodeComponent(userId)}/mutual');
+    return (res['users'] as List<dynamic>).map((u) => UserProfile.fromJson(_withDefaults(u as Map<String, dynamic>))).toList();
+  }
+
   Future<UserStats> fetchUserStats(String userId, {String? languageId}) async {
     final res = await _api.get(
       '/api/users/${Uri.encodeComponent(userId)}/stats',
@@ -140,4 +162,18 @@ final userStatsProvider = FutureProvider.autoDispose.family<UserStats, String>((
   final languages = await ref.watch(availableLanguagesProvider.future);
   final languageId = profile.selectedLanguageId ?? (languages.length == 1 ? languages.single.id : null);
   return ref.watch(socialRepositoryProvider).fetchUserStats(userId, languageId: languageId);
+});
+
+/// Which of a user's three real follow lists to show (§ subscriptions
+/// follow-up, 2026-08-31 — tapping Подписки/Подписчики/Взаимные).
+enum FollowListKind { followers, following, mutual }
+
+final followListProvider = FutureProvider.autoDispose.family<List<UserProfile>, (FollowListKind, String)>((ref, args) {
+  final (kind, userId) = args;
+  final repo = ref.watch(socialRepositoryProvider);
+  return switch (kind) {
+    FollowListKind.followers => repo.fetchFollowers(userId),
+    FollowListKind.following => repo.fetchFollowing(userId),
+    FollowListKind.mutual => repo.fetchMutual(userId),
+  };
 });

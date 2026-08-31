@@ -138,9 +138,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
                     error: (err, st) => Text('Не удалось загрузить подписки: $err', style: ProfileTypography.body(context)),
                     data: (stats) => StatRow(items: [
-                      StatRowItem(value: '${stats.followersCount}', label: 'Подписчики'),
-                      StatRowItem(value: '${stats.mutualCount}', label: 'Взаимные'),
-                      StatRowItem(value: '${stats.followingCount}', label: 'Подписки'),
+                      StatRowItem(value: '${stats.followersCount}', label: 'Подписчики', onTap: () => context.push('/users/${user.id}/followers')),
+                      StatRowItem(value: '${stats.mutualCount}', label: 'Взаимные', onTap: () => context.push('/users/${user.id}/mutual')),
+                      StatRowItem(value: '${stats.followingCount}', label: 'Подписки', onTap: () => context.push('/users/${user.id}/following')),
                     ]),
                   ),
                   const SizedBox(height: 20),

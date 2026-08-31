@@ -5,7 +5,16 @@ from app.auth.deps import require_auth
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
-from app.services.social import follow_user, get_user_profile, get_user_stats, search_users
+from app.services.social import (
+    follow_user,
+    get_user_profile,
+    get_user_stats,
+    list_followers,
+    list_following,
+    list_mutual,
+    search_users,
+    unfollow_user,
+)
 
 router = APIRouter(prefix="/api/users", tags=["social"])
 
@@ -29,6 +38,26 @@ async def get_user_profile_route(user_id: str, user: User = Depends(require_auth
 @router.post("/{user_id}/follow", status_code=201)
 async def follow_user_route(user_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     return await follow_user(db, follower_id=user.id, following_id=user_id)
+
+
+@router.delete("/{user_id}/follow")
+async def unfollow_user_route(user_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    return await unfollow_user(db, follower_id=user.id, following_id=user_id)
+
+
+@router.get("/{user_id}/followers")
+async def list_followers_route(user_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    return {"users": await list_followers(db, user_id)}
+
+
+@router.get("/{user_id}/following")
+async def list_following_route(user_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    return {"users": await list_following(db, user_id)}
+
+
+@router.get("/{user_id}/mutual")
+async def list_mutual_route(user_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    return {"users": await list_mutual(db, user_id)}
 
 
 @router.get("/{user_id}/stats")

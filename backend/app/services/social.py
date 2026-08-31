@@ -98,6 +98,44 @@ async def follow_user(db: AsyncSession, follower_id: str, following_id: str) -> 
     return await get_user_profile(db, following_id, follower_id)
 
 
+async def unfollow_user(db: AsyncSession, follower_id: str, following_id: str) -> dict:
+    """Idempotent the same way follow_user is — unfollowing someone already
+    not followed just returns the current state, not an error. Mutual-ness
+    on both sides updates itself automatically: get_follow_counts always
+    recomputes fresh from the Follow table, so there's nothing else to
+    update once this row is gone."""
+    if follower_id == following_id:
+        raise ApiError(400, "Нельзя отписаться от самого себя")
+    target = await db.get(User, following_id)
+    if not target:
+        raise ApiError(404, "Пользователь не найден")
+
+    row = (
+        await db.execute(select(Follow).where(Follow.followerId == follower_id, Follow.followingId == following_id))
+    ).scalar_one_or_none()
+    if row:
+        await db.delete(row)
+        await db.commit()
+
+    return await get_user_profile(db, following_id, follower_id)
+
+
+async def list_followers(db: AsyncSession, user_id: str) -> list[dict]:
+    stmt = select(User).join(Follow, Follow.followerId == User.id).where(Follow.followingId == user_id)
+    return [_public_user_dto(u) for u in (await db.execute(stmt)).scalars().all()]
+
+
+async def list_following(db: AsyncSession, user_id: str) -> list[dict]:
+    stmt = select(User).join(Follow, Follow.followingId == User.id).where(Follow.followerId == user_id)
+    return [_public_user_dto(u) for u in (await db.execute(stmt)).scalars().all()]
+
+
+async def list_mutual(db: AsyncSession, user_id: str) -> list[dict]:
+    following_ids = select(Follow.followingId).where(Follow.followerId == user_id)
+    stmt = select(User).join(Follow, Follow.followerId == User.id).where(Follow.followingId == user_id, Follow.followerId.in_(following_ids))
+    return [_public_user_dto(u) for u in (await db.execute(stmt)).scalars().all()]
+
+
 async def get_user_stats(db: AsyncSession, user_id: str, language_id: str | None) -> dict:
     """The same real stats a user sees about themselves on their own profile
     (§ subscriptions follow-up, 2026-08-30: "должен увидеть всю статистику

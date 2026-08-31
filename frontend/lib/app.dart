@@ -30,6 +30,8 @@ import 'features/settings/presentation/personal_details_screen.dart';
 import 'features/settings/presentation/security_privacy_screen.dart';
 import 'features/settings/presentation/settings_screen.dart';
 import 'features/shell/presentation/app_shell.dart';
+import 'features/social/data/social_repository.dart';
+import 'features/social/presentation/follow_list_screen.dart';
 import 'features/social/presentation/user_profile_screen.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
@@ -130,6 +132,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/users/:id',
         builder: (context, state) => UserProfileScreen(userId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/users/:id/followers',
+        builder: (context, state) => FollowListScreen(userId: state.pathParameters['id']!, kind: FollowListKind.followers),
+      ),
+      GoRoute(
+        path: '/users/:id/following',
+        builder: (context, state) => FollowListScreen(userId: state.pathParameters['id']!, kind: FollowListKind.following),
+      ),
+      GoRoute(
+        path: '/users/:id/mutual',
+        builder: (context, state) => FollowListScreen(userId: state.pathParameters['id']!, kind: FollowListKind.mutual),
       ),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(path: '/settings/personal', builder: (context, state) => const PersonalDetailsScreen()),
