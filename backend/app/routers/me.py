@@ -16,6 +16,7 @@ from app.services.lesson_state import to_dto
 from app.services.progress import AttemptInput, compute_score, get_progress_summary_for_user
 from app.services.serialize import public_user
 from app.services.username import conflict_message, normalize_username
+from app.services.vocabulary import get_my_words, mark_lesson_words_learned
 from app.uploads.storage import AVATARS_DIR, delete_file, save_avatar
 from app.utils import from_iso, utcnow
 
@@ -118,6 +119,10 @@ async def put_lesson_state(
 ):
     result = await db.execute(select(LessonState).where(LessonState.userId == user.id, LessonState.lessonId == lesson_id))
     state = result.scalar_one_or_none()
+    # Captured before any write — "was this lesson NOT already complete"
+    # is what decides whether this PUT is the one marking its words
+    # learned (§ word cards, 2026-08-31), not the new value alone.
+    was_completed = state is not None and state.completedAt is not None
 
     values = dict(
         completedStages=list(body.completedStages),
@@ -150,7 +155,23 @@ async def put_lesson_state(
 
     await db.commit()
     await db.refresh(state)
+
+    # Lesson just transitioned to complete — link its words to this user
+    # as learned (§6: "изученным после полного прохождения урока"). Never
+    # fires again on a repeat completion (was_completed would already be
+    # true), and mark_lesson_words_learned is itself idempotent regardless.
+    if not was_completed and state.completedAt is not None:
+        await mark_lesson_words_learned(db, user.id, lesson_id)
+
     return {"state": to_dto(state)}
+
+
+@router.get("/words")
+async def get_my_words_route(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """"Мои слова" (§7, § word cards, 2026-08-31) — every word this user has
+    learned, full card data included, so the frontend can group by category
+    without a second round-trip."""
+    return {"words": await get_my_words(db, user.id)}
 
 
 @router.post("/progress/{lesson_id}/attempts", status_code=201)

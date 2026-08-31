@@ -1,5 +1,6 @@
 from app.models.activity_time import ActivityTime
 from app.models.answer_log import AnswerLog
+from app.models.category import Category
 from app.models.course import Course
 from app.models.course_lesson import CourseLesson
 from app.models.daily_activity import DailyActivity
@@ -21,6 +22,7 @@ from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
 from app.models.topic import Topic
 from app.models.user import User
+from app.models.user_word_progress import UserWordProgress
 from app.models.vocabulary_item import VocabularyItem
 
 __all__ = [
@@ -29,6 +31,7 @@ __all__ = [
     "UserStatus",
     "ActivityTime",
     "AnswerLog",
+    "Category",
     "Course",
     "CourseLesson",
     "DailyActivity",
@@ -50,5 +53,6 @@ __all__ = [
     "QuestionPlacement",
     "Topic",
     "User",
+    "UserWordProgress",
     "VocabularyItem",
 ]

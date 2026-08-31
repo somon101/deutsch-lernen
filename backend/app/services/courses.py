@@ -16,6 +16,7 @@ from app.errors import ApiError
 from app.models.course import Course
 from app.models.enums import CourseStatus
 from app.models.course_lesson import CourseLesson
+from app.models.language import Language
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
 from app.models.lesson_question import LessonQuestion
@@ -27,6 +28,7 @@ from app.models.question_placement import QuestionPlacement
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
 from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
+from app.services.vocabulary import get_or_create_category
 from app.utils import to_iso_z, utcnow
 
 STAGE_TITLES = {"minitest": "Мини-тест", "practice": "Практика", "review": "Закрепление"}
@@ -541,7 +543,18 @@ async def search_word_library(db: AsyncSession, query: str) -> list[dict]:
     return list(by_key.values())[:20]
 
 
-async def add_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: str, german: str, translation: str, pronunciation: str) -> dict | None:
+async def _derive_language_id(db: AsyncSession, course_id: str) -> str | None:
+    """Same "legacy = German" backfill rule the word-cards migration used
+    for existing rows (§ word cards, 2026-08-31) — a new word gets a real
+    languageId the same way, not left null just because it's new."""
+    if course_id == LEGACY_COURSE_ID:
+        return await db.scalar(select(Language.id).where(func.lower(func.trim(Language.name)) == "немецкий"))
+    return await db.scalar(select(Level.languageId).join(Course, Course.levelId == Level.id).where(Course.id == course_id))
+
+
+async def add_vocabulary_word(
+    db: AsyncSession, course_id: str, lesson_id: str, german: str, translation: str, pronunciation: str, category_name: str | None = None, image_url: str | None = None
+) -> dict | None:
     if not await _owned_lesson(db, course_id, lesson_id):
         return None
 
@@ -549,6 +562,9 @@ async def add_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: str, 
     clashes = await _find_word_clashes(db, course_id, [german_key])
     if clashes:
         raise DuplicateWordError(_clash_message(clashes))
+
+    category_id = (await get_or_create_category(db, category_name)).id if category_name else None
+    language_id = await _derive_language_id(db, course_id)
 
     last = await db.scalar(select(VocabularyItem.position).where(VocabularyItem.lessonId == lesson_id).order_by(VocabularyItem.position.desc()).limit(1))
     db.add(
@@ -560,6 +576,9 @@ async def add_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: str, 
             pronunciation=pronunciation,
             position=(last if last is not None else -1) + 1,
             germanKey=german_key,
+            categoryId=category_id,
+            imageUrl=image_url,
+            languageId=language_id,
         )
     )
     try:
@@ -591,6 +610,10 @@ async def update_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: st
         word.translation = changes["translation"]
     if "pronunciation" in changes and changes["pronunciation"] is not None:
         word.pronunciation = changes["pronunciation"]
+    if "imageUrl" in changes and changes["imageUrl"] is not None:
+        word.imageUrl = changes["imageUrl"]
+    if "categoryName" in changes and changes["categoryName"] is not None:
+        word.categoryId = (await get_or_create_category(db, changes["categoryName"])).id
     if new_german_key is not None:
         word.german = changes["german"]
         word.germanKey = new_german_key

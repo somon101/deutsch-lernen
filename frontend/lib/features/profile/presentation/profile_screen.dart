@@ -18,6 +18,7 @@ import 'widgets/achievement_badge.dart';
 import 'widgets/avatar_viewer.dart';
 import 'widgets/level_card.dart';
 import 'widgets/metrics_row.dart';
+import 'widgets/profile_card.dart';
 import 'widgets/rank_card.dart';
 import 'widgets/stat_row.dart';
 import 'widgets/week_activity.dart';
@@ -160,6 +161,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   LevelCard(level: overview.level),
+                  const SizedBox(height: ProfileMetrics.cardGap),
+                  _MyWordsEntry(onTap: () => context.push('/my-words')),
                   const SizedBox(height: 24),
                   _SectionHeader(title: 'Достижения', onSeeAll: () {}),
                   const SizedBox(height: 12),
@@ -242,6 +245,33 @@ class _Header extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Entry point into "Мои слова" (§ word cards, 2026-08-31) — the profile
+/// didn't have this section before, so it's a plain new tappable card, not
+/// a redesign of anything existing.
+class _MyWordsEntry extends StatelessWidget {
+  const _MyWordsEntry({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.profileColors;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(ProfileMetrics.cardRadius),
+      child: ProfileCard(
+        child: Row(
+          children: [
+            Icon(Icons.style_outlined, color: c.accent),
+            const SizedBox(width: 12),
+            Expanded(child: Text('Мои слова', style: ProfileTypography.body(context).copyWith(fontWeight: FontWeight.w600))),
+            Icon(Icons.chevron_right, color: c.textMuted),
+          ],
+        ),
       ),
     );
   }

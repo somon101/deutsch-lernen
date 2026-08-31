@@ -33,6 +33,7 @@ import 'features/shell/presentation/app_shell.dart';
 import 'features/social/data/social_repository.dart';
 import 'features/social/presentation/follow_list_screen.dart';
 import 'features/social/presentation/user_profile_screen.dart';
+import 'features/vocabulary/presentation/my_words_screen.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
 /// (src/components/ProtectedRoute.tsx) is given per-route in App.tsx — kept
@@ -129,6 +130,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => AdminUserDetailScreen(userId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/profile/qr', builder: (context, state) => const ProfileQrScreen()),
+      GoRoute(path: '/my-words', builder: (context, state) => const MyWordsScreen()),
       GoRoute(
         path: '/users/:id',
         builder: (context, state) => UserProfileScreen(userId: state.pathParameters['id']!),

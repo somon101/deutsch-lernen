@@ -10,6 +10,7 @@ from app.schemas.course import CourseInput, CourseUpdateInput, LessonInput, Less
 from app.schemas.vocabulary import VocabularyImportPayload, VocabularyWordInput, VocabularyWordUpdateInput
 from app.services import courses as svc
 from app.services.content import DuplicateWordError
+from app.services.vocabulary import list_categories
 from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, delete_file, save_course_media, save_word_audio
 
 router = APIRouter(prefix="/api/builder", tags=["builder"], dependencies=[Depends(require_staff)])
@@ -231,10 +232,21 @@ async def search_materials(q: str = "", db: AsyncSession = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 
+@router.get("/vocabulary/categories")
+async def get_categories(db: AsyncSession = Depends(get_db)):
+    """For a word-authoring "pick an existing category, or type a new one"
+    picker (§ word cards, 2026-08-31) — every category that already exists,
+    so the caller can offer them before falling back to creating a new one
+    via `categoryName` on add/update."""
+    return {"categories": await list_categories(db)}
+
+
 @router.post("/courses/{course_id}/lessons/{lesson_id}/vocabulary", status_code=201)
 async def add_vocabulary(course_id: str, lesson_id: str, body: VocabularyWordInput, db: AsyncSession = Depends(get_db)):
     try:
-        result = await svc.add_vocabulary_word(db, course_id, lesson_id, body.german, body.translation, body.pronunciation)
+        result = await svc.add_vocabulary_word(
+            db, course_id, lesson_id, body.german, body.translation, body.pronunciation, category_name=body.categoryName, image_url=body.imageUrl
+        )
     except DuplicateWordError as e:
         raise ApiError(409, str(e))
     if not result:

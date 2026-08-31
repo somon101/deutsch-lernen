@@ -238,8 +238,46 @@ model VocabularyItem {
   // "legacy" for the original file-based course; a Course id for built ones.
   courseId      String  @default("legacy")
 
+  // Word-card foundation (§ word cards, 2026-08-31) - this row IS the
+  // universal word card, addressable everywhere by its own id ("wordId").
+  imageUrl      String?
+  // Plain string, no real FK (same convention as courseId above).
+  categoryId    String?
+  // Direct reference, not derived through lessonId -> Course -> Level on
+  // every read - legacy words have no Course/Level row to walk through.
+  languageId    String?
+
   @@unique([courseId, germanKey])
   @@index([lessonId, position])
+  @@index([categoryId])
+  @@index([languageId])
+}
+
+// A word-card category (§ word cards, 2026-08-31) - "Еда", "Семья", etc.
+// Global, not per-course/lesson/language: words from completely different
+// lessons or courses can share one category row.
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  // Normalized dedupe key, same idea as VocabularyItem.germanKey - "get or
+  // create by name" never creates a near-duplicate.
+  nameKey   String
+  createdAt DateTime @default(now())
+
+  @@unique([nameKey])
+}
+
+// A user has learned this word (§ word cards, 2026-08-31) - the link ONLY,
+// never a copy of the word card itself. Same shape as Follow for the same
+// reason: the fact of the relationship is all that needs to exist per user.
+model UserWordProgress {
+  id        String   @id @default(uuid())
+  userId    String
+  wordId    String
+  learnedAt DateTime @default(now())
+
+  @@unique([userId, wordId])
+  @@index([wordId])
 }
 
 model LessonQuestion {

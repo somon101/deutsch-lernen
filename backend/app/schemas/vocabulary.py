@@ -9,6 +9,12 @@ class VocabularyWordInput(BaseModel):
     german: str = Field(min_length=1)
     translation: str = Field(min_length=1)
     pronunciation: str = Field(min_length=1)
+    # Optional (§ word cards, 2026-08-31) — a name to get-or-create a
+    # Category by (never a raw id, so the caller never has to look one up
+    # first); omitted leaves the word without one, same as before this
+    # field existed.
+    categoryName: str | None = None
+    imageUrl: str | None = None
 
     @field_validator("german")
     @classmethod
@@ -39,8 +45,10 @@ class VocabularyWordUpdateInput(BaseModel):
     german: str | None = None
     translation: str | None = None
     pronunciation: str | None = None
+    categoryName: str | None = None
+    imageUrl: str | None = None
 
-    @field_validator("german", "translation", "pronunciation")
+    @field_validator("german", "translation", "pronunciation", "categoryName")
     @classmethod
     def _trim(cls, v: str | None) -> str | None:
         return v.strip() if v is not None else v
