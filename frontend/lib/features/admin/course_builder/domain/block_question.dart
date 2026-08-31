@@ -195,12 +195,36 @@ class MatchDraft extends QuestionDraft {
   };
 }
 
+/// Teacher enters only full sentences (§ auto blank, 2026-08-31) — no blank
+/// marker, no options, no correct answer. A different kind from
+/// `ClozeDraft` above, which already owns the "Пропущенное слово" label and
+/// is fully author-provided; this one's label is disambiguated with
+/// "(авто)" (see questionKindLabel below) since the mechanism is genuinely
+/// different, not just a UI variant of cloze.
+class AutoBlankDraft extends QuestionDraft {
+  const AutoBlankDraft({required this.phrases});
+
+  factory AutoBlankDraft.blank() => const AutoBlankDraft(phrases: ['']);
+
+  factory AutoBlankDraft.fromWire(Map<String, dynamic> json) =>
+      AutoBlankDraft(phrases: (json['phrases'] as List<dynamic>).cast<String>());
+
+  final List<String> phrases;
+
+  @override
+  Map<String, dynamic> toWire() => {
+    'kind': 'auto_blank',
+    'phrases': phrases.where((p) => p.trim().isNotEmpty).toList(),
+  };
+}
+
 QuestionDraft questionDraftFromWire(Map<String, dynamic> json) =>
     switch (json['kind'] as String) {
       'truefalse' => TrueFalseDraft.fromWire(json),
       'cloze' => ClozeDraft.fromWire(json),
       'scramble' => ScrambleDraft.fromWire(json),
       'match' => MatchDraft.fromWire(json),
+      'auto_blank' => AutoBlankDraft.fromWire(json),
       _ => ChoiceDraft.fromWire(json),
     };
 
@@ -210,4 +234,5 @@ String questionKindLabel(QuestionDraft d) => switch (d) {
   ClozeDraft() => 'Пропущенное слово',
   ScrambleDraft() => 'Собери фразу',
   MatchDraft() => 'Сопоставление',
+  AutoBlankDraft() => 'Пропущенное слово (авто)',
 };

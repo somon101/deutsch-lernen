@@ -72,6 +72,54 @@ class MatchExercise extends Exercise {
   final List<MatchPair> pairs;
 }
 
+/// One phrase slot of an auto-generated "missing word" exercise (§ auto
+/// blank, 2026-08-31) — deliberately carries NO prompt/options of its own.
+/// Unlike every other Exercise subclass, this one's actual question (which
+/// word got blanked, what the options are) isn't known yet at content-fetch
+/// time — it's resolved per-learner via a separate call
+/// (AutoBlankRepository.generate), ideally already sitting in the runner's
+/// prefetch buffer by the time this slot is reached.
+class AutoBlankSlot extends Exercise {
+  const AutoBlankSlot({required String id, String? placementId, required this.questionId, required this.phraseIndex}) : super(id, placementId);
+  // The stable Question.id (the teacher's authored exercise) - NOT the same
+  // as this slot's own `id` (which is "questionId::phraseIndex", unique per
+  // slot) - the generate/answer endpoints need this real id.
+  final String questionId;
+  final int phraseIndex;
+}
+
+/// One option shown for a generated auto_blank question — `wordId` is set
+/// for a wrong option (a real learned-word card) and null for the correct
+/// one (just the text actually removed from the phrase — clarified in
+/// conversation: the blanked word doesn't need a matching word card).
+class BlankOption {
+  const BlankOption({required this.text, this.wordId});
+
+  factory BlankOption.fromJson(Map<String, dynamic> json) => BlankOption(text: json['text'] as String, wordId: json['wordId'] as String?);
+
+  final String text;
+  final String? wordId;
+}
+
+/// The result of GET /api/questions/{id}/blank/{phraseIndex} (§ auto blank,
+/// 2026-08-31) — `generatedQuestionId` is an opaque, server-signed token;
+/// it must be echoed back unmodified when answering (LessonRepository.
+/// submitBlankAnswer), since the server re-derives correctness from it
+/// rather than trusting anything the client claims.
+class GeneratedBlankQuestion {
+  const GeneratedBlankQuestion({required this.generatedQuestionId, required this.promptWithBlank, required this.options});
+
+  factory GeneratedBlankQuestion.fromJson(Map<String, dynamic> json) => GeneratedBlankQuestion(
+        generatedQuestionId: json['generatedQuestionId'] as String,
+        promptWithBlank: json['promptWithBlank'] as String,
+        options: (json['options'] as List<dynamic>).map((o) => BlankOption.fromJson(o as Map<String, dynamic>)).toList(),
+      );
+
+  final String generatedQuestionId;
+  final String promptWithBlank;
+  final List<BlankOption> options;
+}
+
 /// Raw shape a LessonQuestion row round-trips as (server's to_question_dto)
 /// — the input to toExercise(), one level below the final Exercise shape.
 class QuestionDto {
@@ -84,6 +132,8 @@ class QuestionDto {
     this.correctAnswer = '',
     this.correct = false,
     this.pairs = const [],
+    this.questionId,
+    this.phraseIndex,
   });
 
   factory QuestionDto.fromJson(Map<String, dynamic> json) => QuestionDto(
@@ -98,6 +148,8 @@ class QuestionDto {
                 ?.map((p) => (left: (p as Map<String, dynamic>)['left'] as String, right: p['right'] as String))
                 .toList() ??
             const [],
+        questionId: json['questionId'] as String?,
+        phraseIndex: json['phraseIndex'] as int?,
       );
 
   // Real, stable Question/LessonQuestion id — null only for shapes that
@@ -113,6 +165,11 @@ class QuestionDto {
   final String correctAnswer;
   final bool correct;
   final List<({String left, String right})> pairs;
+  // auto_blank only (§ auto blank, 2026-08-31) — the real Question.id this
+  // slot's generation/answer calls target, and which phrase (in the
+  // teacher's own order) this slot is.
+  final String? questionId;
+  final int? phraseIndex;
 }
 
 String _explanationFor(String prompt, bool correct) =>
@@ -172,6 +229,8 @@ Exercise toExercise(QuestionDto q, String id) {
         placementId: q.placementId,
         pairs: [for (var i = 0; i < q.pairs.length; i++) MatchPair(id: '$id-$i', left: q.pairs[i].left, right: q.pairs[i].right)],
       );
+    case 'auto_blank':
+      return AutoBlankSlot(id: id, placementId: q.placementId, questionId: q.questionId!, phraseIndex: q.phraseIndex!);
     case 'choice':
     default:
       return ChoiceQuestion(id: id, placementId: q.placementId, prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer);

@@ -15,6 +15,7 @@ String poolQuestionPreviewText(QuestionDraft d) => switch (d) {
       ClozeDraft(:final prompt) => prompt,
       ScrambleDraft(:final translation) => translation,
       MatchDraft(:final prompt) => prompt.isEmpty ? 'Сопоставление' : prompt,
+      AutoBlankDraft(:final phrases) => phrases.isEmpty ? 'Пропущенное слово (авто)' : '${phrases.length} фраз: ${phrases.first}',
     };
 
 /// Reusable-question management for one block — shows what's already
@@ -183,6 +184,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
         TrueFalseDraft d => TrueFalseEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
         ScrambleDraft d => ScrambleEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
         MatchDraft d => MatchEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
+        AutoBlankDraft d => AutoBlankEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
       };
 
   @override
@@ -220,6 +222,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
               OutlinedButton(onPressed: () => _startNew(ChoiceDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Вопрос с вариантами')),
               OutlinedButton(onPressed: () => _startNew(TrueFalseDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Верно / Неверно')),
               OutlinedButton(onPressed: () => _startNew(ClozeDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Пропущенное слово')),
+              OutlinedButton(onPressed: () => _startNew(AutoBlankDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Пропущенное слово (авто)')),
               OutlinedButton(onPressed: () => _startNew(ScrambleDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Собери фразу')),
               OutlinedButton(onPressed: () => _startNew(MatchDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Сопоставление')),
             ],
@@ -398,6 +401,10 @@ class _ReadOnlyQuestionContent extends StatelessWidget {
       MatchDraft(:final pairs) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [for (final p in pairs) Text('${p.left} — ${p.right}', style: AdminTypography.body)],
+        ),
+      AutoBlankDraft(:final phrases) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [for (final p in phrases) Text('• $p', style: AdminTypography.body)],
         ),
     };
   }

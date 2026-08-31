@@ -6,6 +6,7 @@ import '../../data/lesson_repository.dart';
 import '../../domain/exercise.dart';
 import '../../domain/lesson_content.dart';
 import '../lesson_runner_controller.dart';
+import '../widgets/auto_blank_question.dart';
 import '../widgets/choice_question.dart';
 import '../widgets/cloze_question.dart';
 import '../widgets/match_question.dart';
@@ -243,6 +244,13 @@ class _InlineCheckpointQuestion extends ConsumerWidget {
           ClozeExercise e => ClozeQuestionView(exercise: e, onAnswered: onAnswered),
           ScrambleExercise e => ScrambleQuestionView(exercise: e, onAnswered: onAnswered),
           MatchExercise e => MatchQuestionView(exercise: e, onAnswered: onAnswered),
+          // No prefetch buffer here (there's no linear "next slot" concept
+          // reading through material blocks) - the widget generates its own
+          // question on first build, and already writes its own AnswerLog
+          // via submitBlankAnswer, so onAnswered here is JUST the scoring
+          // callback, never the generic submitAnswer above (§ auto blank,
+          // 2026-08-31 - same reasoning as ExerciseStage's own skip of it).
+          AutoBlankSlot e => AutoBlankQuestionView(exercise: e, onAnswered: (_) {}),
         },
       ),
     );

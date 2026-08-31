@@ -333,6 +333,11 @@ class _QuestionLibrarySearchState
     ClozeDraft(:final prompt) => prompt,
     ScrambleDraft(:final translation) => translation,
     MatchDraft(:final prompt) => prompt.isEmpty ? 'Сопоставление' : prompt,
+    // Not offered as a button in this (old LessonQuestion/quiz) editor —
+    // auto_blank only creates real, reusable Question rows via the pool
+    // flow (pool_questions_section.dart) — but the switch must still be
+    // exhaustive.
+    AutoBlankDraft(:final phrases) => phrases.isEmpty ? 'Пропущенное слово (авто)' : phrases.first,
   };
 }
 
@@ -398,6 +403,10 @@ class _QuestionCard extends StatelessWidget {
     TrueFalseDraft d => TrueFalseEditor(draft: d, onChanged: onChanged),
     ScrambleDraft d => ScrambleEditor(draft: d, onChanged: onChanged),
     MatchDraft d => MatchEditor(draft: d, onChanged: onChanged),
+    // Not reachable in practice (see _previewText above) - no button here
+    // ever creates one - but still handled so this editor keeps working
+    // unmodified if an auto_blank draft somehow ends up here.
+    AutoBlankDraft d => AutoBlankEditor(draft: d, onChanged: onChanged),
   };
 }
 

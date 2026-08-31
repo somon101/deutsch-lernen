@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
+import '../domain/exercise.dart';
 import '../domain/lesson_content.dart';
 import '../domain/progress.dart';
 
@@ -100,6 +101,39 @@ class LessonRepository {
       '/api/me/answers',
       body: {'questionId': questionId, 'placementId': ?placementId, 'answerData': {'correct': correct}, 'correct': correct},
     );
+  }
+
+  /// Generates one version of an auto_blank phrase slot (§ auto blank,
+  /// 2026-08-31) — fresh and random every call, nothing is written to the
+  /// database by this (generating a question is not answering it). Null
+  /// means the server couldn't safely generate one for this slot right now
+  /// (e.g. not enough learned vocabulary yet) — the caller must not show a
+  /// broken exercise in that case.
+  Future<GeneratedBlankQuestion?> generateBlankQuestion(String questionId, int phraseIndex) async {
+    try {
+      final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/blank/$phraseIndex');
+      return GeneratedBlankQuestion.fromJson(res);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// The server re-derives correctness from `generatedQuestionId` itself
+  /// (§25) — this never sends a client-computed `correct` boolean, unlike
+  /// submitAnswer above. `correctText` only comes back now, post-answer —
+  /// the generate response never states which option was correct.
+  Future<({bool correct, String correctText})> submitBlankAnswer(
+    String questionId, {
+    required String generatedQuestionId,
+    required String selectedText,
+    String? placementId,
+  }) async {
+    final res = await _api.post(
+      '/api/questions/${Uri.encodeComponent(questionId)}/blank/answer',
+      body: {'generatedQuestionId': generatedQuestionId, 'selectedText': selectedText, 'placementId': ?placementId},
+    );
+    return (correct: res['correct'] as bool, correctText: res['correctText'] as String);
   }
 
   /// Reports one already-capped time delta for one activity type within one

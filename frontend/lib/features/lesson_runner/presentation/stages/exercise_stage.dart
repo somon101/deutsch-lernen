@@ -8,11 +8,18 @@ import '../../domain/exercise.dart';
 import '../../domain/progress.dart';
 import '../../domain/stage.dart';
 import '../lesson_runner_controller.dart';
+import '../widgets/auto_blank_question.dart';
 import '../widgets/choice_question.dart';
 import '../widgets/cloze_question.dart';
 import '../widgets/match_question.dart';
 import '../widgets/scramble_question.dart';
 import '../widgets/truefalse_question.dart';
+
+/// How many upcoming auto_blank slots to keep generated ahead of the
+/// learner (§11, "буфер = 3-5 следующих вопросов") — small enough that
+/// opening a lesson never fires a burst of requests, big enough that
+/// normal forward progress essentially never waits on a live generation.
+const _blankBufferSize = 3;
 
 /// Per-exercise time caps (§ time tracking, 2026-08-29) — an exercise left
 /// open longer than this contributes at most this many seconds. Matching
@@ -26,6 +33,7 @@ String _kindLabel(Exercise e) => switch (e) {
       MatchExercise() => 'Сопоставление',
       ScrambleExercise() => 'Собери фразу',
       ClozeExercise() => 'Заполни пропуск',
+      AutoBlankSlot() => 'Пропущенное слово',
     };
 
 String _prompt(Exercise e) => switch (e) {
@@ -34,6 +42,10 @@ String _prompt(Exercise e) => switch (e) {
       MatchExercise() => 'Сопоставление слов и переводов',
       ScrambleExercise() => 'Фраза по переводу «${e.translation}»',
       ClozeExercise() => 'Пропуск во фразе «${e.translation}»',
+      // The actual phrase only exists inside the generated version, held
+      // by the widget itself (§ auto blank, 2026-08-31) — not on the
+      // static Exercise the results screen re-reads after the fact.
+      AutoBlankSlot() => 'Пропущенное слово',
     };
 
 String _correctAnswerLabel(Exercise e) => switch (e) {
@@ -42,6 +54,7 @@ String _correctAnswerLabel(Exercise e) => switch (e) {
       MatchExercise() => 'Не все пары были сопоставлены с первой попытки',
       ScrambleExercise() => 'Правильно: «${e.answer.join(" ")}»',
       ClozeExercise() => 'Правильное слово: «${e.answer}»',
+      AutoBlankSlot() => 'Подробности — в истории ответов',
     };
 
 /// Mirrors ExerciseRunner.tsx: runs one stage's flat exercise list
@@ -69,6 +82,29 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   bool _finished = false;
   final _focusNode = FocusNode();
   DateTime _exerciseShownAt = DateTime.now();
+
+  // Prefetch buffer for auto_blank slots (§11, "буфер = 3-5 следующих
+  // вопросов") — keyed by exercise index so re-visiting an index (there is
+  // none in this linear runner, but it's a cheap safety) never re-fires a
+  // request; a cached null means generation genuinely failed for that slot,
+  // not "not tried yet".
+  final Map<int, Future<GeneratedBlankQuestion?>> _blankBuffer = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _prefetchBlanksAhead();
+  }
+
+  void _prefetchBlanksAhead() {
+    final end = (_index + _blankBufferSize).clamp(0, _exercises.length);
+    for (var i = _index; i < end; i++) {
+      final ex = _exercises[i];
+      if (ex is AutoBlankSlot) {
+        _blankBuffer.putIfAbsent(i, () => ref.read(lessonRepositoryProvider).generateBlankQuestion(ex.questionId, ex.phraseIndex));
+      }
+    }
+  }
 
   int get _correct => _results.where((r) => r).length;
 
@@ -99,12 +135,20 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
     } else {
       await sounds.playIncorrect();
     }
-    try {
-      await ref
-          .read(lessonRepositoryProvider)
-          .submitAnswer(_exercises[_index].id, correct, placementId: _exercises[_index].placementId);
-    } catch (_) {
-      // Best-effort — a logging failure must never block the quiz flow.
+    // auto_blank already wrote its own AnswerLog row server-side (with the
+    // richer generated-question snapshot) inside AutoBlankQuestionView's
+    // own submitBlankAnswer call — calling the generic submitAnswer here
+    // too would either double-write history or (since this slot's `id` is
+    // a synthetic "questionId::phraseIndex" string, not a real Question/
+    // LessonQuestion row) just 404 harmlessly. Either way, skip it.
+    if (_exercises[_index] is! AutoBlankSlot) {
+      try {
+        await ref
+            .read(lessonRepositoryProvider)
+            .submitAnswer(_exercises[_index].id, correct, placementId: _exercises[_index].placementId);
+      } catch (_) {
+        // Best-effort — a logging failure must never block the quiz flow.
+      }
     }
   }
 
@@ -115,6 +159,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
         _index += 1;
         _answered = false;
       });
+      _prefetchBlanksAhead();
     } else {
       setState(() => _finished = true);
     }
@@ -232,6 +277,16 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
       ClozeExercise() => ClozeQuestionView(key: ValueKey(exercise.id), exercise: exercise, onAnswered: _handleAnswered),
       ScrambleExercise() => ScrambleQuestionView(key: ValueKey(exercise.id), exercise: exercise, onAnswered: _handleAnswered),
       MatchExercise() => MatchQuestionView(key: ValueKey(exercise.id), exercise: exercise, onAnswered: _handleAnswered),
+      AutoBlankSlot() => AutoBlankQuestionView(
+          key: ValueKey(exercise.id),
+          exercise: exercise,
+          prefetched: _blankBuffer.putIfAbsent(
+            _index,
+            () => ref.read(lessonRepositoryProvider).generateBlankQuestion(exercise.questionId, exercise.phraseIndex),
+          ),
+          onAnswered: _handleAnswered,
+          onSkip: _next,
+        ),
     };
   }
 }

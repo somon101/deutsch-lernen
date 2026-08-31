@@ -252,6 +252,56 @@ class ScrambleEditor extends StatelessWidget {
   }
 }
 
+/// The teacher enters ONLY full sentences (§ auto blank, 2026-08-31) — no
+/// blank marker, no options, no correct-answer picker anywhere in this
+/// form; the system decides all of that per learner at lesson time.
+class AutoBlankEditor extends StatelessWidget {
+  const AutoBlankEditor({super.key, required this.draft, required this.onChanged});
+  final AutoBlankDraft draft;
+  final ValueChanged<QuestionDraft> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Введите полную фразу (количество не ограничено):', style: AdminTypography.fieldLabel),
+        for (var i = 0; i < draft.phrases.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    decoration: adminInputDecoration(label: 'Фраза ${i + 1}', hint: 'I am from Tajikistan.'),
+                    controller: TextEditingController(text: draft.phrases[i])..selection = TextSelection.collapsed(offset: draft.phrases[i].length),
+                    onChanged: (v) {
+                      final phrases = [...draft.phrases];
+                      phrases[i] = v;
+                      onChanged(AutoBlankDraft(phrases: phrases));
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  color: AdminColors.danger,
+                  onPressed: draft.phrases.length <= 1
+                      ? null
+                      : () {
+                          final phrases = [...draft.phrases]..removeAt(i);
+                          onChanged(AutoBlankDraft(phrases: phrases));
+                        },
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+        AddRowButton(label: '+ Добавить фразу', onPressed: () => onChanged(AutoBlankDraft(phrases: [...draft.phrases, '']))),
+      ],
+    );
+  }
+}
+
 class MatchEditor extends StatelessWidget {
   const MatchEditor({super.key, required this.draft, required this.onChanged});
   final MatchDraft draft;
