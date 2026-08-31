@@ -29,14 +29,11 @@ class FollowListScreen extends ConsumerWidget {
   void _openProfile(BuildContext context, WidgetRef ref, String tappedId) {
     final me = ref.read(authProvider).value;
     if (me != null && me.id == tappedId) {
-      // '/profile' lives inside the app's bottom-nav shell; this screen
-      // lives outside it (like '/users/:id'). Pushing into a shell-nested
-      // route from outside the shell stacks a second copy of the whole
-      // shell on top instead of just showing the profile, which is what
-      // rendered blank. go() replaces the stack and lands on the normal
-      // Профиль tab instead — the same self-case the leaderboard's own
-      // tap-through already uses.
-      context.go('/profile');
+      // Deliberately no navigation here (project owner's explicit call,
+      // 2026-08-31) — just tell the user this row is them, same list stays
+      // open. The Рейтинг tab's own self-tap (context.go('/profile')) is a
+      // separate code path and is intentionally left untouched.
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Это ваш профиль')));
     } else {
       context.push('/users/$tappedId');
     }
