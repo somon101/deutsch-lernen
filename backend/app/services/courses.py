@@ -143,7 +143,14 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         lesson_questions = [q for q in questions if q.lessonId == lesson.id]
         lesson_blocks = [b for b in blocks if b.lessonId == lesson.id]
         vocabulary_dtos = [
-            {"id": w.id, "german": w.german, "translation": w.translation, "pronunciation": w.pronunciation, "audioUrl": w.audioUrl}
+            {
+                "id": w.id,
+                "german": w.german,
+                "translation": w.translation,
+                "pronunciation": w.pronunciation,
+                "audioUrl": w.audioUrl,
+                "imageUrl": w.imageUrl,
+            }
             for w in lesson_words
         ]
         parsed_material = parse_material(lesson.materialText, vocabulary_dtos)
@@ -648,6 +655,19 @@ async def set_vocabulary_word_audio(db: AsyncSession, course_id: str, lesson_id:
     word.audioUrl = audio_url
     await db.commit()
     return {"ok": True, "previousAudioUrl": previous}
+
+
+async def set_vocabulary_word_image(db: AsyncSession, course_id: str, lesson_id: str, word_id: str, image_url: str | None) -> dict | None:
+    """Same shape as set_vocabulary_word_audio above (§ word cards,
+    2026-08-31) - a word's photo upload/removal, mirrored one-for-one."""
+    result = await db.execute(select(VocabularyItem).where(VocabularyItem.id == word_id, VocabularyItem.lessonId == lesson_id, VocabularyItem.courseId == course_id))
+    word = result.scalar_one_or_none()
+    if not word:
+        return None
+    previous = word.imageUrl
+    word.imageUrl = image_url
+    await db.commit()
+    return {"ok": True, "previousImageUrl": previous}
 
 
 # ---------------------------------------------------------------------------

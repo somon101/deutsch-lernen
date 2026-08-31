@@ -292,6 +292,33 @@ class BuilderRepository {
     );
   }
 
+  /// Mirrors uploadWordAudio/removeWordAudio above one-for-one (§ word
+  /// cards, 2026-08-31) — a word's photo.
+  Future<void> uploadWordImage(
+    String courseId,
+    String lessonId,
+    String wordId, {
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    await _api.postMultipart(
+      '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}/image',
+      fieldName: 'image',
+      bytes: bytes,
+      filename: filename,
+    );
+  }
+
+  Future<void> removeWordImage(
+    String courseId,
+    String lessonId,
+    String wordId,
+  ) async {
+    await _api.delete(
+      '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}/image',
+    );
+  }
+
   Future<ImportPreview> previewVocabularyImport(
     String courseId,
     String lessonId,

@@ -19,9 +19,13 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 UPLOADS_ROOT = _REPO_ROOT / "server" / "uploads"
 AVATARS_DIR = UPLOADS_ROOT / "avatars"
 WORD_AUDIO_DIR = UPLOADS_ROOT / "words"
+# Same "words" folder as audio (§ word cards, 2026-08-31) - just a
+# WORD_IMAGES_DIR subfolder under it rather than a new top-level uploads
+# category, since both are per-word-card media.
+WORD_IMAGES_DIR = WORD_AUDIO_DIR / "images"
 COURSE_MEDIA_DIR = UPLOADS_ROOT / "courses"
 
-for _dir in (AVATARS_DIR, WORD_AUDIO_DIR, COURSE_MEDIA_DIR):
+for _dir in (AVATARS_DIR, WORD_AUDIO_DIR, WORD_IMAGES_DIR, COURSE_MEDIA_DIR):
     _dir.mkdir(parents=True, exist_ok=True)
 
 AVATAR_MIME = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}
@@ -38,6 +42,11 @@ WORD_AUDIO_MIME = {
     "audio/x-m4a": ".m4a",
 }
 WORD_AUDIO_MAX_BYTES = 2 * 1024 * 1024
+
+# Same allowed types/size as avatars (§ word cards, 2026-08-31) - a word's
+# photo is exactly the same kind of asset.
+WORD_IMAGE_MIME = AVATAR_MIME
+WORD_IMAGE_MAX_BYTES = AVATAR_MAX_BYTES
 
 COURSE_MEDIA_MIME = {
     "video/mp4": ".mp4",
@@ -132,6 +141,10 @@ async def save_avatar(file: UploadFile) -> str:
 
 async def save_word_audio(file: UploadFile) -> str:
     return await _save(file, WORD_AUDIO_DIR, WORD_AUDIO_MIME, WORD_AUDIO_MAX_BYTES, "Разрешены только аудиофайлы MP3, WAV, OGG, M4A или WebM")
+
+
+async def save_word_image(file: UploadFile) -> str:
+    return await _save(file, WORD_IMAGES_DIR, WORD_IMAGE_MIME, WORD_IMAGE_MAX_BYTES, "Разрешены только изображения JPEG, PNG или WebP")
 
 
 async def save_course_media(file: UploadFile) -> str:

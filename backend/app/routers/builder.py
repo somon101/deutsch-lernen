@@ -11,7 +11,7 @@ from app.schemas.vocabulary import VocabularyImportPayload, VocabularyWordInput,
 from app.services import courses as svc
 from app.services.content import DuplicateWordError
 from app.services.vocabulary import list_categories
-from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, delete_file, save_course_media, save_word_audio
+from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, WORD_IMAGES_DIR, delete_file, save_course_media, save_word_audio, save_word_image
 
 router = APIRouter(prefix="/api/builder", tags=["builder"], dependencies=[Depends(require_staff)])
 
@@ -298,6 +298,36 @@ async def delete_vocabulary_audio(course_id: str, lesson_id: str, word_id: str, 
         raise ApiError(404, "Слово не найдено")
     if result["previousAudioUrl"]:
         delete_file(WORD_AUDIO_DIR, result["previousAudioUrl"])
+    return {"ok": True}
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/vocabulary/{word_id}/image")
+async def upload_vocabulary_image(
+    course_id: str,
+    lesson_id: str,
+    word_id: str,
+    image: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mirrors upload_vocabulary_audio above one-for-one (§ word cards,
+    2026-08-31) — a word's photo, same upload/replace/cleanup shape."""
+    stored_url = await save_word_image(image)
+    result = await svc.set_vocabulary_word_image(db, course_id, lesson_id, word_id, stored_url)
+    if not result:
+        delete_file(WORD_IMAGES_DIR, stored_url)
+        raise ApiError(404, "Слово не найдено")
+    if result["previousImageUrl"]:
+        delete_file(WORD_IMAGES_DIR, result["previousImageUrl"])
+    return {"ok": True, "imageUrl": stored_url}
+
+
+@router.delete("/courses/{course_id}/lessons/{lesson_id}/vocabulary/{word_id}/image")
+async def delete_vocabulary_image(course_id: str, lesson_id: str, word_id: str, db: AsyncSession = Depends(get_db)):
+    result = await svc.set_vocabulary_word_image(db, course_id, lesson_id, word_id, None)
+    if not result:
+        raise ApiError(404, "Слово не найдено")
+    if result["previousImageUrl"]:
+        delete_file(WORD_IMAGES_DIR, result["previousImageUrl"])
     return {"ok": True}
 
 

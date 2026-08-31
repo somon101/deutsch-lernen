@@ -195,6 +195,41 @@ class _WordRowState extends ConsumerState<_WordRow> {
     }
   }
 
+  Future<void> _uploadImage() async {
+    final file = await FilePicker.pickFile(type: FileType.image);
+    if (file == null) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await file.readAsBytes();
+      await ref
+          .read(builderRepositoryProvider)
+          .uploadWordImage(
+            widget.courseId,
+            widget.lessonId,
+            widget.word.id,
+            bytes: bytes,
+            filename: file.name,
+          );
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось загрузить фото');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _removeImage() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(builderRepositoryProvider)
+          .removeWordImage(widget.courseId, widget.lessonId, widget.word.id);
+      widget.onChanged();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -242,6 +277,21 @@ class _WordRowState extends ConsumerState<_WordRow> {
             onPressed: _busy
                 ? null
                 : (widget.word.audioUrl != null ? _removeAudio : _uploadAudio),
+          ),
+          IconButton(
+            tooltip: widget.word.imageUrl != null
+                ? 'Удалить фото'
+                : 'Загрузить фото',
+            icon: Icon(
+              widget.word.imageUrl != null
+                  ? Icons.image_not_supported_outlined
+                  : Icons.image_outlined,
+              size: 18,
+            ),
+            color: AdminColors.textSecondary,
+            onPressed: _busy
+                ? null
+                : (widget.word.imageUrl != null ? _removeImage : _uploadImage),
           ),
           TextButton(
             onPressed: _busy ? null : _save,

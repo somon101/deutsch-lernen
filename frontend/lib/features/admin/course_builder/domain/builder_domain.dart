@@ -14,6 +14,7 @@ class AdminVocabWord {
     required this.translation,
     required this.pronunciation,
     this.audioUrl,
+    this.imageUrl,
   });
 
   factory AdminVocabWord.fromJson(Map<String, dynamic> json) => AdminVocabWord(
@@ -22,6 +23,7 @@ class AdminVocabWord {
     translation: json['translation'] as String,
     pronunciation: json['pronunciation'] as String? ?? '',
     audioUrl: json['audioUrl'] as String?,
+    imageUrl: json['imageUrl'] as String?,
   );
 
   final String id;
@@ -29,6 +31,7 @@ class AdminVocabWord {
   final String translation;
   final String pronunciation;
   final String? audioUrl;
+  final String? imageUrl;
 }
 
 class AdminBlock {
