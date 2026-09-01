@@ -144,6 +144,14 @@ class QuestionReuseInput(BaseModel):
     legacySetName: str | None = None
 
 
+class PlacementVerifiesBlockInput(BaseModel):
+    """Sets/changes/clears the "verifies this reading block" tag on an
+    already-existing quiz-stage placement (§ course-builder redesign, 2026-
+    09-01) — null clears it."""
+
+    materialBlockId: str | None = None
+
+
 class SimilarityCheckInput(BaseModel):
     """Dry-run duplicate check the teacher can trigger before saving, in
     addition to the automatic check `POST /questions` already does."""

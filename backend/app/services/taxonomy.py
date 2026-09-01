@@ -355,8 +355,21 @@ async def list_block_questions(
     listing only, the title of the MaterialBlock this placement is tagged
     as "verifying" (§4 of the same rule) — a quiz-stage placement can
     optionally point at a reading-content block it tests, purely as a
-    label, independent of where it's actually shown."""
-    condition = QuestionPlacement.materialBlockId == material_block_id if material_block_id else QuestionPlacement.lessonBlockId == lesson_block_id
+    label, independent of where it's actually shown.
+
+    A material_block_id lookup additionally requires lessonBlockId IS NULL
+    (§ course-builder redesign bugfix, 2026-09-01): materialBlockId alone
+    isn't enough to mean "placed here" — a quiz-stage placement can carry
+    the SAME materialBlockId purely as its "verifies" tag while its real
+    home is that lessonBlockId. Without this, a quiz question tagged as
+    verifying block X would show up as if actually attached to block X's
+    own Материал editor, and its "Открепить" there would delete the row
+    that's really the question's live placement in the quiz stage."""
+    condition = (
+        (QuestionPlacement.materialBlockId == material_block_id) & (QuestionPlacement.lessonBlockId.is_(None))
+        if material_block_id
+        else QuestionPlacement.lessonBlockId == lesson_block_id
+    )
     rows = (
         await db.execute(
             select(QuestionPlacement, Question).join(Question, Question.id == QuestionPlacement.questionId).where(condition).order_by(QuestionPlacement.position)
@@ -391,6 +404,45 @@ async def _resolve_lesson_title(db: AsyncSession, course_id: str, lesson_id: str
         return lesson_id
     lesson = await db.get(CourseLesson, lesson_id)
     return lesson.title if lesson else lesson_id
+
+
+async def list_verifying_questions(db: AsyncSession, material_block_id: str) -> list[dict]:
+    """The reverse of list_block_questions's material_block_id case: every
+    quiz-stage question tagged as "verifying" this reading block (§4 of the
+    approved rule, 2026-08-27) — materialBlockId == material_block_id AND
+    lessonBlockId IS NOT NULL, the exact complement of the lessonBlockId-IS-
+    NULL filter added to list_block_questions in the same bugfix (§
+    course-builder redesign, 2026-09-01). Powers the new "Проверяет этот
+    блок" read-only section on a MaterialBlock's own card — every row here
+    is a question that actually LIVES elsewhere (a minitest/practice/review
+    LessonBlock), shown purely as a label with enough of the chain
+    (stage/lesson/block) for the teacher to click through to it."""
+    rows = (
+        await db.execute(
+            select(QuestionPlacement, Question)
+            .join(Question, Question.id == QuestionPlacement.questionId)
+            .where(QuestionPlacement.materialBlockId == material_block_id, QuestionPlacement.lessonBlockId.isnot(None))
+            .order_by(QuestionPlacement.position)
+        )
+    ).all()
+
+    result = []
+    for p, q in rows:
+        block = await db.get(LessonBlock, p.lessonBlockId)
+        result.append(
+            {
+                "placementId": p.id,
+                "question": q,
+                "courseId": block.courseId if block else None,
+                "lessonId": block.lessonId if block else None,
+                "blockId": block.id if block else None,
+                "stage": block.stage if block else None,
+                "stageLabel": STAGE_TITLES.get(block.stage) if block else None,
+                "lessonTitle": await _resolve_lesson_title(db, block.courseId, block.lessonId) if block else None,
+                "blockTitle": block.title if block else None,
+            }
+        )
+    return result
 
 
 async def list_question_placements(db: AsyncSession, question_id: str) -> list[dict]:
@@ -433,6 +485,27 @@ async def list_question_placements(db: AsyncSession, question_id: str) -> list[d
         elif p.legacyLessonId:
             result.append({"placementId": p.id, "location": "legacy", "lessonTitle": p.legacyLessonId, "setName": p.legacySetName})
     return result
+
+
+async def set_placement_verifies_block(db: AsyncSession, placement_id: str, material_block_id: str | None) -> QuestionPlacement | None:
+    """Sets/changes/clears the "verifies this reading block" tag on an
+    EXISTING quiz-stage placement (§ course-builder redesign, "+ привязать"
+    chip on an already-attached question, 2026-09-01) — previously this tag
+    could only be set at creation/reuse time via QuestionCreateInput/
+    QuestionReuseInput's own materialBlockId, with no way to add or change
+    it afterward. Only meaningful on a placement that already has a
+    lessonBlockId (a quiz-stage placement) — setting materialBlockId on a
+    materialBlockId-only placement would turn it into the exact ambiguous
+    shape list_block_questions's bugfix (2026-09-01) exists to filter back
+    out, so that case is rejected rather than silently corrupting the
+    placement's own "where it lives" meaning."""
+    placement = await db.get(QuestionPlacement, placement_id)
+    if not placement or not placement.lessonBlockId:
+        return None
+    placement.materialBlockId = material_block_id
+    await db.commit()
+    await db.refresh(placement)
+    return placement
 
 
 async def remove_placement(db: AsyncSession, placement_id: str) -> bool:

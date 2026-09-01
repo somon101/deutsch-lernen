@@ -13,6 +13,7 @@ from app.schemas.taxonomy import (
     MaterialBlockReorderInput,
     MaterialInput,
     MaterialUpdateInput,
+    PlacementVerifiesBlockInput,
     QuestionCreateInput,
     QuestionReuseInput,
     SimilarityCheckInput,
@@ -208,6 +209,31 @@ async def list_block_questions(block_id: str, user: User = Depends(require_auth)
     return {"questions": [_attached_question_dto(r) for r in rows]}
 
 
+@router.get("/materials/blocks/{block_id}/verifying-questions")
+async def list_verifying_questions(block_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """The reverse of materials/blocks/{id}/questions (§ course-builder
+    redesign, 2026-09-01, "Проверяет этот блок" section): quiz-stage
+    questions elsewhere that are tagged as verifying this reading block,
+    not actually placed here."""
+    rows = await svc.list_verifying_questions(db, block_id)
+    return {
+        "questions": [
+            {
+                "placementId": r["placementId"],
+                "courseId": r["courseId"],
+                "lessonId": r["lessonId"],
+                "blockId": r["blockId"],
+                "stage": r["stage"],
+                "stageLabel": r["stageLabel"],
+                "lessonTitle": r["lessonTitle"],
+                "blockTitle": r["blockTitle"],
+                **svc.question_dto(r["question"]),
+            }
+            for r in rows
+        ]
+    }
+
+
 @router.get("/lesson-blocks/{block_id}/questions")
 async def list_lesson_block_questions(block_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """Same reusable-pool listing as materials/blocks/{id}/questions, scoped
@@ -226,6 +252,16 @@ async def list_question_placements(question_id: str, admin: User = Depends(requi
     question itself was first created."""
     placements = await svc.list_question_placements(db, question_id)
     return {"placements": placements}
+
+
+@router.patch("/placements/{placement_id}/verifies-block")
+async def set_placement_verifies_block(
+    placement_id: str, body: PlacementVerifiesBlockInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)
+):
+    placement = await svc.set_placement_verifies_block(db, placement_id, body.materialBlockId)
+    if not placement:
+        raise ApiError(404, "Связь не найдена или не относится к квиз-этапу")
+    return {"ok": True}
 
 
 @router.delete("/placements/{placement_id}")
