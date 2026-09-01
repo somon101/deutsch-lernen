@@ -78,6 +78,24 @@ class AdminCoursesHubScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
+        // §9 of the course-builder redesign, 2026-09-01: course list moves
+        // to the top of the page, "+ Новый курс" becomes a header button
+        // (form opens in a bottom sheet) and notification settings move
+        // into this "⋯" menu — neither is content the teacher scans past
+        // every visit.
+        actions: [
+          TextButton.icon(
+            onPressed: () => _openCreateCourseSheet(context),
+            style: AdminButtonStyles.text(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Новый курс'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_vert),
+            onPressed: () => _openSettingsSheet(context),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: AdminMaxWidth(
         child: ListView(
@@ -88,32 +106,12 @@ class AdminCoursesHubScreen extends ConsumerWidget {
             AdminMetrics.cardGap + bottomBarClearance(context),
           ),
           children: [
-            AdminCard(
-              padding: EdgeInsets.zero,
-              child: ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AdminMetrics.cardRadius),
-                ),
-                title: Text(
-                  'Немецкий с нуля',
-                  style: AdminTypography.cardTitle,
-                ),
-                subtitle: Text(
-                  '${legacyCount ?? "…"} уроков · основной курс из файлов',
-                  style: AdminTypography.caption,
-                ),
-                trailing: const Icon(
-                  Icons.chevron_right,
-                  color: AdminColors.textSecondary,
-                ),
-                onTap: () => context.go('/admin/courses/legacy'),
-              ),
-            ),
-            const SizedBox(height: AdminMetrics.cardGap),
-            const _NotificationSettingsCard(),
-            const SizedBox(height: AdminMetrics.cardGap),
-            const _CreateCourseCard(),
-            const SizedBox(height: AdminMetrics.cardGap),
+            // The old file-based course stays the very first row of the
+            // list, styled identically to a real course row — no separate
+            // frame of its own (§9: "остаётся первой карточкой списка ...
+            // без отдельной рамки").
+            _LegacyCourseRow(legacyCount: legacyCount),
+            const SizedBox(height: 8),
             courses.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, st) => Text(
@@ -128,6 +126,79 @@ class AdminCoursesHubScreen extends ConsumerWidget {
         ),
       ),
       ),
+      ),
+    );
+  }
+
+  void _openCreateCourseSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AdminColors.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: const _CreateCourseCard(),
+      ),
+    );
+  }
+
+  void _openSettingsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AdminColors.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: const _NotificationSettingsCard(),
+      ),
+    );
+  }
+}
+
+/// Same visual treatment as [_CourseRow] (§9: "без отдельной рамки" — no
+/// distinct card style of its own), just pointed at the static file-based
+/// course instead of a real Course row, and with no reorder/delete (its
+/// position is always first, and it can't be deleted from here).
+class _LegacyCourseRow extends StatelessWidget {
+  const _LegacyCourseRow({required this.legacyCount});
+  final int? legacyCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminCard(
+      padding: const EdgeInsets.all(12),
+      child: InkWell(
+        onTap: () => context.go('/admin/courses/legacy'),
+        child: Row(
+          children: [
+            Container(
+              width: AdminMetrics.courseCoverWidth,
+              height: AdminMetrics.courseCoverHeight,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(6)),
+              child: const Icon(Icons.folder_outlined, size: 20, color: AdminColors.textMuted),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Немецкий с нуля', maxLines: 1, overflow: TextOverflow.ellipsis, style: AdminTypography.cardTitle),
+                  Text('основной курс из файлов', maxLines: 1, overflow: TextOverflow.ellipsis, style: AdminTypography.caption),
+                  const SizedBox(height: 2),
+                  Text('${legacyCount ?? "…"} уроков', style: AdminTypography.caption),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AdminColors.textSecondary),
+          ],
+        ),
       ),
     );
   }
@@ -193,7 +264,7 @@ List<Widget> _groupedCourseWidgets(
   return widgets;
 }
 
-class _CourseRow extends ConsumerWidget {
+class _CourseRow extends ConsumerStatefulWidget {
   const _CourseRow({
     required this.course,
     required this.index,
@@ -203,48 +274,60 @@ class _CourseRow extends ConsumerWidget {
   final int index;
   final int total;
 
-  Future<void> _reorder(WidgetRef ref, BuildContext context, int delta) async {
+  @override
+  ConsumerState<_CourseRow> createState() => _CourseRowState();
+}
+
+class _CourseRowState extends ConsumerState<_CourseRow> {
+  // Reorder arrows show only on hover/long-press (§9 of the redesign,
+  // 2026-09-01: "чтобы не шуметь") — long-press pins them visible for
+  // touch, where there's no hover at all.
+  bool _hovering = false;
+  bool _pinned = false;
+
+  Future<void> _reorder(int delta) async {
     final list = ref.read(_coursesHubProvider).value;
     if (list == null) return;
     final ids = list.map((c) => c.id).toList();
-    final j = index + delta;
+    final j = widget.index + delta;
     if (j < 0 || j >= ids.length) return;
-    final tmp = ids[index];
-    ids[index] = ids[j];
+    final tmp = ids[widget.index];
+    ids[widget.index] = ids[j];
     ids[j] = tmp;
     try {
       await ref.read(builderRepositoryProvider).reorderCourses(ids);
       ref.invalidate(_coursesHubProvider);
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         showErrorSnack(context, e, 'Не удалось изменить порядок');
       }
     }
   }
 
-  Future<void> _delete(WidgetRef ref, BuildContext context) async {
+  Future<void> _delete() async {
     final ok = await confirmDialog(
       context,
-      title: 'Удалить курс «${course.title}»?',
+      title: 'Удалить курс «${widget.course.title}»?',
       message: 'Со всеми уроками и словами. Это действие необратимо.',
     );
     if (!ok) return;
     try {
-      await ref.read(builderRepositoryProvider).deleteCourse(course.id);
+      await ref.read(builderRepositoryProvider).deleteCourse(widget.course.id);
       ref.invalidate(_coursesHubProvider);
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         showErrorSnack(context, e, 'Не удалось удалить курс');
       }
     }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final course = widget.course;
     final coverUrl = ref.read(apiClientProvider).assetUrl(course.coverUrl);
     final placeholder = Container(
-      width: 40,
-      height: 40,
+      width: AdminMetrics.courseCoverWidth,
+      height: AdminMetrics.courseCoverHeight,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: AdminColors.blockBg,
@@ -252,81 +335,96 @@ class _CourseRow extends ConsumerWidget {
       ),
       child: const Icon(
         Icons.image_not_supported_outlined,
-        size: 16,
+        size: 18,
         color: AdminColors.textMuted,
       ),
     );
+    final arrowsVisible = _hovering || _pinned;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      child: AdminCard(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovering = true),
+        onExit: (_) => setState(() => _hovering = false),
+        child: GestureDetector(
+          onLongPress: () => setState(() => _pinned = !_pinned),
+          child: AdminCard(
+            padding: const EdgeInsets.all(12),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (coverUrl.isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      coverUrl,
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => placeholder,
-                    ),
-                  )
-                else
-                  placeholder,
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        course.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AdminTypography.cardTitle,
-                      ),
-                      if (course.description.isNotEmpty)
-                        Text(
-                          course.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AdminTypography.caption,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (coverUrl.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.network(
+                          coverUrl,
+                          width: AdminMetrics.courseCoverWidth,
+                          height: AdminMetrics.courseCoverHeight,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => placeholder,
                         ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '${course.lessonCount} уроков · ${course.wordCount} слов · ${course.questionCount} вопросов',
-                        style: AdminTypography.caption,
+                      )
+                    else
+                      placeholder,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            course.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AdminTypography.cardTitle,
+                          ),
+                          if (course.description.isNotEmpty)
+                            Text(
+                              course.description,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AdminTypography.caption,
+                            ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${course.lessonCount} уроков · ${course.wordCount} слов · ${course.questionCount} вопросов',
+                            style: AdminTypography.caption,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    AdminStatusBadge(published: course.status == 'PUBLISHED'),
+                  ],
                 ),
-                AdminStatusBadge(published: course.status == 'PUBLISHED'),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    AnimatedOpacity(
+                      duration: AdminMetrics.transition,
+                      opacity: arrowsVisible ? 1 : 0,
+                      child: IgnorePointer(
+                        ignoring: !arrowsVisible,
+                        child: AdminReorderArrows(
+                          canMoveUp: widget.index > 0,
+                          canMoveDown: widget.index < widget.total - 1,
+                          onMove: _reorder,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => context.go('/admin/builder/${course.id}'),
+                      style: AdminButtonStyles.text(),
+                      child: const Text('Открыть'),
+                    ),
+                    const SizedBox(width: 4),
+                    AdminDeleteLink(onPressed: _delete),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                AdminReorderArrows(
-                  canMoveUp: index > 0,
-                  canMoveDown: index < total - 1,
-                  onMove: (delta) => _reorder(ref, context, delta),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => context.go('/admin/builder/${course.id}'),
-                  style: AdminButtonStyles.text(),
-                  child: const Text('Открыть'),
-                ),
-                const SizedBox(width: 4),
-                AdminDeleteLink(onPressed: () => _delete(ref, context)),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
     );

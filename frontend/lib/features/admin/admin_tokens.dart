@@ -62,6 +62,10 @@ class AdminMetrics {
   /// The step rail's fixed width (§4 of the redesign) — defined now so it's
   /// ready when the rail itself is built later; unused until then.
   static const railWidth = 220.0;
+  /// Course-card cover thumbnail on the hub list (§9 of the redesign,
+  /// 2026-09-01: "Обложка 64×48 слева").
+  static const courseCoverWidth = 64.0;
+  static const courseCoverHeight = 48.0;
   static const transition = Duration(milliseconds: 150);
 }
 

@@ -15,6 +15,7 @@ import 'core/widgets/app_lifecycle_heartbeat.dart';
 import 'l10n/app_localizations.dart';
 import 'features/admin/course_builder/presentation/admin_courses_hub_screen.dart';
 import 'features/admin/course_builder/presentation/builder_course_edit_screen.dart';
+import 'features/admin/course_builder/presentation/builder_lesson_edit_screen.dart';
 import 'features/admin/legacy_lessons/presentation/admin_lesson_edit_screen.dart';
 import 'features/admin/legacy_lessons/presentation/admin_legacy_lessons_screen.dart';
 import 'features/admin/users/presentation/admin_user_detail_screen.dart';
@@ -126,6 +127,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin/builder/:courseId',
         builder: (context, state) => BuilderCourseEditScreen(courseId: state.pathParameters['courseId']!),
+      ),
+      GoRoute(
+        path: '/admin/builder/:courseId/lessons/:lessonId',
+        builder: (context, state) => BuilderLessonEditScreen(
+          courseId: state.pathParameters['courseId']!,
+          lessonId: state.pathParameters['lessonId']!,
+        ),
       ),
       GoRoute(
         path: '/admin/users/:id',
