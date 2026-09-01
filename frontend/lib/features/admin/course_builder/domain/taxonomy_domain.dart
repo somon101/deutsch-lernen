@@ -97,6 +97,7 @@ class PoolQuestion {
     this.topicName,
     this.verifiesBlockId,
     this.verifiesBlockTitle,
+    this.placementCount = 1,
   });
 
   factory PoolQuestion.fromJson(Map<String, dynamic> json) => PoolQuestion(
@@ -107,6 +108,7 @@ class PoolQuestion {
         topicName: json['topicName'] as String?,
         verifiesBlockId: json['verifiesBlockId'] as String?,
         verifiesBlockTitle: json['verifiesBlockTitle'] as String?,
+        placementCount: json['placementCount'] as int? ?? 1,
       );
 
   final String id;
@@ -125,6 +127,10 @@ class PoolQuestion {
   // (§4). Null when no such tag was set.
   final String? verifiesBlockId;
   final String? verifiesBlockTitle;
+  // How many places this Question is placed in total (§ course-builder
+  // redesign, "в пуле · N мест" chip, 2026-09-01) — 1 means it only lives
+  // here ("только здесь"), 2+ means it's genuinely reused elsewhere too.
+  final int placementCount;
 }
 
 /// Every place one Question is actually shown to a learner, resolved to a

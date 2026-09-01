@@ -42,15 +42,27 @@ class BlockEditor extends ConsumerStatefulWidget {
 
 class _BlockEditorState extends ConsumerState<BlockEditor> {
   bool _open = false;
-  late List<QuestionDraft> _questions = List.of(widget.block.questions);
+  late List<QuestionDraft> _questions = _legacyQuestions(widget.block);
   late final _titleController = TextEditingController(text: widget.block.title);
   bool _busy = false;
+
+  // Only the real, locally-editable LessonQuestion rows (§ course-builder
+  // redesign bugfix, 2026-09-01) — widget.block.questions also carries any
+  // reusable-pool questions placed here (needed elsewhere for the course's
+  // aggregate question count), which must never enter this wholesale-save
+  // draft list or they'd get duplicated into a new LessonQuestion row on
+  // "Сохранить вопросы" while the pool original stays untouched. Pool
+  // questions are shown/edited exclusively through PoolQuestionsSection.
+  static List<QuestionDraft> _legacyQuestions(AdminBlock block) => [
+    for (var i = 0; i < block.questions.length; i++)
+      if (block.questionSources[i] != 'pool') block.questions[i],
+  ];
 
   @override
   void didUpdateWidget(covariant BlockEditor old) {
     super.didUpdateWidget(old);
     if (old.block.id != widget.block.id) {
-      _questions = List.of(widget.block.questions);
+      _questions = _legacyQuestions(widget.block);
       _titleController.text = widget.block.title;
     }
   }
@@ -238,8 +250,21 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
                 child: Text(_busy ? 'Сохраняем…' : 'Сохранить вопросы'),
               ),
             ),
-            const Divider(height: 32, color: AdminColors.border),
-            PoolQuestionsSection(lessonBlockId: widget.block.id, lessonId: widget.lessonId),
+            const SizedBox(height: AdminMetrics.fieldGap),
+            // § course-builder redesign, "единый список заданий", 2026-09-01
+            // — continues the SAME numbered sequence as the static
+            // _QuestionCard list above (no divider, no separate heading),
+            // even though the two groups still save through their own real,
+            // separate mechanisms underneath (§12: both must stay
+            // functional) — _QuestionLibrarySearch above only pulls in
+            // OTHER local questions ready to paste in; this is the actual
+            // reusable pool.
+            PoolQuestionsSection(
+              lessonBlockId: widget.block.id,
+              lessonId: widget.lessonId,
+              numberOffset: _questions.length,
+              showHeading: false,
+            ),
           ],
         ],
       ),
@@ -374,12 +399,24 @@ class _QuestionCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Задание ${index + 1} · ${questionKindLabel(draft)}',
-                  style: AdminTypography.fieldLabel.copyWith(
-                    color: AdminColors.text,
-                  ),
+                  '${index + 1}   ${questionKindLabel(draft)}',
+                  style: AdminTypography.body.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              // § course-builder redesign, "единый список заданий",
+              // 2026-09-01 — this is a static LessonQuestion, not a real
+              // QuestionPlacement, so it structurally can't have the pool
+              // items' reuse-count/verifies chips; this neutral label is
+              // what tells the two mechanisms apart now that they're
+              // visually merged (§12: both must stay distinguishable).
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: AdminColors.border)),
+                child: Text('локально', style: AdminTypography.caption),
+              ),
+              const SizedBox(width: 6),
               AdminReorderArrows(
                 canMoveUp: index > 0,
                 canMoveDown: index < total - 1,

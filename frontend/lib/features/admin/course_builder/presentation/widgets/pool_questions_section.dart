@@ -32,8 +32,15 @@ String poolQuestionPreviewText(QuestionDraft d) => switch (d) {
 /// quiz stage — can optionally be tagged as "verifying" a specific
 /// MaterialBlock (§4), purely a label with no effect on where it's shown.
 class PoolQuestionsSection extends ConsumerStatefulWidget {
-  const PoolQuestionsSection({super.key, this.materialBlockId, this.lessonBlockId, this.lessonId, this.topicId})
-      : assert(materialBlockId != null || lessonBlockId != null, 'must scope to either a material or lesson block');
+  const PoolQuestionsSection({
+    super.key,
+    this.materialBlockId,
+    this.lessonBlockId,
+    this.lessonId,
+    this.topicId,
+    this.numberOffset = 0,
+    this.showHeading = true,
+  }) : assert(materialBlockId != null || lessonBlockId != null, 'must scope to either a material or lesson block');
 
   final String? materialBlockId;
   final String? lessonBlockId;
@@ -41,6 +48,16 @@ class PoolQuestionsSection extends ConsumerStatefulWidget {
   // lessonBlockId-scoped question — the lesson's own MaterialBlocks.
   final String? lessonId;
   final String? topicId;
+  // How many items already precede this list (§ course-builder redesign,
+  // "единый список заданий" — a quiz block's static LessonQuestion items
+  // are numbered first, this list continues the same sequence, 2026-09-01).
+  // Zero (default) for the Материал stage's own checkpoint list, which
+  // isn't numbered at all.
+  final int numberOffset;
+  // False merges this list into a caller's own numbered sequence with no
+  // section break (the quiz-stage unified list) — true (default) keeps the
+  // standalone "Вопросы из общего пула" heading for the Материал stage.
+  final bool showHeading;
 
   @override
   ConsumerState<PoolQuestionsSection> createState() => _PoolQuestionsSectionState();
@@ -205,21 +222,25 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Вопросы из общего пула', style: AdminTypography.fieldLabel),
-        const SizedBox(height: 6),
+        if (widget.showHeading) ...[
+          Text('Вопросы из общего пула', style: AdminTypography.fieldLabel),
+          const SizedBox(height: 6),
+        ],
         if (attached == null)
           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator())
-        else if (attached.isEmpty)
+        else if (attached.isEmpty && widget.showHeading)
           Text('К этому блоку пока не привязано ни одного вопроса.', style: AdminTypography.caption)
         else
-          for (final q in attached)
+          for (var i = 0; i < attached.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: _AttachedQuestionTile(
-                question: q,
-                onUnlink: () => _unlink(q),
+                question: attached[i],
+                number: widget.numberOffset + i + 1,
+                showNumber: !widget.showHeading,
+                onUnlink: () => _unlink(attached[i]),
                 verifyBlocks: _showsVerifiesPicker ? _verifyBlocks : const [],
-                onVerifiesChanged: _showsVerifiesPicker ? (blockId) => _setVerifies(q, blockId) : null,
+                onVerifiesChanged: _showsVerifiesPicker ? (blockId) => _setVerifies(attached[i], blockId) : null,
               ),
             ),
         const SizedBox(height: 6),
@@ -308,11 +329,19 @@ class _AttachedQuestionTile extends ConsumerStatefulWidget {
   const _AttachedQuestionTile({
     required this.question,
     required this.onUnlink,
+    this.number,
+    this.showNumber = false,
     this.verifyBlocks = const [],
     this.onVerifiesChanged,
   });
   final PoolQuestion question;
   final VoidCallback onUnlink;
+  // § course-builder redesign, "единый список заданий", 2026-09-01 — the
+  // quiz-stage editor merges this list into one continuously-numbered
+  // sequence with its own static questions; the Материал stage's own
+  // checkpoint list stays unnumbered (showNumber false, the default).
+  final int? number;
+  final bool showNumber;
   // Only non-empty for a lessonBlockId-scoped listing (quiz stages) — the
   // lesson's own MaterialBlocks, to offer as "verifies" chip choices.
   final List<AdminMaterialBlock> verifyBlocks;
@@ -395,13 +424,17 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
                 child: InkWell(
                   onTap: _toggle,
                   child: Text(
-                    '${questionKindLabel(q.draft)}: ${poolQuestionPreviewText(q.draft)}',
+                    widget.showNumber && widget.number != null
+                        ? '${widget.number}   ${questionKindLabel(q.draft)}'
+                        : '${questionKindLabel(q.draft)}: ${poolQuestionPreviewText(q.draft)}',
                     style: AdminTypography.body,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
+              _UsageCountChip(count: q.placementCount),
+              const SizedBox(width: 6),
               if (showsChip) ...[
                 _VerifiesChip(title: q.verifiesBlockTitle, onTap: () => _pickVerifies(context)),
                 const SizedBox(width: 6),
@@ -414,6 +447,15 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
               AdminDeleteLink(label: 'Открепить', onPressed: widget.onUnlink),
             ],
           ),
+          if (widget.showNumber) ...[
+            const SizedBox(height: 2),
+            Text(
+              '«${poolQuestionPreviewText(q.draft)}»',
+              style: AdminTypography.caption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
           if (_open) ...[
             const Divider(height: 16, color: AdminColors.border),
             _ReadOnlyQuestionContent(draft: q.draft),
@@ -437,6 +479,27 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
 /// but only the former should actually call [onVerifiesChanged].
 class _ClearVerifies {
   const _ClearVerifies();
+}
+
+/// Reusability at a glance (§ course-builder redesign, "в пуле · N мест"
+/// chip, 2026-09-01) — neutral (this isn't a connectivity indicator, it's
+/// just a count), always visible so the teacher doesn't have to expand a
+/// row to learn whether editing it here would affect other lessons too.
+class _UsageCountChip extends StatelessWidget {
+  const _UsageCountChip({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(999), border: Border.all(color: AdminColors.border)),
+      child: Text(
+        count > 1 ? 'в пуле · $count мест' : 'только здесь',
+        style: AdminTypography.caption,
+      ),
+    );
+  }
 }
 
 /// The one connectivity indicator in the whole admin family (§2/§10 of the

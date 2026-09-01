@@ -41,6 +41,7 @@ class AdminBlock {
     required this.title,
     required this.position,
     required this.questions,
+    required this.questionSources,
   });
 
   factory AdminBlock.fromJson(Map<String, dynamic> json) => AdminBlock(
@@ -51,19 +52,18 @@ class AdminBlock {
     // The backend's own "questions" field merges real, locally-editable
     // LessonQuestion rows with reusable-pool questions placed in the same
     // block (so the STUDENT-facing quiz sees everything regardless of
-    // mechanism, § approved rule 4, 2026-08-27) — this admin-only model
-    // keeps just the "legacy" ones (§ course-builder redesign bugfix,
-    // 2026-09-01): BlockEditor's static list is a local draft that gets
-    // wholesale-replaced on "Сохранить вопросы", and a pool question
-    // slipping in there would get silently duplicated into a brand new
-    // LessonQuestion row on save, alongside the untouched pool original.
-    // Pool questions are shown (and edited) exclusively through
-    // PoolQuestionsSection, which fetches its own list directly.
+    // mechanism, § approved rule 4, 2026-08-27) — kept as-is here
+    // (unfiltered) since course-level aggregates (word/question counts in
+    // builder_course_edit_screen.dart) sum this field across every block
+    // and need the true total either way. Each item carries its real
+    // "source" ("legacy" | "pool") for BlockEditor to filter down to just
+    // the legacy ones for its own local-draft state (§ course-builder
+    // redesign bugfix, 2026-09-01) — see BlockEditorState._questions.
     questions: (json['questions'] as List<dynamic>)
         .cast<Map<String, dynamic>>()
-        .where((q) => q['source'] != 'pool')
         .map(questionDraftFromWire)
         .toList(),
+    questionSources: (json['questions'] as List<dynamic>).cast<Map<String, dynamic>>().map((q) => q['source'] as String? ?? 'legacy').toList(),
   );
 
   final String id;
@@ -71,6 +71,8 @@ class AdminBlock {
   final String title;
   final int position;
   final List<QuestionDraft> questions;
+  // Parallel to [questions] — same index, "legacy" or "pool" per item.
+  final List<String> questionSources;
 }
 
 class AdminLesson {
