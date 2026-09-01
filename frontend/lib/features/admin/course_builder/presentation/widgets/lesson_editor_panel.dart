@@ -88,6 +88,7 @@ class LessonEditorPanel extends ConsumerStatefulWidget {
     required this.onRemoveMedia,
     required this.onReuseMedia,
     required this.onReload,
+    this.languageId,
   });
 
   final String courseId;
@@ -98,6 +99,10 @@ class LessonEditorPanel extends ConsumerStatefulWidget {
   final Future<void> Function(String kind) onRemoveMedia;
   final Future<void> Function(String kind, String url) onReuseMedia;
   final VoidCallback onReload;
+  // The course's resolved Language.id — threaded down to MaterialBlockEditor
+  // for topic creation (§ topic-language fix, 2026-09-01). Null for legacy
+  // lessons and for a builder course with no level/language picked yet.
+  final String? languageId;
 
   @override
   ConsumerState<LessonEditorPanel> createState() => _LessonEditorPanelState();
@@ -378,6 +383,7 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
           courseId: widget.courseId,
           lessonId: widget.lesson.id,
           lessonTitle: widget.lesson.title,
+          languageId: widget.languageId,
         );
       case 'video':
       case 'audio':
@@ -410,6 +416,7 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
                 total: blocks.length,
                 onMove: (delta) => _moveBlock(key, blocks, i, delta),
                 onChanged: widget.onReload,
+                languageId: widget.languageId,
               ),
             SizedBox(
               width: double.infinity,

@@ -26,6 +26,7 @@ class BlockEditor extends ConsumerStatefulWidget {
     required this.total,
     required this.onMove,
     required this.onChanged,
+    this.languageId,
   });
 
   final String courseId;
@@ -35,6 +36,9 @@ class BlockEditor extends ConsumerStatefulWidget {
   final int total;
   final void Function(int delta) onMove;
   final VoidCallback onChanged;
+  // The course's real Language.id, threaded to PoolQuestionsSection for
+  // Topic tagging (§ topic-language fix, 2026-09-01).
+  final String? languageId;
 
   @override
   ConsumerState<BlockEditor> createState() => _BlockEditorState();
@@ -237,6 +241,7 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
             PoolQuestionsSection(
               lessonBlockId: widget.block.id,
               lessonId: widget.lessonId,
+              languageId: widget.languageId,
               numberOffset: _questions.length,
               showHeading: false,
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
 import '../../../widgets/admin_feedback.dart';
@@ -17,11 +18,21 @@ import 'question_kind_editors.dart';
 /// Material (auto-created on first open) — the schema supports several, but
 /// the UI only needs one for now.
 class MaterialBlockEditor extends ConsumerStatefulWidget {
-  const MaterialBlockEditor({super.key, required this.courseId, required this.lessonId, required this.lessonTitle});
+  const MaterialBlockEditor({super.key, required this.courseId, required this.lessonId, required this.lessonTitle, required this.languageId});
 
   final String courseId;
   final String lessonId;
   final String lessonTitle;
+  // The course's real Language.id (resolved from Course.levelId → Level.
+  // languageId by the caller) — topics are scoped per-language, and Topic
+  // creation needs an actual Language row to attach to. Null when the
+  // course has no level/language assigned yet (a course created without
+  // picking one, or the legacy file-based course, which predates the
+  // Language/Level system entirely) — topic management is disabled rather
+  // than guessing, since a wrong guess here previously caused a hardcoded
+  // 'de' literal to 404 as "Язык не найден" (no Language row actually has
+  // that id — real Language ids are UUIDs).
+  final String? languageId;
 
   @override
   ConsumerState<MaterialBlockEditor> createState() => _MaterialBlockEditorState();
@@ -46,7 +57,8 @@ class _MaterialBlockEditorState extends ConsumerState<MaterialBlockEditor> {
     var material = materials.where((m) => m.materialType == 'text').cast<AdminMaterial?>().firstWhere((m) => m != null, orElse: () => null);
     material ??= await repo.createMaterial(courseId: widget.courseId, lessonId: widget.lessonId, materialType: 'text', title: widget.lessonTitle);
     final blocks = await repo.listMaterialBlocks(material.id);
-    final topics = await repo.listTopics(languageId: 'de');
+    final languageId = widget.languageId;
+    final topics = languageId == null ? <AdminTopic>[] : await repo.listTopics(languageId: languageId);
     if (mounted) {
       setState(() {
         _material = material;
@@ -105,8 +117,13 @@ class _MaterialBlockEditorState extends ConsumerState<MaterialBlockEditor> {
   }
 
   Future<void> _createTopic(String name) async {
+    final languageId = widget.languageId;
+    if (languageId == null) {
+      showErrorSnack(context, Exception('no language'), 'Сначала укажите язык курса в его настройках — темы привязаны к языку');
+      return;
+    }
     try {
-      final (topic, existing) = await ref.read(builderRepositoryProvider).createTopic('de', name);
+      final (topic, existing) = await ref.read(builderRepositoryProvider).createTopic(languageId, name);
       setState(() => _topics = _topics.any((t) => t.id == topic.id) ? _topics : [..._topics, topic]);
       await _onTopicChanged(topic.id);
       if (mounted && existing) showSuccessSnack(context, 'Использована существующая тема «${topic.name}»');
@@ -156,6 +173,7 @@ class _MaterialBlockEditorState extends ConsumerState<MaterialBlockEditor> {
         _TopicPicker(
           topics: _topics,
           selectedTopicId: material.topicId,
+          languageAvailable: widget.languageId != null,
           onChanged: _onTopicChanged,
           onCreate: _createTopic,
           onDelete: _deleteTopic,
@@ -173,6 +191,7 @@ class _MaterialBlockEditorState extends ConsumerState<MaterialBlockEditor> {
             index: index,
             block: _blocks[index],
             topicId: material.topicId,
+            languageId: widget.languageId,
             onDeleted: () => _deleteBlock(_blocks[index]),
             onSaved: (updated) => setState(() => _blocks[index] = updated),
           ),
@@ -188,6 +207,7 @@ class _TopicPicker extends StatelessWidget {
   const _TopicPicker({
     required this.topics,
     required this.selectedTopicId,
+    required this.languageAvailable,
     required this.onChanged,
     required this.onCreate,
     required this.onDelete,
@@ -195,6 +215,11 @@ class _TopicPicker extends StatelessWidget {
 
   final List<AdminTopic> topics;
   final String? selectedTopicId;
+  // False when the course has no language resolved yet (§ topic-language
+  // fix, 2026-09-01) — creating a topic needs a real Language row to
+  // attach to, so the button is disabled with an explanatory tooltip
+  // instead of failing with a confusing "Язык не найден".
+  final bool languageAvailable;
   final ValueChanged<String?> onChanged;
   final ValueChanged<String> onCreate;
   final ValueChanged<AdminTopic> onDelete;
@@ -216,7 +241,14 @@ class _TopicPicker extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
-        TextButton(onPressed: () => _promptNewTopic(context), style: AdminButtonStyles.text(), child: const Text('+ Новая тема')),
+        Tooltip(
+          message: languageAvailable ? '' : 'Сначала укажите язык курса в его настройках',
+          child: TextButton(
+            onPressed: languageAvailable ? () => _promptNewTopic(context) : null,
+            style: AdminButtonStyles.text(),
+            child: const Text('+ Новая тема'),
+          ),
+        ),
         IconButton(
           tooltip: 'Управление темами',
           icon: const Icon(Icons.settings_outlined, size: 20),
@@ -229,31 +261,37 @@ class _TopicPicker extends StatelessWidget {
   // Closes on any delete rather than trying to keep the dialog's own list in
   // sync with the parent's setState — reopening to delete another is a
   // small price for not fighting two independent rebuild sources.
+  // Both dialogs below force lightTheme (§ admin light-theme fix,
+  // 2026-09-01) — showDialog attaches to the Navigator's Overlay, outside
+  // this screen's own `Theme(data: lightTheme, ...)` wrapper.
   Future<void> _manageTopics(BuildContext context) async {
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Темы языка'),
-        content: SizedBox(
-          width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final topic in topics)
-                ListTile(
-                  dense: true,
-                  title: Text(topic.name),
-                  trailing: AdminDeleteLink(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onDelete(topic);
-                    },
+      builder: (context) => Theme(
+        data: lightTheme,
+        child: AlertDialog(
+          title: const Text('Темы языка'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final topic in topics)
+                  ListTile(
+                    dense: true,
+                    title: Text(topic.name),
+                    trailing: AdminDeleteLink(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onDelete(topic);
+                      },
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
+          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Готово'))],
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Готово'))],
       ),
     );
   }
@@ -262,13 +300,16 @@ class _TopicPicker extends StatelessWidget {
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Новая тема'),
-        content: TextField(controller: controller, decoration: adminInputDecoration(label: 'Название темы', hint: 'Präteritum')),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(controller.text.trim()), child: const Text('Создать')),
-        ],
+      builder: (context) => Theme(
+        data: lightTheme,
+        child: AlertDialog(
+          title: const Text('Новая тема'),
+          content: TextField(controller: controller, decoration: adminInputDecoration(label: 'Название темы', hint: 'Präteritum')),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Отмена')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(controller.text.trim()), child: const Text('Создать')),
+          ],
+        ),
       ),
     );
     if (name != null && name.isNotEmpty) onCreate(name);
@@ -276,11 +317,20 @@ class _TopicPicker extends StatelessWidget {
 }
 
 class _MaterialBlockCard extends ConsumerStatefulWidget {
-  const _MaterialBlockCard({super.key, required this.index, required this.block, required this.topicId, required this.onDeleted, required this.onSaved});
+  const _MaterialBlockCard({
+    super.key,
+    required this.index,
+    required this.block,
+    required this.topicId,
+    required this.languageId,
+    required this.onDeleted,
+    required this.onSaved,
+  });
 
   final int index;
   final AdminMaterialBlock block;
   final String? topicId;
+  final String? languageId;
   final VoidCallback onDeleted;
   final ValueChanged<AdminMaterialBlock> onSaved;
 
@@ -355,7 +405,7 @@ class _MaterialBlockCardState extends ConsumerState<_MaterialBlockCard> {
                 child: FilledButton(onPressed: _busy ? null : _save, style: AdminButtonStyles.primary(), child: Text(_busy ? 'Сохраняем…' : 'Сохранить')),
               ),
               const SizedBox(height: AdminMetrics.cardGap),
-              PoolQuestionsSection(materialBlockId: widget.block.id, topicId: widget.topicId),
+              PoolQuestionsSection(materialBlockId: widget.block.id, topicId: widget.topicId, languageId: widget.languageId),
               const SizedBox(height: AdminMetrics.cardGap),
               _VerifyingQuestionsSection(materialBlockId: widget.block.id),
             ],

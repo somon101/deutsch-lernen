@@ -8,8 +8,13 @@ import '../../admin_tokens.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
 import '../domain/builder_domain.dart';
+import '../domain/taxonomy_domain.dart';
 import 'builder_course_edit_screen.dart';
 import 'widgets/lesson_editor_panel.dart';
+
+final _levelsForLanguageProvider = FutureProvider.autoDispose<List<AdminLevel>>(
+  (ref) => ref.watch(builderRepositoryProvider).listLevels(),
+);
 
 /// One lesson's editor, on its own screen (§9 of the course-builder
 /// redesign, 2026-09-01: "разворот открывает не аккордеон, а переход на
@@ -27,6 +32,15 @@ class BuilderLessonEditScreen extends ConsumerWidget {
     final course = ref.watch(builderCourseProvider(courseId));
     void reload() => ref.invalidate(builderCourseProvider(courseId));
     final lesson = course.value?.lessons.where((l) => l.id == lessonId).cast<AdminLesson?>().firstWhere((l) => l != null, orElse: () => null);
+    // Course.levelId → Level.languageId (§ topic-language fix, 2026-09-01)
+    // — MaterialBlockEditor needs a real Language.id to create topics
+    // against; null (level not picked, or still loading) disables that
+    // instead of guessing.
+    final levelId = course.value?.levelId;
+    final levels = ref.watch(_levelsForLanguageProvider).value;
+    final languageId = levelId == null || levels == null
+        ? null
+        : levels.where((l) => l.id == levelId).map((l) => l.languageId).cast<String?>().firstWhere((_) => true, orElse: () => null);
 
     return BackGuard(
       fallbackPath: '/admin/builder/$courseId',
@@ -71,6 +85,7 @@ class BuilderLessonEditScreen extends ConsumerWidget {
                     LessonEditorPanel(
                       courseId: courseId,
                       lesson: lesson,
+                      languageId: languageId,
                       libraryLoader: (kind) => ref.read(builderRepositoryProvider).listMediaLibrary(kind),
                       onUploadMedia: (kind, bytes, filename) async {
                         try {

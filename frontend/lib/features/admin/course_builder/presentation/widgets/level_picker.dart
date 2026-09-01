@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../admin_tokens.dart';
 import '../../../widgets/admin_feedback.dart';
 import '../../data/builder_repository.dart';
@@ -162,17 +163,26 @@ class _LevelPickerFieldState extends ConsumerState<LevelPickerField> {
   }
 }
 
+// Both dialogs below force lightTheme (§ admin light-theme fix, 2026-09-01)
+// — showDialog attaches to the Navigator's Overlay, outside any ancestor
+// `Theme(data: lightTheme, ...)` wrapper (a screen's own, or even the
+// bottom sheet this picker is often opened from), so without this the
+// dialog falls back to the app's actual ambient theme.
+
 Future<String?> _promptText(BuildContext context, {required String title, required String label}) {
   final controller = TextEditingController();
   return showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(title),
-      content: TextField(controller: controller, autofocus: true, decoration: adminInputDecoration(label: label)),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.of(dialogContext).pop(controller.text), child: const Text('Создать')),
-      ],
+    builder: (dialogContext) => Theme(
+      data: lightTheme,
+      child: AlertDialog(
+        title: Text(title),
+        content: TextField(controller: controller, autofocus: true, decoration: adminInputDecoration(label: label)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(controller.text), child: const Text('Создать')),
+        ],
+      ),
     ),
   );
 }
@@ -181,29 +191,32 @@ Future<String?> _promptLevelCode(BuildContext context, {required Set<String> exi
   final controller = TextEditingController();
   return showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Новый уровень'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final code in _cefrSuggestions)
-                if (!existingCodes.contains(code))
-                  ActionChip(label: Text(code), onPressed: () => Navigator.of(dialogContext).pop(code)),
-            ],
-          ),
-          const SizedBox(height: AdminMetrics.fieldGap),
-          TextField(controller: controller, autofocus: true, decoration: adminInputDecoration(label: 'Или свой код, например «A0»')),
+    builder: (dialogContext) => Theme(
+      data: lightTheme,
+      child: AlertDialog(
+        title: const Text('Новый уровень'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final code in _cefrSuggestions)
+                  if (!existingCodes.contains(code))
+                    ActionChip(label: Text(code), onPressed: () => Navigator.of(dialogContext).pop(code)),
+              ],
+            ),
+            const SizedBox(height: AdminMetrics.fieldGap),
+            TextField(controller: controller, autofocus: true, decoration: adminInputDecoration(label: 'Или свой код, например «A0»')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext).pop(controller.text), child: const Text('Создать')),
         ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.of(dialogContext).pop(controller.text), child: const Text('Создать')),
-      ],
     ),
   );
 }

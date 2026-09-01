@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
 import '../../../widgets/admin_feedback.dart';
@@ -38,6 +39,7 @@ class PoolQuestionsSection extends ConsumerStatefulWidget {
     this.lessonBlockId,
     this.lessonId,
     this.topicId,
+    this.languageId,
     this.numberOffset = 0,
     this.showHeading = true,
   }) : assert(materialBlockId != null || lessonBlockId != null, 'must scope to either a material or lesson block');
@@ -48,6 +50,11 @@ class PoolQuestionsSection extends ConsumerStatefulWidget {
   // lessonBlockId-scoped question — the lesson's own MaterialBlocks.
   final String? lessonId;
   final String? topicId;
+  // The course's real Language.id, for tagging a new pool question with a
+  // Topic (§ topic-language fix, 2026-09-01) — null (no level/language
+  // picked yet) just leaves the topic picker empty instead of querying a
+  // bogus language.
+  final String? languageId;
   // How many items already precede this list (§ course-builder redesign,
   // "единый список заданий" — a quiz block's static LessonQuestion items
   // are numbered first, this list continues the same sequence, 2026-09-01).
@@ -95,8 +102,10 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   }
 
   Future<void> _loadTopics() async {
+    final languageId = widget.languageId;
+    if (languageId == null) return;
     try {
-      final topics = await ref.read(builderRepositoryProvider).listTopics(languageId: 'de');
+      final topics = await ref.read(builderRepositoryProvider).listTopics(languageId: languageId);
       if (mounted) setState(() => _topics = topics);
     } catch (_) {
       // Non-critical — the Topic picker just stays empty.
@@ -156,30 +165,38 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   /// differently and the teacher needs to know that BEFORE picking it, not
   /// after.
   Future<void> _pickType(BuildContext context) async {
+    // Forces lightTheme (§ admin light-theme fix, 2026-09-01) —
+    // showModalBottomSheet attaches to the Navigator's Overlay, outside any
+    // ancestor `Theme(data: lightTheme, ...)` wrapper, so this sheet's
+    // hardcoded AdminColors/AdminTypography text would otherwise pair with
+    // whatever the app's actual ambient theme happens to be.
     final picked = await showModalBottomSheet<QuestionDraft Function()>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Новое задание', style: AdminTypography.cardTitle),
-            ),
-            _TypeRow(title: 'Выбор ответа', note: 'один правильный вариант', onTap: () => Navigator.of(context).pop(ChoiceDraft.blank)),
-            _TypeRow(title: 'Верно / неверно', note: 'утверждение, да или нет', onTap: () => Navigator.of(context).pop(TrueFalseDraft.blank)),
-            _TypeRow(title: 'Пропущенное слово', note: 'фраза с одним пропуском', onTap: () => Navigator.of(context).pop(ClozeDraft.blank)),
-            _TypeRow(title: 'Собери фразу', note: 'слова вразброс', onTap: () => Navigator.of(context).pop(ScrambleDraft.blank)),
-            _TypeRow(title: 'Сопоставление', note: 'пары слово → перевод', onTap: () => Navigator.of(context).pop(MatchDraft.blank)),
-            const Divider(height: 20, color: AdminColors.border),
-            _TypeRow(
-              title: 'Пропущенное слово (авто)',
-              note: 'пропуск и неверные варианты система подбирает сама, для каждого ученика свои',
-              onTap: () => Navigator.of(context).pop(AutoBlankDraft.blank),
-            ),
-            const SizedBox(height: 8),
-          ],
+      builder: (context) => Theme(
+        data: lightTheme,
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text('Новое задание', style: AdminTypography.cardTitle),
+              ),
+              _TypeRow(title: 'Выбор ответа', note: 'один правильный вариант', onTap: () => Navigator.of(context).pop(ChoiceDraft.blank)),
+              _TypeRow(title: 'Верно / неверно', note: 'утверждение, да или нет', onTap: () => Navigator.of(context).pop(TrueFalseDraft.blank)),
+              _TypeRow(title: 'Пропущенное слово', note: 'фраза с одним пропуском', onTap: () => Navigator.of(context).pop(ClozeDraft.blank)),
+              _TypeRow(title: 'Собери фразу', note: 'слова вразброс', onTap: () => Navigator.of(context).pop(ScrambleDraft.blank)),
+              _TypeRow(title: 'Сопоставление', note: 'пары слово → перевод', onTap: () => Navigator.of(context).pop(MatchDraft.blank)),
+              const Divider(height: 20, color: AdminColors.border),
+              _TypeRow(
+                title: 'Пропущенное слово (авто)',
+                note: 'пропуск и неверные варианты система подбирает сама, для каждого ученика свои',
+                onTap: () => Navigator.of(context).pop(AutoBlankDraft.blank),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -240,9 +257,12 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   /// attaching an existing match is now the primary, one-tap action, not
   /// buried behind a plain "cancel".
   Future<Object?> _showSimilarityWarning(BuildContext context, List<SimilarQuestionMatch> similar) {
+    // Forces lightTheme, same reason as _pickType above.
     return showDialog<Object?>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => Theme(
+        data: lightTheme,
+        child: AlertDialog(
         title: const Text('Похоже на существующее задание'),
         content: SizedBox(
           width: 420,
@@ -280,6 +300,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
             child: const Text('Всё равно создать новое'),
           ),
         ],
+        ),
       ),
     );
   }
@@ -466,26 +487,30 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
   Future<void> _pickVerifies(BuildContext context) async {
     final onChanged = widget.onVerifiesChanged;
     if (onChanged == null) return;
+    // Forces lightTheme, same reason as _pickType above.
     final picked = await showModalBottomSheet<Object?>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Проверяет блок материала', style: AdminTypography.cardTitle),
-            ),
-            ListTile(
-              dense: true,
-              title: Text('Не привязывать', style: AdminTypography.body),
-              onTap: () => Navigator.of(context).pop(const _ClearVerifies()),
-            ),
-            for (final b in widget.verifyBlocks)
-              ListTile(dense: true, title: Text(b.title, style: AdminTypography.body), onTap: () => Navigator.of(context).pop(b.id)),
-            const SizedBox(height: 8),
-          ],
+      builder: (context) => Theme(
+        data: lightTheme,
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text('Проверяет блок материала', style: AdminTypography.cardTitle),
+              ),
+              ListTile(
+                dense: true,
+                title: Text('Не привязывать', style: AdminTypography.body),
+                onTap: () => Navigator.of(context).pop(const _ClearVerifies()),
+              ),
+              for (final b in widget.verifyBlocks)
+                ListTile(dense: true, title: Text(b.title, style: AdminTypography.body), onTap: () => Navigator.of(context).pop(b.id)),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );

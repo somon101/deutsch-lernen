@@ -139,18 +139,29 @@ class AdminCoursesHubScreen extends ConsumerWidget {
       // full max-height slot by showModalBottomSheet's own layout — Wrap is
       // the standard fix, since RenderWrap always sizes to its children
       // regardless of how loose the incoming constraints are.
-      builder: (sheetContext) => Wrap(
-        children: [
-          Padding(
-            padding: EdgeInsets.only(
-              left: 16,
-              right: 16,
-              top: 16,
-              bottom: 16 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+      //
+      // showModalBottomSheet attaches its content to the Navigator's
+      // Overlay, which sits OUTSIDE this screen's local `Theme(data:
+      // lightTheme, ...)` wrapper — so an unstyled TextField inside it falls
+      // back to the ambient (possibly dark) theme's text color, same bug as
+      // admin_courses_hub_screen.dart's own §admin light-theme fix, just in
+      // a spot that wrapper doesn't reach. Forcing lightTheme again here
+      // fixes it for this sheet specifically.
+      builder: (sheetContext) => Theme(
+        data: lightTheme,
+        child: Wrap(
+          children: [
+            Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: 16 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
+              child: const _CreateCourseCard(),
             ),
-            child: const _CreateCourseCard(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -160,13 +171,17 @@ class AdminCoursesHubScreen extends ConsumerWidget {
       context: context,
       backgroundColor: AdminColors.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (sheetContext) => Wrap(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: const _NotificationSettingsCard(),
-          ),
-        ],
+      // Same forced-lightTheme fix as _openCreateCourseSheet above.
+      builder: (sheetContext) => Theme(
+        data: lightTheme,
+        child: Wrap(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: const _NotificationSettingsCard(),
+            ),
+          ],
+        ),
       ),
     );
   }

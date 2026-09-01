@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/theme/app_theme.dart';
 import '../../../admin_tokens.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/taxonomy_domain.dart';
@@ -55,7 +56,7 @@ class _LessonMapScreenState extends ConsumerState<_LessonMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: ThemeData.light(),
+      data: lightTheme,
       child: Scaffold(
         backgroundColor: AdminColors.bg,
         appBar: AppBar(
@@ -413,7 +414,7 @@ class _CourseMapScreenState extends ConsumerState<_CourseMapScreen> {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: ThemeData.light(),
+      data: lightTheme,
       child: Scaffold(
         backgroundColor: AdminColors.bg,
         appBar: AppBar(

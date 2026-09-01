@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
+import '../../../core/theme/app_theme.dart';
 
 /// Shared feedback helpers for the admin screens — a native SnackBar stands
 /// in for the old React admin's transient "Сохранено" flash /
@@ -43,19 +44,30 @@ Future<bool> confirmDialog(
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: message != null ? Text(message) : null,
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Отмена'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: Text(confirmLabel),
-        ),
-      ],
+    // showDialog attaches to the Navigator's Overlay, outside any local
+    // `Theme(data: lightTheme, ...)` wrapper an admin screen applies to
+    // itself — so without this, the dialog falls back to the app's actual
+    // ambient theme instead of the admin family's fixed light palette (§
+    // admin light-theme fix, 2026-09-01, same bug as the original report,
+    // just in a spot that screen-level wrapper doesn't reach). confirmDialog
+    // is only ever called from admin screens, so forcing lightTheme here is
+    // always correct.
+    builder: (context) => Theme(
+      data: lightTheme,
+      child: AlertDialog(
+        title: Text(title),
+        content: message != null ? Text(message) : null,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
     ),
   );
   return result ?? false;
