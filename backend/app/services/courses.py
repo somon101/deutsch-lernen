@@ -179,8 +179,12 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
                     # LessonQuestion rows (old full-replace quiz path) plus any
                     # reusable-pool Questions placed here (§ approved rule 4,
                     # 2026-08-27) — merged, never one replacing the other.
+                    # "source" tags which is which (§ course-builder redesign
+                    # bugfix, 2026-09-01) — see to_question_dtos's own comment
+                    # for why the admin builder needs this to not duplicate a
+                    # pool question into a real LessonQuestion row on save.
                     "questions": [
-                        {"id": q.id, **to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data)}
+                        {"id": q.id, "source": "legacy", **to_question_dto(q.kind, q.prompt, q.options, q.correctAnswer, q.data)}
                         for q in lesson_questions
                         if q.blockId == b.id
                     ]

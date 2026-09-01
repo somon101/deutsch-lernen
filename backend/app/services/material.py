@@ -53,13 +53,29 @@ def to_question_dtos(question: Question, placement_id: str) -> list[dict]:
     each resolved into an actual blanked question + options only when the
     learner reaches it (GET /api/questions/{id}/blank/{phraseIndex}) —
     nothing about the blank/options exists yet at content-fetch time."""
+    # "source": "pool" (§ course-builder redesign bugfix, 2026-09-01) — every
+    # entry this function returns comes from a real Question+QuestionPlacement
+    # row, never a legacy LessonQuestion. courses.py's lesson_dto merges
+    # these into the SAME block.questions array as real LessonQuestion rows
+    # (§ approved rule 4, 2026-08-27, for the student-facing quiz to see a
+    # complete list either way) — without this marker the admin builder
+    # can't tell them apart, and its "Сохранить вопросы" wholesale-replace
+    # (save_block_questions) would silently duplicate a pool question into
+    # a brand new LessonQuestion row alongside the untouched original.
     if question.kind == "auto_blank":
         phrases = (question.data or {}).get("phrases", [])
         return [
-            {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_blank", "questionId": question.id, "phraseIndex": i}
+            {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_blank", "questionId": question.id, "phraseIndex": i, "source": "pool"}
             for i in range(len(phrases))
         ]
-    return [{"id": question.id, "placementId": placement_id, **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data)}]
+    return [
+        {
+            "id": question.id,
+            "placementId": placement_id,
+            "source": "pool",
+            **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data),
+        }
+    ]
 
 
 def parse_material(material_text: str, vocabulary: list[dict]) -> dict:

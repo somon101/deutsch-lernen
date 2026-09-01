@@ -48,8 +48,21 @@ class AdminBlock {
     stage: json['stage'] as String,
     title: json['title'] as String,
     position: json['position'] as int,
+    // The backend's own "questions" field merges real, locally-editable
+    // LessonQuestion rows with reusable-pool questions placed in the same
+    // block (so the STUDENT-facing quiz sees everything regardless of
+    // mechanism, § approved rule 4, 2026-08-27) — this admin-only model
+    // keeps just the "legacy" ones (§ course-builder redesign bugfix,
+    // 2026-09-01): BlockEditor's static list is a local draft that gets
+    // wholesale-replaced on "Сохранить вопросы", and a pool question
+    // slipping in there would get silently duplicated into a brand new
+    // LessonQuestion row on save, alongside the untouched pool original.
+    // Pool questions are shown (and edited) exclusively through
+    // PoolQuestionsSection, which fetches its own list directly.
     questions: (json['questions'] as List<dynamic>)
-        .map((q) => questionDraftFromWire(q as Map<String, dynamic>))
+        .cast<Map<String, dynamic>>()
+        .where((q) => q['source'] != 'pool')
+        .map(questionDraftFromWire)
         .toList(),
   );
 
