@@ -284,7 +284,8 @@ async def similarity_check(body: SimilarityCheckInput, admin: User = Depends(req
     similar = await svc.check_similarity(db, draft, body.topicId, body.materialId)
     return {
         "similar": [
-            {"questionId": s["question"].id, "question": svc.question_dto(s["question"]), "score": s["score"]} for s in similar
+            {"questionId": s["question"].id, "question": svc.question_dto(s["question"]), "score": s["score"], "location": s.get("location")}
+            for s in similar
         ]
     }
 

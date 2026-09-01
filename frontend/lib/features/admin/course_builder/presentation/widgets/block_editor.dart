@@ -126,8 +126,6 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
     }
   }
 
-  void _addQuestion(QuestionDraft Function() blank) =>
-      setState(() => _questions = [..._questions, blank()]);
   void _replaceQuestion(int i, QuestionDraft draft) =>
       setState(() => _questions = [..._questions]..[i] = draft);
   void _removeQuestion(int i) =>
@@ -199,6 +197,16 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
               ],
             ),
             const SizedBox(height: AdminMetrics.fieldGap),
+            // Existing static LessonQuestion rows stay fully editable in
+            // place (§12: "переписать блок" must stay available) — but
+            // there's no "+ add another local one" control here anymore (§
+            // course-builder redesign, "один вход", 2026-09-01, confirmed
+            // with the user): every NEW question, from here on, is created
+            // through PoolQuestionsSection's own "+ Задание" below, so it's
+            // reusable/connectable from the start rather than a dead-end
+            // copy. "Сохранить вопросы" only matters while this list is
+            // non-empty (existing rows to edit); an empty list has nothing
+            // to wholesale-replace.
             for (var i = 0; i < _questions.length; i++)
               _QuestionCard(
                 draft: _questions[i],
@@ -208,57 +216,24 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
                 onDelete: () => _removeQuestion(i),
                 onMove: (delta) => _moveQuestion(i, delta),
               ),
-            _QuestionLibrarySearch(onPick: (d) => _addQuestion(() => d)),
-            const SizedBox(height: AdminMetrics.fieldGap),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _addQuestion(ChoiceDraft.blank),
-                  style: AdminButtonStyles.secondary(),
-                  child: const Text('Вопрос с вариантами'),
+            if (_questions.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: _busy ? null : _save,
+                  style: AdminButtonStyles.primary(),
+                  child: Text(_busy ? 'Сохраняем…' : 'Сохранить вопросы'),
                 ),
-                OutlinedButton(
-                  onPressed: () => _addQuestion(TrueFalseDraft.blank),
-                  style: AdminButtonStyles.secondary(),
-                  child: const Text('Верно / Неверно'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _addQuestion(ClozeDraft.blank),
-                  style: AdminButtonStyles.secondary(),
-                  child: const Text('Пропущенное слово'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _addQuestion(ScrambleDraft.blank),
-                  style: AdminButtonStyles.secondary(),
-                  child: const Text('Собери фразу'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _addQuestion(MatchDraft.blank),
-                  style: AdminButtonStyles.secondary(),
-                  child: const Text('Сопоставление'),
-                ),
-              ],
-            ),
-            const SizedBox(height: AdminMetrics.cardGap),
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: _busy ? null : _save,
-                style: AdminButtonStyles.primary(),
-                child: Text(_busy ? 'Сохраняем…' : 'Сохранить вопросы'),
               ),
-            ),
-            const SizedBox(height: AdminMetrics.fieldGap),
+              const SizedBox(height: AdminMetrics.fieldGap),
+            ],
             // § course-builder redesign, "единый список заданий", 2026-09-01
             // — continues the SAME numbered sequence as the static
             // _QuestionCard list above (no divider, no separate heading),
             // even though the two groups still save through their own real,
             // separate mechanisms underneath (§12: both must stay
-            // functional) — _QuestionLibrarySearch above only pulls in
-            // OTHER local questions ready to paste in; this is the actual
-            // reusable pool.
+            // functional) — this is the actual reusable pool, and now the
+            // only place a NEW question gets created from.
             PoolQuestionsSection(
               lessonBlockId: widget.block.id,
               lessonId: widget.lessonId,
@@ -270,100 +245,6 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
       ),
     );
   }
-}
-
-class _QuestionLibrarySearch extends ConsumerStatefulWidget {
-  const _QuestionLibrarySearch({required this.onPick});
-  final void Function(QuestionDraft) onPick;
-
-  @override
-  ConsumerState<_QuestionLibrarySearch> createState() =>
-      _QuestionLibrarySearchState();
-}
-
-class _QuestionLibrarySearchState
-    extends ConsumerState<_QuestionLibrarySearch> {
-  final _query = TextEditingController();
-  Timer? _debounce;
-  List<QuestionDraft>? _results;
-
-  @override
-  void dispose() {
-    _query.dispose();
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _onChanged(String value) {
-    _debounce?.cancel();
-    if (value.trim().length < 2) {
-      setState(() => _results = null);
-      return;
-    }
-    _debounce = Timer(const Duration(milliseconds: 300), () async {
-      final results = await ref
-          .read(builderRepositoryProvider)
-          .searchQuestions(value.trim());
-      if (mounted) setState(() => _results = results);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _query,
-          decoration: adminInputDecoration(
-            label: 'Найти готовое задание в других уроках',
-          ),
-          onChanged: _onChanged,
-        ),
-        if (_results != null && _results!.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: 6),
-            decoration: BoxDecoration(
-              border: Border.all(color: AdminColors.border),
-              borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
-            ),
-            child: Column(
-              children: [
-                for (final r in _results!)
-                  ListTile(
-                    dense: true,
-                    title: Text(_previewText(r), style: AdminTypography.body),
-                    subtitle: Text(
-                      questionKindLabel(r),
-                      style: AdminTypography.caption,
-                    ),
-                    onTap: () {
-                      widget.onPick(r);
-                      setState(() {
-                        _results = null;
-                        _query.clear();
-                      });
-                    },
-                  ),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  String _previewText(QuestionDraft d) => switch (d) {
-    ChoiceDraft(:final prompt) => prompt,
-    TrueFalseDraft(:final prompt) => prompt,
-    ClozeDraft(:final prompt) => prompt,
-    ScrambleDraft(:final translation) => translation,
-    MatchDraft(:final prompt) => prompt.isEmpty ? 'Сопоставление' : prompt,
-    // Not offered as a button in this (old LessonQuestion/quiz) editor —
-    // auto_blank only creates real, reusable Question rows via the pool
-    // flow (pool_questions_section.dart) — but the switch must still be
-    // exhaustive.
-    AutoBlankDraft(:final phrases) => phrases.isEmpty ? 'Пропущенное слово (авто)' : phrases.first,
-  };
 }
 
 class _QuestionCard extends StatelessWidget {

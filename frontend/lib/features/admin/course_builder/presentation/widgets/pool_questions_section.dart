@@ -68,6 +68,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   String? _draftTopicId;
   String? _draftVerifiesBlockId;
   bool _saving = false;
+  bool _searching = false;
   List<PoolQuestion>? _attached;
   List<AdminTopic> _topics = [];
   List<AdminMaterialBlock> _verifyBlocks = [];
@@ -143,7 +144,47 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
         _draft = blank;
         _draftTopicId = widget.topicId;
         _draftVerifiesBlockId = null;
+        _searching = false;
       });
+
+  /// "+ Задание" (§ course-builder redesign, "один вход", 2026-09-01) —
+  /// always creates a pool question (confirmed with the user: going
+  /// forward every NEW question is reusable/connectable; existing local
+  /// LessonQuestion rows stay exactly as they are, edited in place through
+  /// their own unchanged UI). Six types: five one-tap ones, and auto_blank
+  /// set apart with its own longer explanation since it behaves
+  /// differently and the teacher needs to know that BEFORE picking it, not
+  /// after.
+  Future<void> _pickType(BuildContext context) async {
+    final picked = await showModalBottomSheet<QuestionDraft Function()>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Новое задание', style: AdminTypography.cardTitle),
+            ),
+            _TypeRow(title: 'Выбор ответа', note: 'один правильный вариант', onTap: () => Navigator.of(context).pop(ChoiceDraft.blank)),
+            _TypeRow(title: 'Верно / неверно', note: 'утверждение, да или нет', onTap: () => Navigator.of(context).pop(TrueFalseDraft.blank)),
+            _TypeRow(title: 'Пропущенное слово', note: 'фраза с одним пропуском', onTap: () => Navigator.of(context).pop(ClozeDraft.blank)),
+            _TypeRow(title: 'Собери фразу', note: 'слова вразброс', onTap: () => Navigator.of(context).pop(ScrambleDraft.blank)),
+            _TypeRow(title: 'Сопоставление', note: 'пары слово → перевод', onTap: () => Navigator.of(context).pop(MatchDraft.blank)),
+            const Divider(height: 20, color: AdminColors.border),
+            _TypeRow(
+              title: 'Пропущенное слово (авто)',
+              note: 'пропуск и неверные варианты система подбирает сама, для каждого ученика свои',
+              onTap: () => Navigator.of(context).pop(AutoBlankDraft.blank),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) _startNew(picked());
+  }
 
   Future<void> _submitDraft() async {
     final draft = _draft;
@@ -153,11 +194,26 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
       final repo = ref.read(builderRepositoryProvider);
       final similar = await repo.checkQuestionSimilarity(draft, topicId: _draftTopicId);
       if (similar.isNotEmpty && mounted) {
-        final force = await _showSimilarityWarning(context, similar);
-        if (!force) {
+        final action = await _showSimilarityWarning(context, similar);
+        if (action == null) {
           if (mounted) setState(() => _saving = false);
           return;
         }
+        if (action is SimilarQuestionMatch) {
+          await repo.reusePoolQuestion(
+            action.question.id,
+            materialBlockId: widget.materialBlockId ?? _draftVerifiesBlockId,
+            lessonBlockId: widget.lessonBlockId,
+          );
+          if (mounted) {
+            showSuccessSnack(context, 'Вопрос привязан (без копирования)');
+            setState(() => _draft = null);
+          }
+          await _loadAttached();
+          if (mounted) setState(() => _saving = false);
+          return;
+        }
+        // action == true — "Всё равно создать новое", fall through below.
       }
       await repo.createPoolQuestion(
         draft,
@@ -178,32 +234,54 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
     }
   }
 
-  Future<bool> _showSimilarityWarning(BuildContext context, List<SimilarQuestionMatch> similar) async {
-    final result = await showDialog<bool>(
+  /// Returns `true` ("Всё равно создать новое"), a [SimilarQuestionMatch]
+  /// (tapped a row — attach that one instead), or `null` (dismissed) — §
+  /// course-builder redesign, "Похоже на существующее задание", 2026-09-01:
+  /// attaching an existing match is now the primary, one-tap action, not
+  /// buried behind a plain "cancel".
+  Future<Object?> _showSimilarityWarning(BuildContext context, List<SimilarQuestionMatch> similar) {
+    return showDialog<Object?>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('⚠️ Найден похожий вопрос'),
+        title: const Text('Похоже на существующее задание'),
         content: SizedBox(
-          width: 400,
+          width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final match in similar)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text('«${poolQuestionPreviewText(match.question.draft)}» — сходство ${match.score}%', style: AdminTypography.body),
+                InkWell(
+                  onTap: () => Navigator.of(context).pop(match),
+                  borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('«${poolQuestionPreviewText(match.question.draft)}» — сходство ${match.score}%', style: AdminTypography.body),
+                        if (match.location != null) ...[
+                          const SizedBox(height: 2),
+                          Text(match.location!, style: AdminTypography.caption),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
+              const SizedBox(height: 4),
+              Text('Нажмите на задание, чтобы привязать его вместо создания нового.', style: AdminTypography.caption),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Создать новый')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: AdminButtonStyles.text(),
+            child: const Text('Всё равно создать новое'),
+          ),
         ],
       ),
     );
-    return result ?? false;
   }
 
   Widget _draftEditor(QuestionDraft draft) => switch (draft) {
@@ -245,25 +323,32 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
             ),
         const SizedBox(height: 6),
         if (draft == null) ...[
-          _PoolQuestionSearch(
-            materialBlockId: widget.materialBlockId,
-            lessonBlockId: widget.lessonBlockId,
-            verifyBlocks: _showsVerifiesPicker ? _verifyBlocks : const [],
-            onReused: _loadAttached,
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              OutlinedButton(onPressed: () => _startNew(ChoiceDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Вопрос с вариантами')),
-              OutlinedButton(onPressed: () => _startNew(TrueFalseDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Верно / Неверно')),
-              OutlinedButton(onPressed: () => _startNew(ClozeDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Пропущенное слово')),
-              OutlinedButton(onPressed: () => _startNew(AutoBlankDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Пропущенное слово (авто)')),
-              OutlinedButton(onPressed: () => _startNew(ScrambleDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Собери фразу')),
-              OutlinedButton(onPressed: () => _startNew(MatchDraft.blank()), style: AdminButtonStyles.secondary(), child: const Text('Сопоставление')),
+              OutlinedButton.icon(
+                onPressed: () => _pickType(context),
+                style: AdminButtonStyles.secondary(),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Задание'),
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () => setState(() => _searching = !_searching),
+                style: AdminButtonStyles.text(),
+                icon: const Icon(Icons.north_east, size: 15),
+                label: const Text('Найти существующее'),
+              ),
             ],
           ),
+          if (_searching) ...[
+            const SizedBox(height: 6),
+            _PoolQuestionSearch(
+              materialBlockId: widget.materialBlockId,
+              lessonBlockId: widget.lessonBlockId,
+              verifyBlocks: _showsVerifiesPicker ? _verifyBlocks : const [],
+              onReused: _loadAttached,
+            ),
+          ],
         ] else
           Container(
             padding: const EdgeInsets.all(10),
@@ -469,6 +554,35 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
               for (final u in _usages!) Text('• ${_usageLine(u)}', style: AdminTypography.caption),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// One row in the "+ Задание" type-picker sheet (§ course-builder redesign,
+/// "лист выбора типа", 2026-09-01) — name plus one explanatory phrase, no
+/// icons or badges (§ redesign principle: badges everywhere turn a list
+/// into a card wall).
+class _TypeRow extends StatelessWidget {
+  const _TypeRow({required this.title, required this.note, required this.onTap});
+  final String title;
+  final String note;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: AdminTypography.body.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(note, style: AdminTypography.caption),
+          ],
+        ),
       ),
     );
   }

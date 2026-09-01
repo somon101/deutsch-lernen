@@ -211,11 +211,18 @@ class VerifyingQuestion {
 }
 
 class SimilarQuestionMatch {
-  const SimilarQuestionMatch({required this.question, required this.score});
-  factory SimilarQuestionMatch.fromJson(Map<String, dynamic> json) =>
-      SimilarQuestionMatch(question: PoolQuestion.fromJson(json['question'] as Map<String, dynamic>), score: json['score'] as int);
+  const SimilarQuestionMatch({required this.question, required this.score, this.location});
+  factory SimilarQuestionMatch.fromJson(Map<String, dynamic> json) => SimilarQuestionMatch(
+    question: PoolQuestion.fromJson(json['question'] as Map<String, dynamic>),
+    score: json['score'] as int,
+    location: json['location'] as String?,
+  );
   final PoolQuestion question;
   final int score;
+  // "Урок «X» → Практика" — the first place this question already lives,
+  // if any (§ course-builder redesign, "Похоже на существующее задание"
+  // dialog, 2026-09-01). Null for a question with no placement at all yet.
+  final String? location;
 }
 
 /// Where a reusable Question is placed — mirrors the backend's

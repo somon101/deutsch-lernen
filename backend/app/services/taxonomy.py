@@ -238,6 +238,33 @@ def _question_row_fields(question_input: dict) -> dict:
     return {"kind": question_input["kind"], **row}
 
 
+async def _first_location_label(db: AsyncSession, question_id: str) -> str | None:
+    """One human-readable "where this already lives" hint for a similarity
+    match (§ course-builder redesign, "Похоже на существующее задание"
+    dialog, 2026-09-01) — just the FIRST placement, not the full chain
+    list_question_placements builds: this is a lightweight nudge in a
+    result list capped at 5 matches, not the question's own detail view."""
+    placement = (await db.execute(select(QuestionPlacement).where(QuestionPlacement.questionId == question_id).limit(1))).scalars().first()
+    if not placement:
+        return None
+    if placement.lessonBlockId:
+        block = await db.get(LessonBlock, placement.lessonBlockId)
+        if not block:
+            return None
+        title = await _resolve_lesson_title(db, block.courseId, block.lessonId)
+        return f"Урок «{title}» → {STAGE_TITLES.get(block.stage, block.stage)}"
+    if placement.materialBlockId:
+        block = await db.get(MaterialBlock, placement.materialBlockId)
+        material = await db.get(Material, block.materialId) if block else None
+        if not material:
+            return None
+        title = await _resolve_lesson_title(db, material.courseId, material.lessonId)
+        return f"Урок «{title}» → Материал"
+    if placement.legacyLessonId:
+        return f"Урок «{placement.legacyLessonId}» (устаревший курс)"
+    return None
+
+
 async def check_similarity(db: AsyncSession, draft: dict, topic_id: str | None, material_id: str | None) -> list[dict]:
     """Returns existing questions scoring >= DUPLICATE_WARNING_THRESHOLD,
     highest first — the caller decides what to do with the warning (§29/§30),
@@ -262,7 +289,10 @@ async def check_similarity(db: AsyncSession, draft: dict, topic_id: str | None, 
         if score >= DUPLICATE_WARNING_THRESHOLD:
             scored.append({"question": c, "score": score})
     scored.sort(key=lambda item: -item["score"])
-    return scored[:5]
+    top = scored[:5]
+    for item in top:
+        item["location"] = await _first_location_label(db, item["question"].id)
+    return top
 
 
 async def create_question(db: AsyncSession, body) -> tuple[Question, list[dict]]:
