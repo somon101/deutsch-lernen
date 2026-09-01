@@ -98,6 +98,17 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
     }
   }
 
+  Future<void> _setVerifies(PoolQuestion q, String? blockId) async {
+    final placementId = q.placementId;
+    if (placementId == null) return;
+    try {
+      await ref.read(builderRepositoryProvider).setPlacementVerifiesBlock(placementId, blockId);
+      await _loadAttached();
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось изменить привязку');
+    }
+  }
+
   Future<void> _unlink(PoolQuestion q) async {
     final placementId = q.placementId;
     if (placementId == null) return;
@@ -199,12 +210,17 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
         if (attached == null)
           const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator())
         else if (attached.isEmpty)
-          const Text('К этому блоку пока не привязано ни одного вопроса.', style: AdminTypography.caption)
+          Text('К этому блоку пока не привязано ни одного вопроса.', style: AdminTypography.caption)
         else
           for (final q in attached)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: _AttachedQuestionTile(question: q, onUnlink: () => _unlink(q)),
+              child: _AttachedQuestionTile(
+                question: q,
+                onUnlink: () => _unlink(q),
+                verifyBlocks: _showsVerifiesPicker ? _verifyBlocks : const [],
+                onVerifiesChanged: _showsVerifiesPicker ? (blockId) => _setVerifies(q, blockId) : null,
+              ),
             ),
         const SizedBox(height: 6),
         if (draft == null) ...[
@@ -289,9 +305,22 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
 /// the resolved Topic, the "verifies" tag (if any), and the full "where
 /// it's actually shown" chain (§5/§6/§7), fetched lazily on first expand.
 class _AttachedQuestionTile extends ConsumerStatefulWidget {
-  const _AttachedQuestionTile({required this.question, required this.onUnlink});
+  const _AttachedQuestionTile({
+    required this.question,
+    required this.onUnlink,
+    this.verifyBlocks = const [],
+    this.onVerifiesChanged,
+  });
   final PoolQuestion question;
   final VoidCallback onUnlink;
+  // Only non-empty for a lessonBlockId-scoped listing (quiz stages) — the
+  // lesson's own MaterialBlocks, to offer as "verifies" chip choices.
+  final List<AdminMaterialBlock> verifyBlocks;
+  // Null when this tile is a Материал-stage's own inline question (no
+  // "verifies" concept applies there — a material block can't verify
+  // itself). Non-null (even if verifyBlocks is momentarily still loading)
+  // is what makes the chip render at all.
+  final ValueChanged<String?>? onVerifiesChanged;
 
   @override
   ConsumerState<_AttachedQuestionTile> createState() => _AttachedQuestionTileState();
@@ -320,9 +349,40 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
     return 'Урок «$lesson» (устаревший курс)';
   }
 
+  Future<void> _pickVerifies(BuildContext context) async {
+    final onChanged = widget.onVerifiesChanged;
+    if (onChanged == null) return;
+    final picked = await showModalBottomSheet<Object?>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Проверяет блок материала', style: AdminTypography.cardTitle),
+            ),
+            ListTile(
+              dense: true,
+              title: Text('Не привязывать', style: AdminTypography.body),
+              onTap: () => Navigator.of(context).pop(const _ClearVerifies()),
+            ),
+            for (final b in widget.verifyBlocks)
+              ListTile(dense: true, title: Text(b.title, style: AdminTypography.body), onTap: () => Navigator.of(context).pop(b.id)),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return; // dismissed without choosing
+    onChanged(picked is _ClearVerifies ? null : picked as String);
+  }
+
   @override
   Widget build(BuildContext context) {
     final q = widget.question;
+    final showsChip = widget.onVerifiesChanged != null;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius)),
@@ -342,6 +402,10 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
                   ),
                 ),
               ),
+              if (showsChip) ...[
+                _VerifiesChip(title: q.verifiesBlockTitle, onTap: () => _pickVerifies(context)),
+                const SizedBox(width: 6),
+              ],
               IconButton(
                 icon: Icon(_open ? Icons.expand_less : Icons.expand_more, size: 18),
                 visualDensity: VisualDensity.compact,
@@ -355,7 +419,6 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
             _ReadOnlyQuestionContent(draft: q.draft),
             const SizedBox(height: 8),
             Text('Тема: ${q.topicName ?? '—'}', style: AdminTypography.caption),
-            if (q.verifiesBlockId != null) Text('Проверяет блок материала: ${q.verifiesBlockTitle}', style: AdminTypography.caption),
             const SizedBox(height: 8),
             Text('Где используется:', style: AdminTypography.fieldLabel),
             if (_usages == null)
@@ -364,6 +427,51 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
               for (final u in _usages!) Text('• ${_usageLine(u)}', style: AdminTypography.caption),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// Sentinel distinguishing "explicitly chose Не привязывать" from "dismissed
+/// the sheet without picking anything" — both close the sheet with `pop`,
+/// but only the former should actually call [onVerifiesChanged].
+class _ClearVerifies {
+  const _ClearVerifies();
+}
+
+/// The one connectivity indicator in the whole admin family (§2/§10 of the
+/// course-builder redesign, 2026-09-01) — the accent color is reserved
+/// exclusively for this. A resolved link renders as a small accent-outlined
+/// pill with the block's title; no link yet renders as a muted "+
+/// привязать" in the same spot, so the affordance never moves around.
+class _VerifiesChip extends StatelessWidget {
+  const _VerifiesChip({required this.title, required this.onTap});
+  final String? title;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final linked = title != null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        constraints: const BoxConstraints(maxWidth: 160),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: linked ? AdminColors.accent : AdminColors.border),
+          color: linked ? AdminColors.accentSoft : Colors.transparent,
+        ),
+        child: Text(
+          linked ? title! : '+ привязать',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AdminTypography.caption.copyWith(
+            color: linked ? AdminColors.accent : AdminColors.textMuted,
+            fontWeight: linked ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
       ),
     );
   }

@@ -83,7 +83,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: GestureDetector(
                   onTap: () => context.go('/admin/courses'),
-                  child: const Text('Курсы →', style: AdminTypography.caption),
+                  child: Text('Курсы →', style: AdminTypography.caption),
                 ),
               ),
               _CourseSettingsCard(course: c),
@@ -92,7 +92,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    Text(
                       'Структура курса',
                       style: AdminTypography.cardTitle,
                     ),
@@ -104,7 +104,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                     for (var i = 0; i < c.lessons.length; i++)
                       _LessonTile(courseId: courseId, course: c, index: i),
                     if (c.lessons.isEmpty)
-                      const Text(
+                      Text(
                         'Уроков пока нет — добавьте первый ниже.',
                         style: AdminTypography.caption,
                       ),
@@ -271,7 +271,7 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
                       AdminMetrics.buttonRadius,
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Без обложки',
                     style: AdminTypography.caption,
                   ),

@@ -77,9 +77,9 @@ class _MediaEditorState extends ConsumerState<MediaEditor> {
         if (hasFile && !isVideo)
           _InlineAudioPlayer(url: assetUrl)
         else if (hasFile)
-          const Text('Видео загружено', style: AdminTypography.body),
+          Text('Видео загружено', style: AdminTypography.body),
         if (!hasFile)
-          const Text('Файл ещё не загружен.', style: AdminTypography.body),
+          Text('Файл ещё не загружен.', style: AdminTypography.body),
         const SizedBox(height: AdminMetrics.fieldGap),
         Wrap(
           spacing: 8,

@@ -43,7 +43,7 @@ class _VocabularyEditorState extends ConsumerState<VocabularyEditor> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.words.isEmpty)
-          const Text(
+          Text(
             'Слов пока нет — добавьте первое ниже.',
             style: AdminTypography.caption,
           ),
@@ -442,7 +442,7 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
                       '${s.german} — ${s.translation}',
                       style: AdminTypography.body,
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Уже есть в другом уроке — использовать?',
                       style: AdminTypography.caption,
                     ),
@@ -612,7 +612,7 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
                 style: AdminTypography.caption,
               ),
             if (preview.duplicateCount > 0 && preview.newCount > 0)
-              const Text(
+              Text(
                 'Дубликаты будут пропущены автоматически — импортируются только новые слова.',
                 style: AdminTypography.caption,
               ),

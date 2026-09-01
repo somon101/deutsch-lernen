@@ -163,6 +163,47 @@ class QuestionUsage {
   final String? setName;
 }
 
+/// One quiz-stage question that's tagged as verifying a MaterialBlock, from
+/// the *material block's* point of view (§ course-builder redesign, "Проверяет
+/// этот блок" section, 2026-09-01) — GET .../blocks/{id}/verifying-questions.
+/// The question doesn't live here; this is purely a read-only pointer to
+/// where it actually is, for the teacher to click through to it.
+class VerifyingQuestion {
+  const VerifyingQuestion({
+    required this.placementId,
+    required this.draft,
+    required this.courseId,
+    required this.lessonId,
+    required this.blockId,
+    required this.stage,
+    required this.stageLabel,
+    required this.lessonTitle,
+    required this.blockTitle,
+  });
+
+  factory VerifyingQuestion.fromJson(Map<String, dynamic> json) => VerifyingQuestion(
+        placementId: json['placementId'] as String,
+        draft: questionDraftFromWire(json),
+        courseId: json['courseId'] as String?,
+        lessonId: json['lessonId'] as String?,
+        blockId: json['blockId'] as String?,
+        stage: json['stage'] as String?,
+        stageLabel: json['stageLabel'] as String?,
+        lessonTitle: json['lessonTitle'] as String?,
+        blockTitle: json['blockTitle'] as String?,
+      );
+
+  final String placementId;
+  final QuestionDraft draft;
+  final String? courseId;
+  final String? lessonId;
+  final String? blockId;
+  final String? stage;
+  final String? stageLabel;
+  final String? lessonTitle;
+  final String? blockTitle;
+}
+
 class SimilarQuestionMatch {
   const SimilarQuestionMatch({required this.question, required this.score});
   factory SimilarQuestionMatch.fromJson(Map<String, dynamic> json) =>
@@ -171,9 +212,13 @@ class SimilarQuestionMatch {
   final int score;
 }
 
-/// Where a reusable Question is placed — exactly one of materialBlockId/
-/// lessonBlockId/(legacyLessonId+legacySetName) is non-null, mirroring the
-/// backend's QuestionPlacement.
+/// Where a reusable Question is placed — mirrors the backend's
+/// QuestionPlacement. Usually exactly one of materialBlockId/lessonBlockId/
+/// (legacyLessonId+legacySetName) is non-null (its real home), EXCEPT a
+/// quiz-stage placement (lessonBlockId set) may ALSO carry a materialBlockId
+/// as its "verifies this reading block" tag (§4 of the approved rule,
+/// 2026-08-27) — that combination means "shown in the lessonBlock, tagged as
+/// verifying the materialBlock", never "also placed in the material".
 class AdminQuestionPlacement {
   const AdminQuestionPlacement({
     required this.id,

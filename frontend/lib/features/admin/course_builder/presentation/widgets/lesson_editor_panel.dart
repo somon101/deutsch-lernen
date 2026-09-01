@@ -279,7 +279,7 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
         );
       case 'complete':
       default:
-        return const Text(
+        return Text(
           'Считается автоматически — экран результатов показывает итоги мини-теста, практики и закрепления.',
           style: AdminTypography.caption,
         );

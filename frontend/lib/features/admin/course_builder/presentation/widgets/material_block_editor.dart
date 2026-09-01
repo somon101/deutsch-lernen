@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
@@ -160,7 +161,7 @@ class _MaterialBlockEditorState extends ConsumerState<MaterialBlockEditor> {
           onDelete: _deleteTopic,
         ),
         const SizedBox(height: AdminMetrics.cardGap),
-        if (_blocks.isEmpty) const Text('Блоков пока нет — добавьте первый ниже.', style: AdminTypography.caption),
+        if (_blocks.isEmpty) Text('Блоков пока нет — добавьте первый ниже.', style: AdminTypography.caption),
         ReorderableListView.builder(
           buildDefaultDragHandles: false,
           shrinkWrap: true,
@@ -355,7 +356,96 @@ class _MaterialBlockCardState extends ConsumerState<_MaterialBlockCard> {
               ),
               const SizedBox(height: AdminMetrics.cardGap),
               PoolQuestionsSection(materialBlockId: widget.block.id, topicId: widget.topicId),
+              const SizedBox(height: AdminMetrics.cardGap),
+              _VerifyingQuestionsSection(materialBlockId: widget.block.id),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Read-only reverse of PoolQuestionsSection's own list (§ course-builder
+/// redesign, "Проверяет этот блок", 2026-09-01): quiz-stage questions
+/// elsewhere (minitest/practice/review) that are tagged as verifying THIS
+/// reading block — none of them live here, this is purely a pointer so the
+/// teacher can see, from the theory side, what actually tests it. Not an
+/// editor: attaching/detaching the tag happens on the question's own chip
+/// (PoolQuestionsSection._VerifiesChip), where the question actually lives.
+class _VerifyingQuestionsSection extends ConsumerStatefulWidget {
+  const _VerifyingQuestionsSection({required this.materialBlockId});
+  final String materialBlockId;
+
+  @override
+  ConsumerState<_VerifyingQuestionsSection> createState() => _VerifyingQuestionsSectionState();
+}
+
+class _VerifyingQuestionsSectionState extends ConsumerState<_VerifyingQuestionsSection> {
+  List<VerifyingQuestion>? _questions;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final questions = await ref.read(builderRepositoryProvider).listVerifyingQuestions(widget.materialBlockId);
+      if (mounted) setState(() => _questions = questions);
+    } catch (_) {
+      // Non-critical, read-only section — just stays empty on failure.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final questions = _questions;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Проверяет этот блок', style: AdminTypography.fieldLabel),
+        const SizedBox(height: 6),
+        if (questions == null)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator())
+        else if (questions.isEmpty)
+          Text('Ни одно задание пока не проверяет этот блок.', style: AdminTypography.caption)
+        else
+          for (final q in questions)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: _VerifyingQuestionRow(question: q),
+            ),
+      ],
+    );
+  }
+}
+
+class _VerifyingQuestionRow extends StatelessWidget {
+  const _VerifyingQuestionRow({required this.question});
+  final VerifyingQuestion question;
+
+  @override
+  Widget build(BuildContext context) {
+    final q = question;
+    return InkWell(
+      borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+      onTap: q.courseId == null ? null : () => context.push('/admin/builder/${q.courseId}'),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius)),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${q.stageLabel ?? q.stage ?? '?'} · ${poolQuestionPreviewText(q.draft)}',
+                style: AdminTypography.body,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (q.courseId != null) const Icon(Icons.chevron_right, color: AdminColors.textMuted, size: 18),
           ],
         ),
       ),

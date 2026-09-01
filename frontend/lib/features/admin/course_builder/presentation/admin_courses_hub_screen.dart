@@ -73,7 +73,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
         backgroundColor: AdminColors.card,
         foregroundColor: AdminColors.text,
         elevation: 0,
-        title: const Text('Курсы', style: AdminTypography.pageTitle),
+        title: Text('Курсы', style: AdminTypography.pageTitle),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
@@ -94,7 +94,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AdminMetrics.cardRadius),
                 ),
-                title: const Text(
+                title: Text(
                   'Немецкий с нуля',
                   style: AdminTypography.cardTitle,
                 ),
@@ -364,12 +364,12 @@ class _NotificationSettingsCardState extends ConsumerState<_NotificationSettings
     return AdminCard(
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Автоматическая отправка уведомлений', style: AdminTypography.cardTitle),
-                SizedBox(height: 2),
+                const SizedBox(height: 2),
                 Text(
                   'Когда включено: уведомление о новом уроке уходит сразу после его создания (если курс уже опубликован). '
                   'Когда выключено: уведомление можно отправить вручную кнопкой у урока.',
@@ -454,7 +454,7 @@ class _CreateCourseCardState extends ConsumerState<_CreateCourseCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Новый курс', style: AdminTypography.cardTitle),
+          Text('Новый курс', style: AdminTypography.cardTitle),
           const SizedBox(height: AdminMetrics.fieldGap),
           TextField(
             controller: _title,
@@ -473,7 +473,7 @@ class _CreateCourseCardState extends ConsumerState<_CreateCourseCard> {
             decoration: adminInputDecoration(label: 'Описание (необязательно)'),
           ),
           const SizedBox(height: 6),
-          const Text(
+          Text(
             'Новый курс создаётся пустым. Ничего не копируется из других курсов — уроки, слова и вопросы вы добавляете вручную.',
             style: AdminTypography.caption,
           ),

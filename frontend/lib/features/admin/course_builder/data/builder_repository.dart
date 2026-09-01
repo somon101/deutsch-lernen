@@ -525,6 +525,22 @@ class BuilderRepository {
     return (res['questions'] as List<dynamic>).map((q) => PoolQuestion.fromJson(q as Map<String, dynamic>)).toList();
   }
 
+  /// The reverse of [listBlockQuestions]'s materialBlockId case (§
+  /// course-builder redesign, "Проверяет этот блок" section, 2026-09-01):
+  /// quiz-stage questions elsewhere that are tagged as verifying this
+  /// reading block, not actually placed here.
+  Future<List<VerifyingQuestion>> listVerifyingQuestions(String materialBlockId) async {
+    final res = await _api.get('/api/materials/blocks/${Uri.encodeComponent(materialBlockId)}/verifying-questions');
+    return (res['questions'] as List<dynamic>).map((q) => VerifyingQuestion.fromJson(q as Map<String, dynamic>)).toList();
+  }
+
+  /// Sets/changes/clears the "verifies this reading block" tag on an
+  /// already-attached quiz-stage question (§ course-builder redesign, "+
+  /// привязать" chip, 2026-09-01) — pass null to clear.
+  Future<void> setPlacementVerifiesBlock(String placementId, String? materialBlockId) async {
+    await _api.patch('/api/placements/${Uri.encodeComponent(placementId)}/verifies-block', body: {'materialBlockId': materialBlockId});
+  }
+
   /// Unlinks a question from one placement — the shared Question (and any
   /// other placement of it) is untouched.
   Future<void> removePlacement(String placementId) async {
