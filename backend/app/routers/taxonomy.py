@@ -199,6 +199,7 @@ def _attached_question_dto(row: dict) -> dict:
         "topicName": row["topicName"],
         "verifiesBlockId": row["verifiesBlockId"],
         "verifiesBlockTitle": row["verifiesBlockTitle"],
+        "placementCount": row["placementCount"],
         **svc.question_dto(row["question"]),
     }
 

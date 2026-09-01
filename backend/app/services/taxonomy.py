@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -387,6 +387,23 @@ async def list_block_questions(
                 b.id: b.title for b in (await db.execute(select(MaterialBlock).where(MaterialBlock.id.in_(verify_block_ids)))).scalars().all()
             }
 
+    # How many places each question is actually placed (§ course-builder
+    # redesign, "в пуле · N мест" chip, 2026-09-01) — a question attached
+    # here once (the common case) reads as "только здесь"; 2+ means it's
+    # genuinely reused elsewhere too. One row per DISTINCT questionId in
+    # this listing, so a single grouped count query covers all of them.
+    question_ids = {q.id for _, q in rows}
+    placement_counts: dict[str, int] = {}
+    if question_ids:
+        count_rows = (
+            await db.execute(
+                select(QuestionPlacement.questionId, func.count())
+                .where(QuestionPlacement.questionId.in_(question_ids))
+                .group_by(QuestionPlacement.questionId)
+            )
+        ).all()
+        placement_counts = dict(count_rows)
+
     return [
         {
             "placementId": p.id,
@@ -394,6 +411,7 @@ async def list_block_questions(
             "topicName": topics_by_id.get(q.topicId),
             "verifiesBlockId": p.materialBlockId if lesson_block_id else None,
             "verifiesBlockTitle": verifies_titles.get(p.materialBlockId) if lesson_block_id and p.materialBlockId else None,
+            "placementCount": placement_counts.get(q.id, 1),
         }
         for p, q in rows
     ]
