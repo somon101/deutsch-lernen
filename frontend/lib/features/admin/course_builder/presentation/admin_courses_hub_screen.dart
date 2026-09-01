@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/push/notification_settings_repository.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/data/profile_repository.dart';
 import '../../../profile/presentation/profile_tokens.dart';
@@ -54,7 +55,19 @@ class AdminCoursesHubScreen extends ConsumerWidget {
 
     return BackGuard(
       fallbackPath: '/',
-      child: Scaffold(
+      // Admin/course-builder screens are a deliberately fixed light palette
+      // (admin_tokens.dart) that doesn't follow the app's dark-mode toggle —
+      // but that was only ever applied to the explicit AdminColors/
+      // AdminTypography constants. A plain TextField with no explicit style
+      // (e.g. the "Название" field below) still fell back to the AMBIENT
+      // theme's default text color, which in dark mode is near-white —
+      // invisible on AdminColors.card's hardcoded white fill (§ admin
+      // light-theme fix, 2026-09-01, reported: white text on white field).
+      // Forcing `lightTheme` here makes every unstyled default match the
+      // fixed light palette this whole screen family already assumes.
+      child: Theme(
+        data: lightTheme,
+        child: Scaffold(
       backgroundColor: AdminColors.bg,
       appBar: AppBar(
         backgroundColor: AdminColors.card,
@@ -113,6 +126,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
       ),
       ),
     );

@@ -18,6 +18,7 @@ import 'features/admin/course_builder/presentation/builder_course_edit_screen.da
 import 'features/admin/legacy_lessons/presentation/admin_lesson_edit_screen.dart';
 import 'features/admin/legacy_lessons/presentation/admin_legacy_lessons_screen.dart';
 import 'features/admin/users/presentation/admin_user_detail_screen.dart';
+import 'features/admin/users/presentation/admin_users_all_screen.dart';
 import 'features/admin/users/presentation/admin_users_screen.dart';
 import 'features/auth/presentation/forbidden_screen.dart';
 import 'features/auth/presentation/login_screen.dart';
@@ -91,6 +92,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
           GoRoute(path: '/leaderboard', builder: (context, state) => const LeaderboardScreen()),
           GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
+          GoRoute(path: '/admin/users/all', builder: (context, state) => const AdminUsersAllScreen()),
           GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
         ],
       ),

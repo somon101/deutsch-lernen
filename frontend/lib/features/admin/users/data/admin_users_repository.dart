@@ -52,6 +52,28 @@ class AdminUser {
   final bool online;
 }
 
+/// Real-activity order (§ admin users expanded list, 2026-09-01): online
+/// users first, then everyone else by how recently they were last active —
+/// "1 минуту назад, 2 минуты назад…" — with users who were never active
+/// sorted last. `online` is itself derived server-side from `lastActiveAt`
+/// (within a 5-minute window, see with_online_status in serialize.py), so
+/// sorting by `online` first and `lastActiveAt` second never contradicts
+/// itself — it just makes the intent explicit instead of relying on that
+/// coincidence.
+List<AdminUser> sortUsersByActivity(List<AdminUser> users) {
+  final sorted = [...users];
+  sorted.sort((a, b) {
+    if (a.online != b.online) return a.online ? -1 : 1;
+    final at = a.lastActiveAt == null ? null : DateTime.tryParse(a.lastActiveAt!);
+    final bt = b.lastActiveAt == null ? null : DateTime.tryParse(b.lastActiveAt!);
+    if (at == null && bt == null) return 0;
+    if (at == null) return 1;
+    if (bt == null) return -1;
+    return bt.compareTo(at);
+  });
+  return sorted;
+}
+
 class LoginEventRow {
   const LoginEventRow({required this.id, required this.createdAt});
   factory LoginEventRow.fromJson(Map<String, dynamic> json) => LoginEventRow(

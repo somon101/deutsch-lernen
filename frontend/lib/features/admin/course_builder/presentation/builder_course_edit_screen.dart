@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
 import '../../admin_tokens.dart';
 import '../../admin_widgets.dart';
@@ -43,7 +44,14 @@ class BuilderCourseEditScreen extends ConsumerWidget {
 
     return BackGuard(
       fallbackPath: '/admin/courses',
-      child: Scaffold(
+      // Forces this fixed-light-palette screen family's unstyled defaults
+      // (e.g. a plain TextField's own text color) to match, regardless of
+      // the app's dark-mode toggle — see the matching fix + full
+      // explanation in admin_courses_hub_screen.dart (§ admin light-theme
+      // fix, 2026-09-01).
+      child: Theme(
+        data: lightTheme,
+        child: Scaffold(
       backgroundColor: AdminColors.bg,
       appBar: AppBar(
         backgroundColor: AdminColors.card,
@@ -108,6 +116,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
       ),
       ),
     );

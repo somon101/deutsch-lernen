@@ -67,6 +67,11 @@ class AdminUserDetailScreen extends ConsumerWidget {
     final data = ref.watch(_detailProvider(userId));
     final me = ref.watch(authProvider).value;
     final isSelf = me?.id == userId;
+    // True when reached via context.push (e.g. from the expanded "Показать
+    // все" user list, § admin users expanded list, 2026-09-01) — a real
+    // page sits underneath, so the back arrow should pop back to it instead
+    // of always resetting to the compact /admin list.
+    final canPop = Navigator.of(context).canPop();
 
     return BackGuard(
       fallbackPath: '/admin',
@@ -75,7 +80,7 @@ class AdminUserDetailScreen extends ConsumerWidget {
         title: const Text('Пользователь'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/admin'),
+          onPressed: canPop ? () => context.pop() : () => context.go('/admin'),
         ),
       ),
       body: data.when(
@@ -198,24 +203,54 @@ class _ProgressList extends StatelessWidget {
   }
 }
 
-class _LoginHistoryList extends StatelessWidget {
+/// Compact-by-default, same idea as the admin users list's "Показать все"
+/// (§ login history expand, 2026-09-01) — the backend already caps this at
+/// 50 entries (see GET .../logins), so this is purely a local show-more
+/// toggle, no new route or endpoint needed.
+const _loginHistoryCompactLimit = 10;
+
+class _LoginHistoryList extends StatefulWidget {
   const _LoginHistoryList({required this.logins});
   final List<LoginEventRow> logins;
 
   @override
+  State<_LoginHistoryList> createState() => _LoginHistoryListState();
+}
+
+class _LoginHistoryListState extends State<_LoginHistoryList> {
+  bool _expanded = false;
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final logins = widget.logins;
     if (logins.isEmpty) {
       return Text(
         'Ещё ни разу не входил(а).',
         style: TextStyle(color: c.textFaint),
       );
     }
+    final canExpand = logins.length > _loginHistoryCompactLimit;
+    final visible = _expanded ? logins : logins.take(_loginHistoryCompactLimit).toList();
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < logins.length; i++) ...[
+        for (var i = 0; i < visible.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
-          _ProgressRow(title: _formatDateTime(logins[i].createdAt)),
+          _ProgressRow(title: _formatDateTime(visible[i].createdAt)),
+        ],
+        if (canExpand) ...[
+          const SizedBox(height: 12),
+          OutlinedButton(
+            onPressed: () => setState(() => _expanded = !_expanded),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: c.primary,
+              side: BorderSide(color: c.primarySoft, width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+              textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+            ),
+            child: Text(_expanded ? 'Свернуть' : 'Показать все (${logins.length})'),
+          ),
         ],
       ],
     );
