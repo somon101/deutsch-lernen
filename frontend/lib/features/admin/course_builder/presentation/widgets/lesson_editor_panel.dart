@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../widgets/admin_feedback.dart';
 import '../../../admin_tokens.dart';
-import '../../../admin_widgets.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
+import '../../domain/taxonomy_domain.dart';
 import 'block_editor.dart';
 import 'material_block_editor.dart';
 import 'media_editor.dart';
@@ -22,33 +22,53 @@ const _chain = [
   (key: 'complete', label: 'Итог', note: 'экран результатов'),
 ];
 
-/// Counter shown to the right of a collapsed stage's header — computed from
-/// the lesson's real data, never hardcoded, so an admin can tell a stage is
-/// empty without opening it (Screenshot 1/6).
-String _counterFor(AdminLesson lesson, String key) {
+/// Terse rail counter (§ course-builder redesign, "рельс этапов", 2026-09-01
+/// — "12, ✓, ✗, авто" per the spec's own mockup) — computed from the
+/// lesson's real data, never hardcoded, so an admin can tell a stage is
+/// empty without opening it. A word/question count of zero renders muted
+/// (see _RailItem) rather than as a different string — the rail's whole
+/// point is that the number itself is the signal.
+String _counterFor(AdminLesson lesson, String key, int? materialBlockCount) {
   switch (key) {
     case 'vocabulary':
-      return '${lesson.vocabulary.length} слов';
+      return '${lesson.vocabulary.length}';
     case 'material':
-      return 'блоки материала';
+      return materialBlockCount == null ? '…' : '$materialBlockCount';
     case 'video':
-      return lesson.videoUrl != null && lesson.videoUrl!.isNotEmpty
-          ? 'файл загружен'
-          : 'нет';
+      return lesson.videoUrl != null && lesson.videoUrl!.isNotEmpty ? '✓' : '✗';
     case 'audio':
-      return lesson.audioUrl != null && lesson.audioUrl!.isNotEmpty
-          ? 'файл загружен'
-          : 'нет';
+      return lesson.audioUrl != null && lesson.audioUrl!.isNotEmpty ? '✓' : '✗';
     case 'minitest':
     case 'practice':
     case 'review':
       final blocks = lesson.blocksFor(key);
-      if (blocks.isEmpty) return 'нет блоков';
       final questions = blocks.fold(0, (sum, b) => sum + b.questions.length);
-      return '${blocks.length} блок(ов) · $questions вопросов';
+      return '$questions';
     case 'complete':
     default:
-      return 'считается автоматически';
+      return 'авто';
+  }
+}
+
+/// True when a stage has real content — drives the rail counter's muted vs
+/// ink color (§ course-builder redesign, 2026-09-01).
+bool _hasContent(AdminLesson lesson, String key, int? materialBlockCount) {
+  switch (key) {
+    case 'vocabulary':
+      return lesson.vocabulary.isNotEmpty;
+    case 'material':
+      return (materialBlockCount ?? 0) > 0;
+    case 'video':
+      return lesson.videoUrl != null && lesson.videoUrl!.isNotEmpty;
+    case 'audio':
+      return lesson.audioUrl != null && lesson.audioUrl!.isNotEmpty;
+    case 'minitest':
+    case 'practice':
+    case 'review':
+      return lesson.blocksFor(key).any((b) => b.questions.isNotEmpty);
+    case 'complete':
+    default:
+      return true;
   }
 }
 
@@ -123,8 +143,50 @@ class _NotifyButtonState extends ConsumerState<_NotifyButton> {
   }
 }
 
+/// Below this width the rail collapses into a horizontal icon strip, same
+/// breakpoint concept as AppShell's own nav-rail/bottom-bar split (§
+/// course-builder redesign, "рельс этапов", 2026-09-01).
+const _railBreakpoint = 900.0;
+
 class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
-  String? _open = 'vocabulary';
+  String _selected = 'vocabulary';
+  int? _materialBlockCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMaterialBlockCount();
+  }
+
+  // AdminLesson carries the quiz-stage `blocks` but not material blocks
+  // (those live in a separate Material row MaterialBlockEditor fetches on
+  // its own) — this is a lightweight, READ-ONLY mirror of just enough of
+  // that fetch to show a real count on the rail, deliberately not calling
+  // createMaterial (unlike MaterialBlockEditor._load) so merely glancing at
+  // the rail can never conjure a Material row into existence.
+  Future<void> _loadMaterialBlockCount() async {
+    try {
+      final repo = ref.read(builderRepositoryProvider);
+      final materials = await repo.listMaterials(widget.lesson.id);
+      final material = materials.where((m) => m.materialType == 'text').cast<AdminMaterial?>().firstWhere((m) => m != null, orElse: () => null);
+      if (material == null) {
+        if (mounted) setState(() => _materialBlockCount = 0);
+        return;
+      }
+      final blocks = await repo.listMaterialBlocks(material.id);
+      if (mounted) setState(() => _materialBlockCount = blocks.length);
+    } catch (_) {
+      // Non-critical — the rail counter just stays "…" indefinitely.
+    }
+  }
+
+  void _select(String key) {
+    setState(() => _selected = key);
+    // Cheap enough to just always refresh — the admin may have just edited
+    // material blocks on the stage they're navigating away from, and there
+    // is no other signal that tells this widget the count changed.
+    _loadMaterialBlockCount();
+  }
 
   Future<void> _addBlock(String stage) async {
     final label = _chain.firstWhere((s) => s.key == stage).label;
@@ -170,6 +232,7 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final isWide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -180,38 +243,85 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
           _NotifyButton(courseId: widget.courseId, lessonId: widget.lesson.id),
           const SizedBox(height: AdminMetrics.cardGap),
         ],
-        for (var i = 0; i < _chain.length; i++) ...[
-          _section(context, i + 1, _chain[i]),
-          if (i < _chain.length - 1) const AdminStepConnector(),
+        if (isWide)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: AdminMetrics.railWidth, child: _rail(context)),
+              const SizedBox(width: 20),
+              Expanded(child: _workingArea(context)),
+            ],
+          )
+        else ...[
+          _horizontalRail(context),
+          const SizedBox(height: AdminMetrics.cardGap),
+          _workingArea(context),
         ],
       ],
     );
   }
 
-  Widget _section(
-    BuildContext context,
-    int number,
-    ({String key, String label, String? note}) step,
-  ) {
-    final isOpen = _open == step.key;
+  Widget _workingArea(BuildContext context) {
+    final step = _chain.firstWhere((s) => s.key == _selected);
     return AdminCard(
-      padding: EdgeInsets.zero,
-      highlighted: isOpen,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AdminStageHeader(
-            number: number,
-            title: step.label,
-            subtitle: step.note,
-            counter: _counterFor(widget.lesson, step.key),
-            isOpen: isOpen,
-            onTap: () => setState(() => _open = isOpen ? null : step.key),
+          Text(step.label, style: AdminTypography.cardTitle),
+          if (step.note != null) ...[
+            const SizedBox(height: 2),
+            Text(step.note!, style: AdminTypography.caption),
+          ],
+          const SizedBox(height: AdminMetrics.fieldGap),
+          _body(context, _selected),
+        ],
+      ),
+    );
+  }
+
+  /// The step rail (§ course-builder redesign, "рельс этапов", 2026-09-01):
+  /// always visible, doesn't scroll away with the working area's own
+  /// content, one continuous 1px line connecting every item top to bottom
+  /// (the old interface's "↓" made literal) — the sequence is fixed, this
+  /// is not a row of independent tabs.
+  Widget _rail(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8, bottom: 8),
+          child: Text('ЭТАПЫ', style: AdminTypography.fieldLabel),
+        ),
+        for (var i = 0; i < _chain.length; i++)
+          _RailItem(
+            number: i + 1,
+            label: _chain[i].label,
+            counter: _counterFor(widget.lesson, _chain[i].key, _materialBlockCount),
+            hasContent: _hasContent(widget.lesson, _chain[i].key, _materialBlockCount),
+            selected: _selected == _chain[i].key,
+            isFirst: i == 0,
+            isLast: i == _chain.length - 1,
+            onTap: () => _select(_chain[i].key),
           ),
-          if (isOpen)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-              child: _body(context, step.key),
+      ],
+    );
+  }
+
+  /// Narrow-viewport counterpart (< 900px — phone, a squeezed window) —
+  /// same idea as AppShell's own rail/bottom-bar split: a horizontal strip
+  /// of icons under where the AppBar is, working area at full width below.
+  Widget _horizontalRail(BuildContext context) {
+    return SizedBox(
+      height: 56,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final step in _chain)
+            _HorizontalRailItem(
+              label: step.label,
+              selected: _selected == step.key,
+              hasContent: _hasContent(widget.lesson, step.key, _materialBlockCount),
+              onTap: () => _select(step.key),
             ),
         ],
       ),
@@ -284,5 +394,131 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
           style: AdminTypography.caption,
         );
     }
+  }
+}
+
+/// One rail row: number circle, title, terse counter, and a continuous 1px
+/// connecting line through the circle's center — half above (skipped for
+/// the first item), half below (skipped for the last), so consecutive
+/// items' segments join into one unbroken line rather than N separate
+/// short ones. The selected item gets a `▸` marker and a background
+/// slightly darker than the page (never the accent fill — §2 of the
+/// redesign reserves that for connectivity indicators only).
+class _RailItem extends StatelessWidget {
+  const _RailItem({
+    required this.number,
+    required this.label,
+    required this.counter,
+    required this.hasContent,
+    required this.selected,
+    required this.isFirst,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  final int number;
+  final String label;
+  final String counter;
+  final bool hasContent;
+  final bool selected;
+  final bool isFirst;
+  final bool isLast;
+  final VoidCallback onTap;
+
+  static const _circleSize = 24.0;
+  static const _rowVPad = 8.0;
+
+  Widget _lineSegment(bool visible) => SizedBox(
+    width: _circleSize,
+    height: _rowVPad,
+    child: visible ? const Center(child: SizedBox(width: 1, height: _rowVPad, child: ColoredBox(color: AdminColors.border))) : null,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+      child: Container(
+        decoration: BoxDecoration(
+          color: selected ? AdminColors.blockBg : null,
+          borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+        ),
+        child: Column(
+          children: [
+            _lineSegment(!isFirst),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: _circleSize,
+                    height: _circleSize,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(shape: BoxShape.circle, border: Border.fromBorderSide(BorderSide(color: AdminColors.border))),
+                    child: Text('$number', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AdminColors.text)),
+                  ),
+                  const SizedBox(width: 10),
+                  if (selected) const Text('▸ ', style: TextStyle(color: AdminColors.text, fontWeight: FontWeight.w700)),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: AdminTypography.body.copyWith(fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(
+                    counter,
+                    style: AdminTypography.caption.copyWith(color: hasContent ? AdminColors.text : AdminColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            _lineSegment(!isLast),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Narrow-viewport rail item — icon-free (this section has no icon set of
+/// its own), just the label as a compact pill, matching the same
+/// selected/muted vocabulary as [_RailItem].
+class _HorizontalRailItem extends StatelessWidget {
+  const _HorizontalRailItem({required this.label, required this.selected, required this.hasContent, required this.onTap});
+  final String label;
+  final bool selected;
+  final bool hasContent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? AdminColors.blockBg : null,
+            border: Border.all(color: selected ? AdminColors.borderStrong : AdminColors.border),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: AdminTypography.body.copyWith(
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: hasContent ? AdminColors.text : AdminColors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
