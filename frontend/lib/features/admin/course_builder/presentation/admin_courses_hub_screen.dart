@@ -133,17 +133,24 @@ class AdminCoursesHubScreen extends ConsumerWidget {
   void _openCreateCourseSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
       backgroundColor: AdminColors.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 16,
-          bottom: 16 + MediaQuery.viewInsetsOf(sheetContext).bottom,
-        ),
-        child: const _CreateCourseCard(),
+      // A bare Padding/Column child still gets stretched to the sheet's
+      // full max-height slot by showModalBottomSheet's own layout — Wrap is
+      // the standard fix, since RenderWrap always sizes to its children
+      // regardless of how loose the incoming constraints are.
+      builder: (sheetContext) => Wrap(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: 16 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: const _CreateCourseCard(),
+          ),
+        ],
       ),
     );
   }
@@ -153,9 +160,13 @@ class AdminCoursesHubScreen extends ConsumerWidget {
       context: context,
       backgroundColor: AdminColors.bg,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (sheetContext) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: const _NotificationSettingsCard(),
+      builder: (sheetContext) => Wrap(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: const _NotificationSettingsCard(),
+          ),
+        ],
       ),
     );
   }
