@@ -261,3 +261,162 @@ class AdminQuestionPlacement {
   final String? legacySetName;
   final int position;
 }
+
+/// One reading (MaterialBlock) row on the "Карта урока" overview (§8 of the
+/// course-builder redesign, 2026-09-01), with every quiz question elsewhere
+/// tagged as verifying it.
+class MapMaterialBlock {
+  const MapMaterialBlock({required this.id, required this.title, required this.verifiedBy});
+
+  factory MapMaterialBlock.fromJson(Map<String, dynamic> json) => MapMaterialBlock(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        verifiedBy: (json['verifiedBy'] as List<dynamic>)
+            .map((e) => MapVerifyingRef.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+
+  final String id;
+  final String title;
+  final List<MapVerifyingRef> verifiedBy;
+
+  bool get hasWarning => verifiedBy.isEmpty;
+}
+
+class MapVerifyingRef {
+  const MapVerifyingRef({
+    required this.questionId,
+    required this.stage,
+    required this.stageLabel,
+    required this.blockId,
+    required this.blockTitle,
+  });
+
+  factory MapVerifyingRef.fromJson(Map<String, dynamic> json) => MapVerifyingRef(
+        questionId: json['questionId'] as String,
+        stage: json['stage'] as String?,
+        stageLabel: json['stageLabel'] as String?,
+        blockId: json['blockId'] as String?,
+        blockTitle: json['blockTitle'] as String?,
+      );
+
+  final String questionId;
+  final String? stage;
+  final String? stageLabel;
+  final String? blockId;
+  final String? blockTitle;
+}
+
+/// One quiz question row on the map — the running 1..N number matches what
+/// the teacher already sees inside the block's own editor.
+class MapQuestion {
+  const MapQuestion({
+    required this.id,
+    required this.number,
+    required this.kind,
+    required this.prompt,
+    required this.source,
+    required this.verifiesBlockId,
+    required this.verifiesBlockTitle,
+  });
+
+  factory MapQuestion.fromJson(Map<String, dynamic> json) => MapQuestion(
+        id: json['id'] as String,
+        number: json['number'] as int,
+        kind: json['kind'] as String,
+        prompt: json['prompt'] as String? ?? '',
+        source: json['source'] as String,
+        verifiesBlockId: json['verifiesBlockId'] as String?,
+        verifiesBlockTitle: json['verifiesBlockTitle'] as String?,
+      );
+
+  final String id;
+  final int number;
+  final String kind;
+  final String prompt;
+  final String source;
+  final String? verifiesBlockId;
+  final String? verifiesBlockTitle;
+
+  bool get hasWarning => verifiesBlockId == null;
+}
+
+class MapQuizBlock {
+  const MapQuizBlock({required this.id, required this.title, required this.questions});
+
+  factory MapQuizBlock.fromJson(Map<String, dynamic> json) => MapQuizBlock(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        questions: (json['questions'] as List<dynamic>).map((e) => MapQuestion.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  final String id;
+  final String title;
+  final List<MapQuestion> questions;
+}
+
+class MapStage {
+  const MapStage({required this.stage, required this.stageLabel, required this.blocks});
+
+  factory MapStage.fromJson(Map<String, dynamic> json) => MapStage(
+        stage: json['stage'] as String,
+        stageLabel: json['stageLabel'] as String,
+        blocks: (json['blocks'] as List<dynamic>).map((e) => MapQuizBlock.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  final String stage;
+  final String stageLabel;
+  final List<MapQuizBlock> blocks;
+}
+
+/// The full "Карта урока" read-only overview for one lesson (§8).
+class LessonConnectionsMap {
+  const LessonConnectionsMap({required this.materials, required this.stages});
+
+  factory LessonConnectionsMap.fromJson(Map<String, dynamic> json) => LessonConnectionsMap(
+        materials: (json['materials'] as List<dynamic>).map((e) => MapMaterialBlock.fromJson(e as Map<String, dynamic>)).toList(),
+        stages: (json['stages'] as List<dynamic>).map((e) => MapStage.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  final List<MapMaterialBlock> materials;
+  final List<MapStage> stages;
+}
+
+/// One row of the course-level map (§8: "строки это уроки, и видно, какой
+/// урок недособран, без захода внутрь").
+class CourseMapLesson {
+  const CourseMapLesson({
+    required this.id,
+    required this.title,
+    required this.materialCount,
+    required this.materialWarnings,
+    required this.questionCount,
+    required this.questionWarnings,
+  });
+
+  factory CourseMapLesson.fromJson(Map<String, dynamic> json) => CourseMapLesson(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        materialCount: json['materialCount'] as int,
+        materialWarnings: json['materialWarnings'] as int,
+        questionCount: json['questionCount'] as int,
+        questionWarnings: json['questionWarnings'] as int,
+      );
+
+  final String id;
+  final String title;
+  final int materialCount;
+  final int materialWarnings;
+  final int questionCount;
+  final int questionWarnings;
+
+  bool get isFullyLinked => materialWarnings == 0 && questionWarnings == 0;
+}
+
+class CourseConnectionsMap {
+  const CourseConnectionsMap({required this.lessons});
+  factory CourseConnectionsMap.fromJson(Map<String, dynamic> json) => CourseConnectionsMap(
+        lessons: (json['lessons'] as List<dynamic>).map((e) => CourseMapLesson.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+  final List<CourseMapLesson> lessons;
+}

@@ -245,6 +245,20 @@ async def list_lesson_block_questions(block_id: str, user: User = Depends(requir
     return {"questions": [_attached_question_dto(r) for r in rows]}
 
 
+@router.get("/courses/{course_id}/lessons/{lesson_id}/connections-map")
+async def lesson_connections_map(course_id: str, lesson_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Powers the "Карта урока" read-only overview (§8 of the course-builder
+    redesign, 2026-09-01)."""
+    return await svc.get_lesson_connections_map(db, course_id, lesson_id)
+
+
+@router.get("/courses/{course_id}/connections-map")
+async def course_connections_map(course_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Course-level "Карта урока" rollup (§8: one row per lesson, so the
+    teacher sees which lesson is under-built without opening it)."""
+    return await svc.get_course_connections_map(db, course_id)
+
+
 @router.get("/questions/{question_id}/placements")
 async def list_question_placements(question_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
     """Full "where is this question actually shown" chain (§5/§6/§7 of the

@@ -12,6 +12,7 @@ import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
 import '../domain/builder_domain.dart';
 import 'widgets/lesson_editor_panel.dart';
+import 'widgets/lesson_map_view.dart';
 import 'widgets/level_picker.dart';
 
 final _courseProvider = FutureProvider.autoDispose.family<AdminCourse, String>(
@@ -92,9 +93,18 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'Структура курса',
-                      style: AdminTypography.cardTitle,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Структура курса', style: AdminTypography.cardTitle),
+                        if (c.lessons.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: () => showCourseConnectionsMap(context, courseId: courseId, courseTitle: c.title),
+                            style: AdminButtonStyles.text(),
+                            icon: const Icon(Icons.hub_outlined, size: 16),
+                            label: const Text('Карта курса'),
+                          ),
+                      ],
                     ),
                     Text(
                       '${c.lessons.length} уроков · ${_wordCount(c)} слов · ${_questionCount(c)} вопросов',

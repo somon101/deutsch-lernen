@@ -10,6 +10,7 @@ from app.models.course_lesson import CourseLesson
 from app.models.enums import CourseStatus
 from app.models.language import Language
 from app.models.lesson_block import LessonBlock
+from app.models.lesson_question import LessonQuestion
 from app.models.level import Level
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
@@ -491,6 +492,144 @@ async def list_verifying_questions(db: AsyncSession, material_block_id: str) -> 
             }
         )
     return result
+
+
+async def get_lesson_connections_map(db: AsyncSession, course_id: str, lesson_id: str) -> dict:
+    """Read-only overview for the "Карта урока" screen (§8 of the
+    course-builder redesign, 2026-09-01) — every reading (MaterialBlock)
+    and every quiz-stage question in one lesson, with the "verifies" edges
+    between them (§3's second connection type) surfaced together. Composes
+    only relations that already exist (the same ones list_verifying_questions
+    and list_block_questions already expose one block at a time) — no new
+    stored data, no schema change, purely a bird's-eye read.
+
+    Quiz questions are numbered continuously across minitest → practice →
+    review, block order then item order within a block (legacy
+    LessonQuestion rows first, then pool questions) — matching the running
+    numbering the teacher already sees inside each block's own editor, and
+    the spec's own diagram (§8) which numbers 1..N straight across stages."""
+    materials = (
+        await db.execute(
+            select(Material).where(Material.courseId == course_id, Material.lessonId == lesson_id, Material.materialType == "text")
+        )
+    ).scalars().all()
+    material_blocks: list[MaterialBlock] = []
+    if materials:
+        material_blocks = (
+            await db.execute(
+                select(MaterialBlock)
+                .where(MaterialBlock.materialId.in_([m.id for m in materials]))
+                .order_by(MaterialBlock.materialId, MaterialBlock.position)
+            )
+        ).scalars().all()
+
+    materials_out = []
+    for b in material_blocks:
+        verifying = await list_verifying_questions(db, b.id)
+        materials_out.append(
+            {
+                "id": b.id,
+                "title": b.title,
+                "verifiedBy": [
+                    {
+                        "questionId": r["question"].id,
+                        "stage": r["stage"],
+                        "stageLabel": r["stageLabel"],
+                        "blockId": r["blockId"],
+                        "blockTitle": r["blockTitle"],
+                    }
+                    for r in verifying
+                ],
+            }
+        )
+
+    lesson_blocks = (
+        await db.execute(
+            select(LessonBlock)
+            .where(LessonBlock.courseId == course_id, LessonBlock.lessonId == lesson_id)
+            .order_by(LessonBlock.stage, LessonBlock.position)
+        )
+    ).scalars().all()
+
+    legacy_by_block: dict[str, list[LessonQuestion]] = {}
+    if lesson_blocks:
+        legacy_rows = (
+            await db.execute(
+                select(LessonQuestion)
+                .where(LessonQuestion.lessonId == lesson_id, LessonQuestion.blockId.in_([b.id for b in lesson_blocks]))
+                .order_by(LessonQuestion.blockId, LessonQuestion.position)
+            )
+        ).scalars().all()
+        for q in legacy_rows:
+            legacy_by_block.setdefault(q.blockId, []).append(q)
+
+    counter = 0
+    stages_out: dict[str, dict] = {}
+    for block in lesson_blocks:
+        pool_rows = await list_block_questions(db, lesson_block_id=block.id)
+        items = []
+        for q in legacy_by_block.get(block.id, []):
+            counter += 1
+            items.append(
+                {
+                    "id": q.id,
+                    "number": counter,
+                    "kind": q.kind,
+                    "prompt": q.prompt,
+                    "source": "legacy",
+                    "verifiesBlockId": None,
+                    "verifiesBlockTitle": None,
+                }
+            )
+        for r in pool_rows:
+            counter += 1
+            items.append(
+                {
+                    "id": r["question"].id,
+                    "number": counter,
+                    "kind": r["question"].kind,
+                    "prompt": r["question"].prompt,
+                    "source": "pool",
+                    "verifiesBlockId": r["verifiesBlockId"],
+                    "verifiesBlockTitle": r["verifiesBlockTitle"],
+                }
+            )
+        stage_entry = stages_out.setdefault(
+            block.stage, {"stage": block.stage, "stageLabel": STAGE_TITLES.get(block.stage, block.stage), "blocks": []}
+        )
+        stage_entry["blocks"].append({"id": block.id, "title": block.title, "questions": items})
+
+    return {"materials": materials_out, "stages": list(stages_out.values())}
+
+
+async def get_course_connections_map(db: AsyncSession, course_id: str) -> dict:
+    """Course-level rollup of get_lesson_connections_map (§8 of the
+    course-builder redesign, 2026-09-01: "Карта доступна и на уровне
+    курса — тогда строки это уроки, и видно, какой урок недособран, без
+    захода внутрь") — one row per lesson with just the warning counts, so
+    the teacher can spot an under-built lesson without opening it."""
+    lessons = (
+        await db.execute(select(CourseLesson).where(CourseLesson.courseId == course_id).order_by(CourseLesson.position))
+    ).scalars().all()
+
+    rows = []
+    for lesson in lessons:
+        lesson_map = await get_lesson_connections_map(db, course_id, lesson.id)
+        material_warnings = sum(1 for m in lesson_map["materials"] for _ in [None] if not m["verifiedBy"])
+        question_warnings = sum(
+            1 for stage in lesson_map["stages"] for block in stage["blocks"] for q in block["questions"] if q["verifiesBlockId"] is None
+        )
+        rows.append(
+            {
+                "id": lesson.id,
+                "title": lesson.title,
+                "materialCount": len(lesson_map["materials"]),
+                "materialWarnings": material_warnings,
+                "questionCount": sum(len(block["questions"]) for stage in lesson_map["stages"] for block in stage["blocks"]),
+                "questionWarnings": question_warnings,
+            }
+        )
+    return {"lessons": rows}
 
 
 async def list_question_placements(db: AsyncSession, question_id: str) -> list[dict]:

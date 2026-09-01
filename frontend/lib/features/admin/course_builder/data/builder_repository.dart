@@ -534,6 +534,18 @@ class BuilderRepository {
     return (res['questions'] as List<dynamic>).map((q) => VerifyingQuestion.fromJson(q as Map<String, dynamic>)).toList();
   }
 
+  /// Read-only overview for the "Карта урока" screen (§8, 2026-09-01).
+  Future<LessonConnectionsMap> lessonConnectionsMap(String courseId, String lessonId) async {
+    final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/connections-map');
+    return LessonConnectionsMap.fromJson(res);
+  }
+
+  /// Course-level rollup — one row per lesson (§8, 2026-09-01).
+  Future<CourseConnectionsMap> courseConnectionsMap(String courseId) async {
+    final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}/connections-map');
+    return CourseConnectionsMap.fromJson(res);
+  }
+
   /// Sets/changes/clears the "verifies this reading block" tag on an
   /// already-attached quiz-stage question (§ course-builder redesign, "+
   /// привязать" chip, 2026-09-01) — pass null to clear.

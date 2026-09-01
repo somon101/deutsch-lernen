@@ -7,6 +7,7 @@ import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
 import '../../domain/taxonomy_domain.dart';
 import 'block_editor.dart';
+import 'lesson_map_view.dart';
 import 'material_block_editor.dart';
 import 'media_editor.dart';
 import 'vocabulary_editor.dart';
@@ -180,6 +181,19 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
     }
   }
 
+  /// Opens the read-only "Карта урока" overview (§8 of the redesign,
+  /// 2026-09-01) and, if the teacher tapped an element in it, switches the
+  /// rail to that step — the map itself never edits anything.
+  Future<void> _openMap() async {
+    final key = await showLessonConnectionsMap(
+      context,
+      courseId: widget.courseId,
+      lessonId: widget.lesson.id,
+      lessonTitle: widget.lesson.title,
+    );
+    if (key != null) _select(key);
+  }
+
   void _select(String key) {
     setState(() => _selected = key);
     // Cheap enough to just always refresh — the admin may have just edited
@@ -303,6 +317,19 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
             isLast: i == _chain.length - 1,
             onTap: () => _select(_chain[i].key),
           ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openMap,
+              style: AdminButtonStyles.secondary(),
+              icon: const Icon(Icons.hub_outlined, size: 16),
+              label: const Text('Карта урока'),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -323,6 +350,15 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
               hasContent: _hasContent(widget.lesson, step.key, _materialBlockCount),
               onTap: () => _select(step.key),
             ),
+          Padding(
+            padding: const EdgeInsets.only(left: 4),
+            child: OutlinedButton.icon(
+              onPressed: _openMap,
+              style: AdminButtonStyles.secondary(),
+              icon: const Icon(Icons.hub_outlined, size: 16),
+              label: const Text('Карта'),
+            ),
+          ),
         ],
       ),
     );
