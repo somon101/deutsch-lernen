@@ -3,12 +3,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../courses/presentation/courses_overview.dart';
 import '../../courses/presentation/widgets/lesson_grid_card.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
+import 'widgets/lesson_download_gate.dart';
 
 /// Which language the lesson list below is showing — deliberately
 /// independent of the profile's own progress-language preference
@@ -162,11 +164,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 child: LessonGridCard(
                                   index: i,
                                   lesson: lessons[i],
-                                  onTap: () => context.go(
-                                    lessons[i].courseId != null
-                                        ? '/courses/${lessons[i].courseId}/lesson/${lessons[i].lessonId}/${lessons[i].targetStage.name}'
-                                        : '/lesson/${lessons[i].lessonId}/${lessons[i].targetStage.name}',
-                                  ),
+                                  // The lesson's word photos are pulled onto
+                                  // the device first, with progress, and the
+                                  // lesson opens after (§ pre-download word
+                                  // photos, 2026-09-02). A lesson opened
+                                  // before has them on disk already and goes
+                                  // straight through without any sheet.
+                                  onTap: () {
+                                    final lesson = lessons[i];
+                                    final target = lesson.courseId != null
+                                        ? '/courses/${lesson.courseId}/lesson/${lesson.lessonId}/${lesson.targetStage.name}'
+                                        : '/lesson/${lesson.lessonId}/${lesson.targetStage.name}';
+                                    openLessonWithPhotos(
+                                      context,
+                                      api: ref.read(apiClientProvider),
+                                      imageUrls: lesson.imageUrls,
+                                      open: () => context.go(target),
+                                    );
+                                  },
                                 ),
                               ),
                           ],

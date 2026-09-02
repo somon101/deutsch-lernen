@@ -13,3 +13,6 @@ python-multipart==0.0.20
 python-dotenv==1.0.1
 httpx==0.28.1
 regex==2024.11.6
+# Re-encodes uploaded photos to WebP (§ word photo weight, 2026-09-02) —
+# a 825 KB PNG becomes 23 KB at the same resolution.
+pillow==11.1.0

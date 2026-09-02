@@ -17,13 +17,26 @@ import '../data/courses_repository.dart';
 /// (§ Home lesson list, 2026-08-29) needs to build the right lesson-runner
 /// route on tap, since both kinds are now shown side by side in one list.
 class LessonCard {
-  const LessonCard({required this.lessonId, required this.title, required this.vocabularyCount, required this.progress, this.courseId});
+  const LessonCard({
+    required this.lessonId,
+    required this.title,
+    required this.vocabularyCount,
+    required this.progress,
+    this.courseId,
+    this.imageUrls = const [],
+  });
 
   final String lessonId;
   final String? courseId;
   final String title;
   final int vocabularyCount;
   final LessonProgress? progress;
+
+  /// Word photos belonging to this lesson, so they can be pulled onto the
+  /// device before the lesson opens (§ pre-download word photos,
+  /// 2026-09-02). They come from the already-cached course content — the
+  /// list costs no extra request.
+  final List<String> imageUrls;
 
   double get ratio => courseProgressRatio(progress?.completedStages);
   bool get completed => progress?.completedStages.contains(Stage.complete) ?? false;
@@ -49,12 +62,17 @@ List<LessonCard> _cardsFromHomeContentRaw(Map<String, dynamic> raw, Map<String, 
   for (final course in (raw['courseDetails'] as List<dynamic>).cast<Map<String, dynamic>>()) {
     final courseId = course['id'] as String;
     for (final l in (course['lessons'] as List<dynamic>).cast<Map<String, dynamic>>()) {
+      final vocabulary = (l['vocabulary'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
       cards.add(LessonCard(
         lessonId: l['id'] as String,
         courseId: courseId,
         title: l['title'] as String,
-        vocabularyCount: (l['vocabulary'] as List<dynamic>? ?? const []).length,
+        vocabularyCount: vocabulary.length,
         progress: progressByLesson[l['id']],
+        imageUrls: [
+          for (final w in vocabulary)
+            if ((w['imageUrl'] as String?)?.isNotEmpty ?? false) w['imageUrl'] as String,
+        ],
       ));
     }
   }

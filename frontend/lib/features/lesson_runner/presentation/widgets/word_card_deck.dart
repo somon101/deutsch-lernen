@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -161,10 +162,12 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
       final url = _resolvedImage(widget.words[i]);
       if (url == null || !seen.add(url)) continue;
       if (!mounted) return;
-      // Errors are swallowed on purpose: a photo that fails to prefetch is
-      // retried by the Image.network in the card itself, and a broken URL
-      // must never take down the lesson.
-      precacheImage(NetworkImage(url), context, onError: (_, _) {});
+      // CachedNetworkImageProvider, not NetworkImage: this has to warm the
+      // same disk cache the cards read from, otherwise the work is thrown
+      // away when the app closes. Errors are swallowed on purpose — a photo
+      // that fails to prefetch is retried by the card itself, and a broken
+      // URL must never take down the lesson.
+      precacheImage(CachedNetworkImageProvider(url), context, onError: (_, _) {});
     }
   }
 
@@ -466,8 +469,25 @@ class _WordCardFace extends StatelessWidget {
                 Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [a, b])),
+                    // Disk-backed, like the avatar already is: Image.network
+                    // only ever cached in memory, so every app restart —
+                    // and every return to a lesson — re-downloaded the photo
+                    // in full. The prefetch before the lesson opens writes
+                    // into this same cache, so by the time a card is shown
+                    // its file is normally already local
+                    // (§ pre-download word photos, 2026-09-02).
                     child: imageUrl != null
-                        ? Image.network(imageUrl!, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox.shrink())
+                        ? CachedNetworkImage(
+                            imageUrl: imageUrl!,
+                            fit: BoxFit.cover,
+                            // The card's own gradient shows through while a
+                            // photo loads, so there is deliberately no
+                            // spinner: a card that is about to be filled
+                            // should not flash a loading state for the split
+                            // second the disk read takes.
+                            placeholder: (_, _) => const SizedBox.shrink(),
+                            errorWidget: (_, _, _) => const SizedBox.shrink(),
+                          )
                         : null,
                   ),
                 ),

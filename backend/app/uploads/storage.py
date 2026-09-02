@@ -14,6 +14,7 @@ from fastapi import UploadFile
 
 from app.config import settings
 from app.errors import ApiError
+from app.uploads.images import encode_if_smaller
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 UPLOADS_ROOT = _REPO_ROOT / "server" / "uploads"
@@ -130,29 +131,54 @@ async def _upload_bytes(folder: str, filename: str, content: bytes, content_type
             raise ApiError(500, "Не удалось сохранить файл")
 
 
-async def _save(file: UploadFile, directory: Path, mime_map: dict[str, str], max_bytes: int, error_message: str) -> str:
+async def _save(
+    file: UploadFile,
+    directory: Path,
+    mime_map: dict[str, str],
+    max_bytes: int,
+    error_message: str,
+    *,
+    reencode_images: bool = False,
+) -> str:
     """Reads and validates the upload; returns the URL stored on the user /
     course / word row (relative /uploads/... locally, or a public Supabase
-    URL in production)."""
+    URL in production).
+
+    `reencode_images` turns on the WebP conversion for the photo uploads
+    (§ word photo weight, 2026-09-02). It never applies to audio or video,
+    and even where it is on, an upload that would not get smaller is stored
+    exactly as it arrived.
+    """
     ext = mime_map.get(file.content_type or "")
     if ext is None:
         raise ApiError(400, error_message)
 
     content = await file.read()
+    # The size limit is checked against what was UPLOADED, before any
+    # re-encode — otherwise compression would quietly raise the real ceiling
+    # and a 20 MB original would sneak through by becoming small.
     if len(content) > max_bytes:
         raise ApiError(400, "Файл слишком большой")
+
+    content_type = file.content_type or "application/octet-stream"
+    if reencode_images:
+        converted = encode_if_smaller(content)
+        if converted is not None:
+            content, ext, content_type = converted
 
     filename = f"{uuid.uuid4()}{ext}"
     folder = directory.name
     if settings.supabase_storage_enabled:
-        await _upload_bytes(folder, filename, content, file.content_type or "application/octet-stream")
+        await _upload_bytes(folder, filename, content, content_type)
     else:
         (directory / filename).write_bytes(content)
     return public_url(folder, filename)
 
 
 async def save_avatar(file: UploadFile) -> str:
-    return await _save(file, AVATARS_DIR, AVATAR_MIME, AVATAR_MAX_BYTES, "Разрешены только изображения JPEG, PNG или WebP")
+    return await _save(
+        file, AVATARS_DIR, AVATAR_MIME, AVATAR_MAX_BYTES, "Разрешены только изображения JPEG, PNG или WebP", reencode_images=True
+    )
 
 
 async def save_word_audio(file: UploadFile) -> str:
@@ -160,7 +186,14 @@ async def save_word_audio(file: UploadFile) -> str:
 
 
 async def save_word_image(file: UploadFile) -> str:
-    return await _save(file, WORD_IMAGES_DIR, WORD_IMAGE_MIME, WORD_IMAGE_MAX_BYTES, "Разрешены только изображения JPEG, PNG или WebP")
+    return await _save(
+        file,
+        WORD_IMAGES_DIR,
+        WORD_IMAGE_MIME,
+        WORD_IMAGE_MAX_BYTES,
+        "Разрешены только изображения JPEG, PNG или WebP",
+        reencode_images=True,
+    )
 
 
 async def save_course_media(file: UploadFile) -> str:
