@@ -12,7 +12,6 @@ Usage:  python serve_nocache.py [port]     (default 8091, serves ./build/web)
 import functools
 import http.server
 import os
-import socketserver
 import sys
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8091
@@ -51,13 +50,32 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+    def handle_one_request(self):
+        # A browser cancelling an in-flight asset (reload mid-download, or
+        # dropping a keep-alive connection) surfaces as one of these — let the
+        # thread end quietly instead of dumping a traceback.
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            self.close_connection = True
+
     def log_message(self, *args):
         pass
 
 
+class Server(http.server.ThreadingHTTPServer):
+    """Threaded on purpose. A browser opens several connections at once and
+    keeps them alive; a single-threaded server blocks on the first one that
+    doesn't finish and then accepts nothing else — the port stays LISTENING
+    while every request is refused, which looks exactly like the server
+    having crashed. (`python -m http.server` is threaded for this reason.)"""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 if __name__ == "__main__":
     handler = functools.partial(NoCacheHandler, directory=ROOT)
-    socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("", PORT), handler) as httpd:
+    with Server(("", PORT), handler) as httpd:
         print(f"serving {ROOT} on http://localhost:{PORT} (no-cache)")
         httpd.serve_forever()
