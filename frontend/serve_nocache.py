@@ -27,15 +27,21 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        # Hand back an inert service worker instead of the real one — the
-        # cached original would otherwise keep answering from its own store
-        # regardless of the headers above.
+        # Hand back a self-destructing service worker instead of the real one.
+        # A browser that already registered the original keeps that worker
+        # controlling the page — and serving its cached bundle — until a new
+        # script at the same URL replaces it, so clearing the caches is not
+        # enough: this also unregisters itself, leaving the browser with no
+        # worker at all. Deliberately no fetch handler, so it never answers a
+        # request from cache while it's still alive.
         if self.path.split("?")[0].endswith("flutter_service_worker.js"):
             body = (
                 b"self.addEventListener('install',e=>self.skipWaiting());\n"
-                b"self.addEventListener('activate',e=>e.waitUntil("
-                b"caches.keys().then(k=>Promise.all(k.map(c=>caches.delete(c))))"
-                b".then(()=>self.clients.claim())));\n"
+                b"self.addEventListener('activate',e=>e.waitUntil((async()=>{\n"
+                b"  for (const k of await caches.keys()) await caches.delete(k);\n"
+                b"  await self.registration.unregister();\n"
+                b"  await self.clients.claim();\n"
+                b"})()));\n"
             )
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript")
