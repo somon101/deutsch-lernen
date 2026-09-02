@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/api/api_client.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
+import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
 import '../../admin_widgets.dart';
 import '../../widgets/admin_feedback.dart';
@@ -77,8 +78,9 @@ class BuilderCourseEditScreen extends ConsumerWidget {
           return const Center(child: CircularProgressIndicator());
         },
         data: (c) => AdminMaxWidth(
+          maxWidth: AdminMetrics.maxListWidth,
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
             children: [
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -465,12 +467,20 @@ class _LessonStatusGrid extends StatelessWidget {
       ('Практика', _blocksCounter(lesson.blocksFor('practice'))),
       ('Закрепление', _blocksCounter(lesson.blocksFor('review'))),
     ];
-    return GridView.count(
-      crossAxisCount: 3,
+    // Fixed row height rather than childAspectRatio (§ builder full-width
+    // layout, 2026-09-02) — an aspect ratio derives height from width, so on
+    // a wide screen the rows stretched into tall bands of empty space. These
+    // are single-line label+value pairs; their height should never depend on
+    // how wide the window is.
+    return GridView(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 4.2,
-      mainAxisSpacing: 2,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        mainAxisExtent: 22,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 12,
+      ),
       children: [
         for (final (label, value) in items)
           Row(

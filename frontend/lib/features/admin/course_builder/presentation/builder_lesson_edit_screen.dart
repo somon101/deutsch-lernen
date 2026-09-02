@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
+import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
 import '../../widgets/admin_feedback.dart';
 import '../data/builder_repository.dart';
@@ -76,9 +77,13 @@ class BuilderLessonEditScreen extends ConsumerWidget {
               if (lesson == null) {
                 return Center(child: Text('Урок не найден', style: AdminTypography.body));
               }
-              return AdminMaxWidth(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
+              // Deliberately no AdminMaxWidth here (§ builder full-width
+              // layout, 2026-09-02) — the rail is a fixed 220px and the
+              // working area takes everything else, so a wide monitor
+              // actually buys the teacher room to edit rather than empty
+              // margins.
+              return ListView(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
                   children: [
                     AdminCard(child: LessonNameCard(courseId: courseId, lesson: lesson)),
                     const SizedBox(height: AdminMetrics.fieldGap),
@@ -115,8 +120,7 @@ class BuilderLessonEditScreen extends ConsumerWidget {
                       onReload: reload,
                     ),
                   ],
-                ),
-              );
+                );
             },
           ),
         ),

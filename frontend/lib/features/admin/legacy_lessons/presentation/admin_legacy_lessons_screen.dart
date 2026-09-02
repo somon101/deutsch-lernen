@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/data/profile_repository.dart';
+import '../../../profile/presentation/profile_tokens.dart';
+import '../../admin_tokens.dart';
 import '../data/legacy_admin_repository.dart';
 import '../../course_builder/domain/builder_domain.dart';
 
@@ -57,9 +59,12 @@ class AdminLegacyLessonsScreen extends ConsumerWidget {
           if (list.isEmpty) {
             return const Center(child: Text('Уроки не найдены.'));
           }
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [for (final row in list) _LessonCard(row: row)],
+          return AdminMaxWidth(
+            maxWidth: AdminMetrics.maxListWidth,
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
+              children: [for (final row in list) _LessonCard(row: row)],
+            ),
           );
         },
       ),

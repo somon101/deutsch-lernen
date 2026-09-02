@@ -83,9 +83,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/403', builder: (context, state) => const ForbiddenScreen()),
-      // Shared desktop rail chrome around the top-level sections — everything
-      // else (lesson runner, detail/edit screens) stays outside it and is
-      // pushed full-screen as before.
+      // Shared desktop rail chrome around the top-level sections AND the whole
+      // course-builder editor family — the learner-facing lesson runner is the
+      // only thing that still takes over the full screen, since it's a focus
+      // mode, not a section of the app. Keeping the builder screens in here
+      // means the nav rail never disappears mid-edit (§ builder full-width
+      // layout, 2026-09-02).
       ShellRoute(
         builder: (context, state, child) => AppShell(currentPath: state.matchedLocation, child: child),
         routes: [
@@ -95,6 +98,22 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
           GoRoute(path: '/admin/users/all', builder: (context, state) => const AdminUsersAllScreen()),
           GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
+          GoRoute(path: '/admin/courses/legacy', builder: (context, state) => const AdminLegacyLessonsScreen()),
+          GoRoute(
+            path: '/admin/lessons/:lessonId',
+            builder: (context, state) => AdminLessonEditScreen(lessonId: state.pathParameters['lessonId']!),
+          ),
+          GoRoute(
+            path: '/admin/builder/:courseId',
+            builder: (context, state) => BuilderCourseEditScreen(courseId: state.pathParameters['courseId']!),
+          ),
+          GoRoute(
+            path: '/admin/builder/:courseId/lessons/:lessonId',
+            builder: (context, state) => BuilderLessonEditScreen(
+              courseId: state.pathParameters['courseId']!,
+              lessonId: state.pathParameters['lessonId']!,
+            ),
+          ),
         ],
       ),
       GoRoute(
@@ -116,25 +135,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           stage: state.pathParameters['stage']!,
         ),
       ),
-      GoRoute(path: '/admin/courses/legacy', builder: (context, state) => const AdminLegacyLessonsScreen()),
-      GoRoute(
-        path: '/admin/lessons/:lessonId',
-        builder: (context, state) => AdminLessonEditScreen(lessonId: state.pathParameters['lessonId']!),
-      ),
       // Old constructor list URL — kept as a redirect so existing
       // bookmarks/links still work, mirroring App.tsx's own <Navigate> for it.
       GoRoute(path: '/admin/builder', redirect: (context, state) => '/admin/courses'),
-      GoRoute(
-        path: '/admin/builder/:courseId',
-        builder: (context, state) => BuilderCourseEditScreen(courseId: state.pathParameters['courseId']!),
-      ),
-      GoRoute(
-        path: '/admin/builder/:courseId/lessons/:lessonId',
-        builder: (context, state) => BuilderLessonEditScreen(
-          courseId: state.pathParameters['courseId']!,
-          lessonId: state.pathParameters['lessonId']!,
-        ),
-      ),
       GoRoute(
         path: '/admin/users/:id',
         builder: (context, state) => AdminUserDetailScreen(userId: state.pathParameters['id']!),

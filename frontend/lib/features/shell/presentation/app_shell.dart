@@ -66,8 +66,25 @@ bool _visibleFor(_NavItem item, AppUser? user) {
   return true;
 }
 
+/// Paths that belong to a nav item's section without starting with that
+/// item's own path — the course builder's editor screens live under
+/// /admin/builder and /admin/lessons but are part of "Конструктор курсов"
+/// (§ builder full-width layout, 2026-09-02).
+const _sectionAliases = <String, List<String>>{
+  '/admin/courses': ['/admin/builder', '/admin/lessons'],
+};
+
 bool _isActive(_NavItem item, String currentPath) {
   if (item.path == '/') return currentPath == '/';
+  for (final alias in _sectionAliases[item.path] ?? const <String>[]) {
+    if (currentPath.startsWith(alias)) return true;
+  }
+  // "Пользователи" is /admin, a prefix of every other admin path — without
+  // this it would light up on the courses/builder screens too. Its own
+  // section is just /admin itself plus /admin/users/*.
+  if (item.path == '/admin') {
+    return currentPath == '/admin' || currentPath.startsWith('/admin/users');
+  }
   return currentPath.startsWith(item.path);
 }
 

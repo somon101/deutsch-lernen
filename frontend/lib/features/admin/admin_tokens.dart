@@ -59,6 +59,12 @@ class AdminMetrics {
   static const sectionGap = 24.0;
   static const fieldGap = 12.0;
   static const maxContentWidth = 760.0;
+  /// Reading-width cap for the list-shaped admin screens (courses hub, course
+  /// structure) — wide enough to use a real monitor, still short enough that a
+  /// course description doesn't run edge to edge (§ builder full-width layout,
+  /// 2026-09-02). The lesson editor deliberately has no cap at all: its rail +
+  /// working-area split genuinely uses every pixel.
+  static const maxListWidth = 1400.0;
   /// The step rail's fixed width (§4 of the redesign) — defined now so it's
   /// ready when the rail itself is built later; unused until then.
   static const railWidth = 220.0;
@@ -208,20 +214,21 @@ class AdminCard extends StatelessWidget {
   }
 }
 
-/// Centers content at a 760px reading-width max (Principle 4), full width
-/// below that.
+/// Centers content at a reading-width max (Principle 4), full width below
+/// that. [maxWidth] overrides the default 760px cap — the list-shaped admin
+/// screens pass [AdminMetrics.maxListWidth] so they actually use a wide
+/// monitor (§ builder full-width layout, 2026-09-02).
 class AdminMaxWidth extends StatelessWidget {
-  const AdminMaxWidth({super.key, required this.child});
+  const AdminMaxWidth({super.key, required this.child, this.maxWidth = AdminMetrics.maxContentWidth});
   final Widget child;
+  final double maxWidth;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: AdminMetrics.maxContentWidth,
-        ),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       ),
     );

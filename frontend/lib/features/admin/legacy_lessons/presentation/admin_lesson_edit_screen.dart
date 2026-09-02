@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/data/profile_repository.dart';
+import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
 import '../../course_builder/data/builder_repository.dart';
 import '../../course_builder/domain/builder_domain.dart';
@@ -68,9 +69,11 @@ class AdminLessonEditScreen extends ConsumerWidget {
             style: AdminTypography.body,
           ),
         ),
-        data: (l) => AdminMaxWidth(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
+        // No AdminMaxWidth — same full-width rail+working-area layout as the
+        // builder's own lesson screen (§ builder full-width layout,
+        // 2026-09-02).
+        data: (l) => ListView(
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
             children: [
               LessonEditorPanel(
                 courseId: 'legacy',
@@ -120,7 +123,6 @@ class AdminLessonEditScreen extends ConsumerWidget {
               ),
             ],
           ),
-        ),
       ),
       ),
       ),

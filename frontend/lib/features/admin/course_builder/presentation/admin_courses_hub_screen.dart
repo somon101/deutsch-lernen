@@ -98,6 +98,7 @@ class AdminCoursesHubScreen extends ConsumerWidget {
         ],
       ),
       body: AdminMaxWidth(
+        maxWidth: AdminMetrics.maxListWidth,
         child: ListView(
           padding: EdgeInsets.fromLTRB(
             16,
