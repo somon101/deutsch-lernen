@@ -248,6 +248,7 @@ class _InlineCheckpointQuestion extends ConsumerWidget {
           // placed inline in a material block, so this branch only exists to
           // keep the switch exhaustive.
           AutoTranslateSlot() => const SizedBox.shrink(),
+          AutoMatchSlot() => const SizedBox.shrink(),
           // No prefetch buffer here (there's no linear "next slot" concept
           // reading through material blocks) - the widget generates its own
           // question on first build, and already writes its own AnswerLog

@@ -18,6 +18,7 @@ String poolQuestionPreviewText(QuestionDraft d) => switch (d) {
       MatchDraft(:final prompt) => prompt.isEmpty ? 'Сопоставление' : prompt,
       AutoBlankDraft(:final phrases) => phrases.isEmpty ? 'Пропущенное слово (авто)' : '${phrases.length} фраз: ${phrases.first}',
       AutoTranslateDraft(:final source, :final count) => 'Переведи слово: $count вопр. · ${source.label}',
+      AutoMatchDraft(:final count) => 'Сопоставление (авто): $count вариантов',
     };
 
 /// Reusable-question management for one block — shows what's already
@@ -85,6 +86,20 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   // Advisory only — the server validates the count on save and applies the
   // real cap when generating.
   final Map<WordPoolSource, int> _poolSizes = {};
+
+  // How the auto-match pool splits for this learner, for the editor's hint.
+  ({int todayFree, int total})? _matchBreakdown;
+
+  Future<void> _loadMatchBreakdown() async {
+    final lessonId = widget.lessonId;
+    if (lessonId == null || _matchBreakdown != null) return;
+    try {
+      final b = await ref.read(builderRepositoryProvider).matchPoolBreakdown(lessonId: lessonId);
+      if (mounted) setState(() => _matchBreakdown = b);
+    } catch (_) {
+      // Non-critical — the editor falls back to its generic hint.
+    }
+  }
 
   Future<void> _loadPoolSize(WordPoolSource source) async {
     final lessonId = widget.lessonId;
@@ -168,6 +183,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
 
   void _startNew(QuestionDraft blank) {
     if (blank is AutoTranslateDraft) _loadPoolSize(blank.source);
+    if (blank is AutoMatchDraft) _loadMatchBreakdown();
     setState(() {
         _draft = blank;
         _draftTopicId = widget.topicId;
@@ -218,6 +234,11 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
                 title: 'Переведи слово (авто)',
                 note: 'слова берутся из выбранного источника, варианты система подбирает сама',
                 onTap: () => Navigator.of(context).pop(AutoTranslateDraft.blank),
+              ),
+              _TypeRow(
+                title: 'Сопоставление (авто)',
+                note: 'пары подбираются сами: сначала слова, изученные сегодня',
+                onTap: () => Navigator.of(context).pop(AutoMatchDraft.blank),
               ),
               const SizedBox(height: 8),
             ],
@@ -337,6 +358,7 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
         ScrambleDraft d => ScrambleEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
         MatchDraft d => MatchEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
         AutoBlankDraft d => AutoBlankEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
+        AutoMatchDraft d => AutoMatchEditor(draft: d, breakdown: _matchBreakdown, onChanged: (v) => setState(() => _draft = v)),
         AutoTranslateDraft d => AutoTranslateEditor(
             draft: d,
             poolSize: _poolSizes[d.source],
@@ -751,6 +773,7 @@ class _ReadOnlyQuestionContent extends StatelessWidget {
         ),
       AutoTranslateDraft(:final source, :final count) =>
         Text('$count вопр. · ${source.label}', style: AdminTypography.body),
+      AutoMatchDraft(:final count) => Text('$count вариантов', style: AdminTypography.body),
     };
   }
 }

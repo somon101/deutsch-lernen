@@ -99,6 +99,23 @@ _PROVIDERS: dict[str, Callable[..., Awaitable[list[dict]]]] = {
 }
 
 
+def register_source(name: str, provider: Callable[..., Awaitable[list[dict]]]) -> None:
+    """Adds a source at import time.
+
+    The extension point for sources this module must not depend on: a
+    provider that needs to know what another exercise is doing (or, later,
+    what an adaptive algorithm decided) lives with that code and registers
+    itself here, so this module keeps knowing nothing about exercises and
+    no import cycle appears. Every generator keeps drawing through
+    [build_word_pool] and is unaffected.
+    """
+    _PROVIDERS[name] = provider
+
+
+def source_exists(name: str) -> bool:
+    return name in _PROVIDERS
+
+
 async def build_word_pool(db: AsyncSession, *, source: str, user_id: str, lesson_id: str) -> list[dict]:
     """The pool for one source, or an empty list for an unknown source — a
     generator asking for a source that no longer exists should render

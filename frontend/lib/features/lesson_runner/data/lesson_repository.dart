@@ -166,6 +166,37 @@ class LessonRepository {
     return (correct: res['correct'] as bool, correctText: res['correctText'] as String);
   }
 
+  /// One generated matching exercise (§ auto match, 2026-09-02). Null means
+  /// the learner doesn't have enough distinct words yet — the runner skips
+  /// it rather than showing a short exercise.
+  Future<GeneratedMatchQuestion?> generateMatchQuestion(String questionId) async {
+    try {
+      final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/match');
+      return GeneratedMatchQuestion.fromJson(res);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// Correctness is decided server-side from the signed pairs.
+  Future<bool> submitMatchAnswer(
+    String questionId, {
+    required String generatedQuestionId,
+    required List<({String wordId, String right})> pairs,
+    String? placementId,
+  }) async {
+    final res = await _api.post(
+      '/api/questions/${Uri.encodeComponent(questionId)}/match/answer',
+      body: {
+        'generatedQuestionId': generatedQuestionId,
+        'pairs': [for (final p in pairs) {'wordId': p.wordId, 'right': p.right}],
+        'placementId': ?placementId,
+      },
+    );
+    return res['correct'] as bool;
+  }
+
   /// Reports one already-capped time delta for one activity type within one
   /// lesson (§ time tracking, 2026-08-29) — fire-and-forget from the
   /// caller's point of view, same contract as submitAnswer above.

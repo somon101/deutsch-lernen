@@ -543,6 +543,18 @@ class BuilderRepository {
     return (res['size'] as num).toInt();
   }
 
+  /// How this learner's auto-match pool splits between "learned today and
+  /// not yet claimed by «Переведи слово»" and everything earlier (§ auto
+  /// match, 2026-09-02) — a builder hint only; the server decides the real
+  /// selection.
+  Future<({int todayFree, int total})> matchPoolBreakdown({required String lessonId}) async {
+    final res = await _api.get('/api/word-pools/match-breakdown?lessonId=${Uri.encodeComponent(lessonId)}');
+    return (
+      todayFree: (res['todayUnusedByTranslateWord'] as num).toInt(),
+      total: (res['total'] as num).toInt(),
+    );
+  }
+
   /// Read-only overview for the "Карта урока" screen (§8, 2026-09-01).
   Future<LessonConnectionsMap> lessonConnectionsMap(String courseId, String lessonId) async {
     final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/connections-map');

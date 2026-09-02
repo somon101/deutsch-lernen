@@ -212,6 +212,17 @@ class AutoTranslateQuestionInput(BaseModel):
     count: int = Field(ge=1, le=100)
 
 
+class AutoMatchQuestionInput(BaseModel):
+    """Teacher stores only how many pairs to show (§ auto match,
+    2026-09-02) — never which words. `count` is a Literal, so 3, 5, 7 or any
+    other value is rejected here even when posted straight at the API,
+    independently of what the form allows.
+    """
+
+    kind: Literal["auto_match"]
+    count: Literal[2, 4, 6, 8]
+
+
 BlockQuestionInput = Annotated[
     Union[
         ChoiceQuestionInput,
@@ -221,6 +232,7 @@ BlockQuestionInput = Annotated[
         MatchQuestionInput,
         AutoBlankQuestionInput,
         AutoTranslateQuestionInput,
+        AutoMatchQuestionInput,
     ],
     Field(discriminator="kind"),
 ]

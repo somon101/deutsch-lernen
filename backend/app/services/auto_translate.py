@@ -111,29 +111,61 @@ async def _session_index(db: AsyncSession, user_id: str, lesson_id: str) -> int:
     return int(await db.scalar(select(func.count()).select_from(LessonAttempt).where(LessonAttempt.userId == user_id, LessonAttempt.lessonId == lesson_id)) or 0)
 
 
-async def _allocation(db: AsyncSession, *, question: Question, source: str, lesson_id: str, user_id: str) -> list[dict]:
-    """The words this question owns for this session.
+async def _allocate_source(db: AsyncSession, *, source: str, lesson_id: str, user_id: str) -> dict[str, list[dict]]:
+    """Which words every auto_translate question on this source owns for
+    this session, keyed by question id.
 
-    Every auto_translate question in the lesson drawing on the same source
-    is put in the learner's own order and given a consecutive slice of one
-    shuffled pool, so no two of them can land on the same word. A question
-    whose slice runs past the end of the pool simply gets fewer words —
-    the pool is never padded and a word is never reused to hit a count.
+    All of them are put in the learner's own order and given a consecutive
+    slice of one shuffled pool, so no two can land on the same word. A slice
+    running past the end of the pool simply yields fewer words — the pool is
+    never padded and a word is never reused to hit a count.
     """
     pool = await build_word_pool(db, source=source, user_id=user_id, lesson_id=lesson_id)
     if not pool:
-        return []
+        return {}
 
     session = await _session_index(db, user_id, lesson_id)
     shuffled = list(pool)
     random.Random(_seed(user_id, lesson_id, source, str(session))).shuffle(shuffled)
 
+    out: dict[str, list[dict]] = {}
     offset = 0
     for sibling_id, sibling_count in await _siblings(db, lesson_id=lesson_id, source=source):
-        if sibling_id == question.id:
-            return shuffled[offset : offset + sibling_count]
+        out[sibling_id] = shuffled[offset : offset + sibling_count]
         offset += sibling_count
-    return []
+    return out
+
+
+async def _allocation(db: AsyncSession, *, question: Question, source: str, lesson_id: str, user_id: str) -> list[dict]:
+    """The words one question owns for this session."""
+    return (await _allocate_source(db, source=source, lesson_id=lesson_id, user_id=user_id)).get(question.id, [])
+
+
+async def words_used_by_translate_word(db: AsyncSession, *, user_id: str, lesson_id: str) -> set[str]:
+    """The wordIds the "Переведи слово" exercises in this lesson claim for
+    this learner's current session — the explicit notion other exercises
+    build on, so none of them has to reason about "used by anything".
+
+    Deliberately derived from the allocation rather than from answered
+    AnswerLog rows: the allocation is what those exercises WILL show, so a
+    later block sees the same picture whether or not the learner has reached
+    the earlier one yet, and a fresh session starts over instead of
+    permanently retiring a word.
+    """
+    rows = (
+        await db.execute(
+            select(Question)
+            .join(QuestionPlacement, QuestionPlacement.questionId == Question.id)
+            .join(LessonBlock, LessonBlock.id == QuestionPlacement.lessonBlockId)
+            .where(LessonBlock.lessonId == lesson_id, Question.kind == "auto_translate")
+        )
+    ).scalars().all()
+
+    used: set[str] = set()
+    for source in {read_config(q)[0] for q in rows}:
+        for cards in (await _allocate_source(db, source=source, lesson_id=lesson_id, user_id=user_id)).values():
+            used.update(c["wordId"] for c in cards)
+    return used
 
 
 async def _siblings(db: AsyncSession, *, lesson_id: str, source: str) -> list[tuple[str, int]]:

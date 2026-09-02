@@ -265,6 +265,28 @@ class AutoTranslateDraft extends QuestionDraft {
   };
 }
 
+/// The teacher configures only how many pairs to show (§ auto match,
+/// 2026-09-02); the words are chosen per learner, per session, on the
+/// server. Only these four counts exist — the server rejects anything else
+/// regardless of what the form sends.
+class AutoMatchDraft extends QuestionDraft {
+  const AutoMatchDraft({required this.count});
+
+  factory AutoMatchDraft.blank() => const AutoMatchDraft(count: 4);
+
+  factory AutoMatchDraft.fromWire(Map<String, dynamic> json) {
+    final raw = (json['count'] as num?)?.toInt() ?? 0;
+    return AutoMatchDraft(count: allowedPairCounts.contains(raw) ? raw : 4);
+  }
+
+  static const allowedPairCounts = [2, 4, 6, 8];
+
+  final int count;
+
+  @override
+  Map<String, dynamic> toWire() => {'kind': 'auto_match', 'count': count};
+}
+
 QuestionDraft questionDraftFromWire(Map<String, dynamic> json) =>
     switch (json['kind'] as String) {
       'truefalse' => TrueFalseDraft.fromWire(json),
@@ -273,6 +295,7 @@ QuestionDraft questionDraftFromWire(Map<String, dynamic> json) =>
       'match' => MatchDraft.fromWire(json),
       'auto_blank' => AutoBlankDraft.fromWire(json),
       'auto_translate' => AutoTranslateDraft.fromWire(json),
+      'auto_match' => AutoMatchDraft.fromWire(json),
       _ => ChoiceDraft.fromWire(json),
     };
 
@@ -284,4 +307,5 @@ String questionKindLabel(QuestionDraft d) => switch (d) {
   MatchDraft() => 'Сопоставление',
   AutoBlankDraft() => 'Пропущенное слово (авто)',
   AutoTranslateDraft() => 'Переведи слово (авто)',
+  AutoMatchDraft() => 'Сопоставление (авто)',
 };

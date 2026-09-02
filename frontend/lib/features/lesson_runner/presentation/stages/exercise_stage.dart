@@ -9,6 +9,7 @@ import '../../domain/progress.dart';
 import '../../domain/stage.dart';
 import '../lesson_runner_controller.dart';
 import '../widgets/auto_blank_question.dart';
+import '../widgets/auto_match_question.dart';
 import '../widgets/auto_translate_question.dart';
 import '../widgets/choice_question.dart';
 import '../widgets/cloze_question.dart';
@@ -26,7 +27,7 @@ const _blankBufferSize = 3;
 /// open longer than this contributes at most this many seconds. Matching
 /// gets more time since it's inherently a multi-step task (several pairs),
 /// unlike every other kind here which is answered in one action.
-int _exerciseCapSeconds(Exercise e) => e is MatchExercise ? 90 : 60;
+int _exerciseCapSeconds(Exercise e) => (e is MatchExercise || e is AutoMatchSlot) ? 90 : 60;
 
 String _kindLabel(Exercise e) => switch (e) {
       ChoiceQuestion() => 'Выбор ответа',
@@ -36,6 +37,7 @@ String _kindLabel(Exercise e) => switch (e) {
       ClozeExercise() => 'Заполни пропуск',
       AutoBlankSlot() => 'Пропущенное слово',
       AutoTranslateSlot() => 'Переведи слово',
+      AutoMatchSlot() => 'Сопоставление',
     };
 
 String _prompt(Exercise e) => switch (e) {
@@ -52,6 +54,7 @@ String _prompt(Exercise e) => switch (e) {
       // the generated version the widget held, not on the static Exercise
       // the results screen re-reads afterwards.
       AutoTranslateSlot() => 'Переведи слово',
+      AutoMatchSlot() => 'Сопоставление слов и переводов',
     };
 
 String _correctAnswerLabel(Exercise e) => switch (e) {
@@ -62,6 +65,7 @@ String _correctAnswerLabel(Exercise e) => switch (e) {
       ClozeExercise() => 'Правильное слово: «${e.answer}»',
       AutoBlankSlot() => 'Подробности — в истории ответов',
       AutoTranslateSlot() => 'Подробности — в истории ответов',
+      AutoMatchSlot() => 'Подробности — в истории ответов',
     };
 
 /// Mirrors ExerciseRunner.tsx: runs one stage's flat exercise list
@@ -98,6 +102,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   final Map<int, Future<GeneratedBlankQuestion?>> _blankBuffer = {};
   // Same prefetch buffer, for "translate the word" slots.
   final Map<int, Future<GeneratedTranslateQuestion?>> _translateBuffer = {};
+  final Map<int, Future<GeneratedMatchQuestion?>> _matchBuffer = {};
 
   @override
   void initState() {
@@ -114,6 +119,9 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
       }
       if (ex is AutoTranslateSlot) {
         _translateBuffer.putIfAbsent(i, () => ref.read(lessonRepositoryProvider).generateTranslateQuestion(ex.questionId, ex.slotIndex));
+      }
+      if (ex is AutoMatchSlot) {
+        _matchBuffer.putIfAbsent(i, () => ref.read(lessonRepositoryProvider).generateMatchQuestion(ex.questionId));
       }
     }
   }
@@ -153,7 +161,8 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
     // too would either double-write history or (since this slot's `id` is
     // a synthetic "questionId::phraseIndex" string, not a real Question/
     // LessonQuestion row) just 404 harmlessly. Either way, skip it.
-    if (_exercises[_index] is! AutoBlankSlot && _exercises[_index] is! AutoTranslateSlot) {
+    final current = _exercises[_index];
+    if (current is! AutoBlankSlot && current is! AutoTranslateSlot && current is! AutoMatchSlot) {
       try {
         await ref
             .read(lessonRepositoryProvider)
@@ -295,6 +304,16 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
           prefetched: _blankBuffer.putIfAbsent(
             _index,
             () => ref.read(lessonRepositoryProvider).generateBlankQuestion(exercise.questionId, exercise.phraseIndex),
+          ),
+          onAnswered: _handleAnswered,
+          onSkip: _next,
+        ),
+      AutoMatchSlot() => AutoMatchQuestionView(
+          key: ValueKey(exercise.id),
+          exercise: exercise,
+          prefetched: _matchBuffer.putIfAbsent(
+            _index,
+            () => ref.read(lessonRepositoryProvider).generateMatchQuestion(exercise.questionId),
           ),
           onAnswered: _handleAnswered,
           onSkip: _next,

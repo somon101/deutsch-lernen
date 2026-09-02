@@ -88,6 +88,14 @@ class AutoBlankSlot extends Exercise {
   final int phraseIndex;
 }
 
+/// One auto-generated matching exercise (§ auto match, 2026-09-02) —
+/// carries no pairs; they are resolved per learner and per session when the
+/// exercise is reached.
+class AutoMatchSlot extends Exercise {
+  const AutoMatchSlot({required String id, String? placementId, required this.questionId}) : super(id, placementId);
+  final String questionId;
+}
+
 /// One "translate the word" slot (§ auto translate, 2026-09-02). Carries no
 /// content for the same reason AutoBlankSlot doesn't: the word, its options
 /// and the correct answer are resolved per learner and per session when the
@@ -148,6 +156,33 @@ class GeneratedTranslateQuestion {
   final String prompt;
   final String word;
   final List<BlankOption> options;
+}
+
+/// One generated matching pair — `wordId` ties the two sides together and
+/// is what gets submitted, so grading never depends on the displayed text.
+class MatchOption {
+  const MatchOption({required this.wordId, required this.text});
+  factory MatchOption.fromJson(Map<String, dynamic> json) =>
+      MatchOption(wordId: json['wordId'] as String, text: json['text'] as String);
+  final String wordId;
+  final String text;
+}
+
+/// The result of GET /api/questions/{id}/match (§ auto match, 2026-09-02).
+/// Same signed-token contract as the other automatic kinds: the response
+/// never says which pairs are right, and the token goes back unmodified.
+class GeneratedMatchQuestion {
+  const GeneratedMatchQuestion({required this.generatedQuestionId, required this.left, required this.right});
+
+  factory GeneratedMatchQuestion.fromJson(Map<String, dynamic> json) => GeneratedMatchQuestion(
+        generatedQuestionId: json['generatedQuestionId'] as String,
+        left: (json['left'] as List<dynamic>).map((o) => MatchOption.fromJson(o as Map<String, dynamic>)).toList(),
+        right: (json['right'] as List<dynamic>).map((o) => MatchOption.fromJson(o as Map<String, dynamic>)).toList(),
+      );
+
+  final String generatedQuestionId;
+  final List<MatchOption> left;
+  final List<MatchOption> right;
 }
 
 /// Raw shape a LessonQuestion row round-trips as (server's to_question_dto)
@@ -272,6 +307,8 @@ Exercise toExercise(QuestionDto q, String id) {
       );
     case 'auto_blank':
       return AutoBlankSlot(id: id, placementId: q.placementId, questionId: q.questionId!, phraseIndex: q.phraseIndex!);
+    case 'auto_match':
+      return AutoMatchSlot(id: id, placementId: q.placementId, questionId: q.questionId!);
     case 'auto_translate':
       return AutoTranslateSlot(id: id, placementId: q.placementId, questionId: q.questionId!, slotIndex: q.slotIndex!);
     case 'choice':

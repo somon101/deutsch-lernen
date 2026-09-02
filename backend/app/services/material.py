@@ -72,6 +72,8 @@ def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_a
         # their own configuration back, not generated questions, since
         # nothing is generated at authoring time.
         return {"kind": "auto_translate", "source": (data or {}).get("source", "lesson"), "count": (data or {}).get("count", 0)}
+    if kind == "auto_match":
+        return {"kind": "auto_match", "count": (data or {}).get("count", 0)}
     return {"kind": "choice", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
 
 
@@ -99,6 +101,13 @@ def to_question_dtos(question: Question, placement_id: str) -> list[dict]:
         return [
             {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_blank", "questionId": question.id, "phraseIndex": i, "source": "pool"}
             for i in range(len(phrases))
+        ]
+    if question.kind == "auto_match":
+        # One slot for the whole exercise (§ auto match, 2026-09-02) — unlike
+        # the other automatic kinds, all its pairs are answered together as a
+        # single matching question, exactly like the manual "match" kind.
+        return [
+            {"id": question.id, "placementId": placement_id, "kind": "auto_match", "questionId": question.id, "source": "pool"}
         ]
     if question.kind == "auto_translate":
         # One slot per requested question (§ auto translate, 2026-09-02).

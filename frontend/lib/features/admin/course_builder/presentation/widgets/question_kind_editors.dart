@@ -440,3 +440,61 @@ class AutoTranslateEditor extends StatelessWidget {
     );
   }
 }
+
+
+/// The teacher picks only how many pairs to show (§ auto match,
+/// 2026-09-02). A fixed set of choices rather than a number field: only 2,
+/// 4, 6 and 8 are valid, so offering them as buttons removes the chance of
+/// entering anything else. The server enforces the same set on save.
+///
+/// [breakdown] is how the learner's pool currently splits — shown as a hint
+/// so the teacher can see how many words are actually available.
+class AutoMatchEditor extends StatelessWidget {
+  const AutoMatchEditor({super.key, required this.draft, required this.onChanged, this.breakdown});
+  final AutoMatchDraft draft;
+  final ValueChanged<QuestionDraft> onChanged;
+  final ({int todayFree, int total})? breakdown;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = breakdown;
+    final short = b != null && draft.count > b.total;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Количество вариантов:', style: AdminTypography.fieldLabel),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (final n in AutoMatchDraft.allowedPairCounts)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text('$n'),
+                  selected: draft.count == n,
+                  onSelected: (_) => onChanged(AutoMatchDraft(count: n)),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          b == null
+              ? 'Система сама подберёт слова: сначала изученные сегодня, которые ещё не занял «Переведи слово», '
+                  'затем — из ранее изученных.'
+              : 'Сегодня свободно слов: ${b.todayFree}, всего доступно: ${b.total}. '
+                  'Сначала берутся сегодняшние, затем — ранее изученные.',
+          style: AdminTypography.caption,
+        ),
+        if (short)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Сейчас доступно только ${b.total} слов — упражнение не будет показано, пока их не станет ${draft.count}.',
+              style: AdminTypography.caption.copyWith(color: AdminColors.warn),
+            ),
+          ),
+      ],
+    );
+  }
+}
