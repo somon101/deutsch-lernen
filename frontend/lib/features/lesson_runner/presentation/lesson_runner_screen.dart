@@ -143,7 +143,17 @@ class _StageBody extends ConsumerWidget {
       case Stage.minitest:
       case Stage.practice:
       case Stage.review:
-        return ExerciseStage(runnerKey: key, stage: stage, onComplete: completeAndAdvance);
+        // The key is load-bearing, not decoration (§ review stage reused
+        // practice's state, 2026-09-02). All three of these stages are the
+        // same widget type behind the same route, `/lesson/:lessonId/:stage`,
+        // and go_router builds a page key from the route PATTERN rather than
+        // the filled-in location — so practice and review produced identical
+        // page keys, Flutter matched the Elements, and the State object (with
+        // its `late final` exercise list and its `_finished` flag) survived
+        // the move. Review then opened already-finished, showing practice's
+        // questions, and recorded practice's score as its own. Keying by
+        // stage forces a fresh State per stage.
+        return ExerciseStage(key: ValueKey(stage), runnerKey: key, stage: stage, onComplete: completeAndAdvance);
       case Stage.complete:
         return CompleteStage(runnerKey: key);
     }

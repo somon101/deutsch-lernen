@@ -321,10 +321,32 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
               ],
             ),
             const SizedBox(height: AdminMetrics.cardGap),
+            // Said before the click, not only after it: a course with no
+            // level is filtered out of every learner's course list (the home
+            // screen always asks by language, and that filter joins through
+            // Level), so publishing it would reach nobody. The server refuses
+            // the publish; this is the part that explains why in advance
+            // (§ course level required to publish, 2026-09-02).
+            if (widget.course.levelId == null) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 18, color: AdminColors.danger),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Уровень не указан — курс нельзя опубликовать: ученики не увидят его в списке.',
+                      style: AdminTypography.caption.copyWith(color: AdminColors.danger),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AdminMetrics.cardGap),
+            ],
             Row(
               children: [
                 OutlinedButton(
-                  onPressed: _togglePublish,
+                  onPressed: (!published && widget.course.levelId == null) ? null : _togglePublish,
                   style: AdminButtonStyles.secondary(),
                   child: Text(
                     published ? 'Вернуть в черновики' : 'Опубликовать курс',

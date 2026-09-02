@@ -275,6 +275,10 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
 async def create_course(db: AsyncSession, title: str, description: str | None, status, created_by_id: str, level_id: str | None = None) -> dict:
     if level_id and not await db.get(Level, level_id):
         raise ApiError(404, "Уровень не найден")
+    # Same rule as update_course, closing the other way in: creating a course
+    # straight into PUBLISHED must not skip the level check.
+    if (status or CourseStatus.DRAFT) == CourseStatus.PUBLISHED and not level_id:
+        raise ApiError(400, "Укажите уровень курса — без него ученики не увидят курс")
     last = await db.scalar(select(Course.position).order_by(Course.position.desc()).limit(1))
     course = Course(
         title=title,
@@ -295,6 +299,25 @@ async def update_course(db: AsyncSession, course_id: str, changes: dict) -> dict
         return None
     if changes.get("levelId") and not await db.get(Level, changes["levelId"]):
         raise ApiError(404, "Уровень не найден")
+
+    # A published course with no Level is invisible to every learner: the
+    # home screen always asks for one language, and that filter is an inner
+    # join Course -> Level -> Language, so a course with no levelId matches
+    # nothing. Publishing one looks like it worked and silently reaches
+    # nobody, so the publish is refused instead (§ course level required to
+    # publish, 2026-09-02). Drafts stay allowed without a level — the rule
+    # bites exactly where the harm appears.
+    #
+    # Only a request that actually touches status or levelId is judged. A
+    # course that is ALREADY published without a level (data from before this
+    # rule) must stay editable: refusing to rename it would lock the teacher
+    # out of the very screen where the level is assigned.
+    if "status" in changes or "levelId" in changes:
+        resulting_status = changes.get("status", course.status)
+        resulting_level = changes["levelId"] if "levelId" in changes else course.levelId
+        if resulting_status == "PUBLISHED" and not resulting_level:
+            raise ApiError(400, "Укажите уровень курса — без него ученики не увидят курс")
+
     for field, value in changes.items():
         setattr(course, field, value)
     await db.commit()

@@ -33,13 +33,24 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
   bool _sideEffectsRan = false;
   bool _restarting = false;
 
+  /// Marking the lesson complete writes to a provider, and playing the chime
+  /// touches another — both are side effects, and both used to run straight
+  /// out of `build()`. That only stayed upright because of the run-once flag;
+  /// mutating a provider while the tree is building is the standard way to
+  /// earn "Tried to modify a provider while the widget tree was building".
+  /// Deferring to after the frame keeps the same "exactly once" behaviour
+  /// without doing the work at a moment when it isn't allowed
+  /// (§ side effects out of build, 2026-09-02).
   void _runSideEffectsOnce(bool alreadyComplete) {
     if (_sideEffectsRan) return;
     _sideEffectsRan = true;
-    if (!alreadyComplete) {
-      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).completeLesson();
-    }
-    ref.read(soundEffectsProvider).playComplete();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!alreadyComplete) {
+        ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).completeLesson();
+      }
+      ref.read(soundEffectsProvider).playComplete();
+    });
   }
 
   Future<void> _restart() async {

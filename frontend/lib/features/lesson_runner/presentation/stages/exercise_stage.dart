@@ -94,6 +94,20 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   final _focusNode = FocusNode();
   DateTime _exerciseShownAt = DateTime.now();
 
+  /// Held as a field so `dispose()` can still report the time for a stage
+  /// the learner walked out of half-way. Reading `ref` during dispose is not
+  /// merely discouraged — flutter_riverpod throws a StateError ("Using
+  /// "ref" when a widget is about to or has been unmounted is unsafe"), and
+  /// because that throw happened before `super.dispose()`, the FocusNode
+  /// leaked and the time was lost anyway (§ dispose-time flush, 2026-09-02).
+  LessonRunnerController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller = ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier);
+  }
+
   // Prefetch buffer for auto_blank slots (§11, "буфер = 3-5 следующих
   // вопросов") — keyed by exercise index so re-visiting an index (there is
   // none in this linear runner, but it's a cheap safety) never re-fires a
@@ -138,7 +152,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
     final elapsed = DateTime.now().difference(_exerciseShownAt).inSeconds.clamp(0, cap);
     _exerciseShownAt = DateTime.now();
     if (elapsed > 0) {
-      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime(widget.stage.name, elapsed);
+      _controller?.recordActivityTime(widget.stage.name, elapsed);
     }
   }
 
