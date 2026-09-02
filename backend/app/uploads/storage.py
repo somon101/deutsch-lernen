@@ -101,13 +101,29 @@ async def ensure_storage_bucket() -> None:
             print(f"Supabase Storage bucket ensure failed: {response.status_code} {response.text}")
 
 
+# Every uploaded object is named after a fresh uuid4 and is never rewritten
+# in place, so a given URL always returns the same bytes — the exact case
+# `immutable` exists for. Without this Supabase serves `cache-control:
+# no-cache`, and a lesson re-downloaded its word photos in full on every
+# single pass: around a megabyte per card, seconds of blank card each time
+# (§ word photos appear late, 2026-09-02). A year is the conventional cap.
+_UPLOAD_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
 async def _upload_bytes(folder: str, filename: str, content: bytes, content_type: str) -> None:
     base = settings.supabase_url.rstrip("/")
     bucket = settings.supabase_storage_bucket
     async with httpx.AsyncClient(timeout=300.0) as client:
         response = await client.post(
             f"{base}/storage/v1/object/{bucket}/{_object_path(folder, filename)}",
-            headers={**_storage_headers(), "Content-Type": content_type, "x-upsert": "true"},
+            headers={
+                **_storage_headers(),
+                "Content-Type": content_type,
+                "x-upsert": "true",
+                # Supabase reads the max-age from this header and serves it
+                # back on every download of the object.
+                "cache-control": _UPLOAD_CACHE_CONTROL,
+            },
             content=content,
         )
         if response.status_code not in (200, 201):

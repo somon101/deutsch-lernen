@@ -128,7 +128,7 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
     super.initState();
     _index = widget.initialIndex.clamp(0, widget.words.length);
     _controller = AnimationController(vsync: this, duration: _duration);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAhead());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheWholeDeck());
   }
 
   @override
@@ -145,13 +145,30 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
     return resolved.isEmpty ? null : resolved;
   }
 
-  void _precacheAhead() {
-    for (final i in [_index + 1, _index + 2]) {
-      if (i >= widget.words.length) continue;
+  /// Warms the card currently on screen first, then the next two, then
+  /// everything else in the lesson (§ word photos appear late, 2026-09-02).
+  ///
+  /// The old version started at `_index + 1`, so the card the learner was
+  /// actually looking at — the very first one, on opening the lesson — was
+  /// never warmed and had to fetch its own image while visible. With word
+  /// photos running around a megabyte each that is seconds of empty card.
+  /// Order matters more than the set: the visible card must not queue behind
+  /// the rest of the deck.
+  void _precacheWholeDeck() {
+    final seen = <String>{};
+    for (final i in [_index, _index + 1, _index + 2, ...List.generate(widget.words.length, (i) => i)]) {
+      if (i < 0 || i >= widget.words.length) continue;
       final url = _resolvedImage(widget.words[i]);
-      if (url != null) precacheImage(NetworkImage(url), context);
+      if (url == null || !seen.add(url)) continue;
+      if (!mounted) return;
+      // Errors are swallowed on purpose: a photo that fails to prefetch is
+      // retried by the Image.network in the card itself, and a broken URL
+      // must never take down the lesson.
+      precacheImage(NetworkImage(url), context, onError: (_, _) {});
     }
   }
+
+  void _precacheAhead() => _precacheWholeDeck();
 
   Future<void> _animateDragTo(double target) async {
     final tween = Tween<double>(begin: _dragDy, end: target);
