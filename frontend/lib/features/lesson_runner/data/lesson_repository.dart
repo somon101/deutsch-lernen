@@ -136,6 +136,36 @@ class LessonRepository {
     return (correct: res['correct'] as bool, correctText: res['correctText'] as String);
   }
 
+  /// One generated "translate the word" question (§ auto translate,
+  /// 2026-09-02). Null means the server could not fill this slot — the pool
+  /// is smaller than the teacher's requested count, or there aren't enough
+  /// distinct translations to offer a choice. The caller skips it rather
+  /// than showing a broken exercise, exactly as the blank slots do.
+  Future<GeneratedTranslateQuestion?> generateTranslateQuestion(String questionId, int slotIndex) async {
+    try {
+      final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/translate/$slotIndex');
+      return GeneratedTranslateQuestion.fromJson(res);
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  /// Correctness is decided server-side from the signed question, never
+  /// asserted here.
+  Future<({bool correct, String correctText})> submitTranslateAnswer(
+    String questionId, {
+    required String generatedQuestionId,
+    required String selectedText,
+    String? placementId,
+  }) async {
+    final res = await _api.post(
+      '/api/questions/${Uri.encodeComponent(questionId)}/translate/answer',
+      body: {'generatedQuestionId': generatedQuestionId, 'selectedText': selectedText, 'placementId': ?placementId},
+    );
+    return (correct: res['correct'] as bool, correctText: res['correctText'] as String);
+  }
+
   /// Reports one already-capped time delta for one activity type within one
   /// lesson (§ time tracking, 2026-08-29) — fire-and-forget from the
   /// caller's point of view, same contract as submitAnswer above.

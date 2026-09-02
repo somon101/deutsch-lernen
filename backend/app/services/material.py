@@ -67,6 +67,11 @@ def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_a
         # a blanked/generated version (nothing is generated at authoring
         # time). The learner-facing expansion is to_question_dtos below.
         return {"kind": "auto_blank", "phrases": (data or {}).get("phrases", [])}
+    if kind == "auto_translate":
+        # Admin-facing view (§ auto translate, 2026-09-02) — the teacher sees
+        # their own configuration back, not generated questions, since
+        # nothing is generated at authoring time.
+        return {"kind": "auto_translate", "source": (data or {}).get("source", "lesson"), "count": (data or {}).get("count", 0)}
     return {"kind": "choice", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
 
 
@@ -94,6 +99,18 @@ def to_question_dtos(question: Question, placement_id: str) -> list[dict]:
         return [
             {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_blank", "questionId": question.id, "phraseIndex": i, "source": "pool"}
             for i in range(len(phrases))
+        ]
+    if question.kind == "auto_translate":
+        # One slot per requested question (§ auto translate, 2026-09-02).
+        # The count is NOT capped to the pool here: the pool depends on the
+        # learner (their learned words) and this function has neither the
+        # user nor the database. A slot the pool can't fill is resolved as
+        # "can't generate" at serve time and skipped by the runner, which is
+        # the same path auto_blank already uses when a slot is unsafe.
+        count = (question.data or {}).get("count") or 0
+        return [
+            {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_translate", "questionId": question.id, "slotIndex": i, "source": "pool"}
+            for i in range(int(count))
         ]
     return [
         {

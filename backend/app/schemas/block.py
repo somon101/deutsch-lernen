@@ -196,8 +196,32 @@ class AutoBlankQuestionInput(BaseModel):
         return trimmed
 
 
+class AutoTranslateQuestionInput(BaseModel):
+    """Teacher stores only where the words come from and how many questions
+    to make (§ auto translate, 2026-09-02) — never which words, which is
+    correct, or what the wrong options are. All of that is decided per
+    learner, per session, at serve time.
+
+    `count` is a plain int, so anything that isn't a whole number (a
+    decimal, letters, free text) is rejected by validation before it can be
+    stored — the server is the authority on that, not the input widget.
+    """
+
+    kind: Literal["auto_translate"]
+    source: Literal["lesson", "learned"]
+    count: int = Field(ge=1, le=100)
+
+
 BlockQuestionInput = Annotated[
-    Union[ChoiceQuestionInput, TrueFalseQuestionInput, ClozeQuestionInput, ScrambleQuestionInput, MatchQuestionInput, AutoBlankQuestionInput],
+    Union[
+        ChoiceQuestionInput,
+        TrueFalseQuestionInput,
+        ClozeQuestionInput,
+        ScrambleQuestionInput,
+        MatchQuestionInput,
+        AutoBlankQuestionInput,
+        AutoTranslateQuestionInput,
+    ],
     Field(discriminator="kind"),
 ]
 

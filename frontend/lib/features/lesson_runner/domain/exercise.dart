@@ -88,6 +88,16 @@ class AutoBlankSlot extends Exercise {
   final int phraseIndex;
 }
 
+/// One "translate the word" slot (§ auto translate, 2026-09-02). Carries no
+/// content for the same reason AutoBlankSlot doesn't: the word, its options
+/// and the correct answer are resolved per learner and per session when the
+/// slot is actually reached.
+class AutoTranslateSlot extends Exercise {
+  const AutoTranslateSlot({required String id, String? placementId, required this.questionId, required this.slotIndex}) : super(id, placementId);
+  final String questionId;
+  final int slotIndex;
+}
+
 /// One option shown for a generated auto_blank question — `wordId` is set
 /// for a wrong option (a real learned-word card) and null for the correct
 /// one (just the text actually removed from the phrase — clarified in
@@ -120,6 +130,26 @@ class GeneratedBlankQuestion {
   final List<BlankOption> options;
 }
 
+/// The result of GET /api/questions/{id}/translate/{slotIndex} (§ auto
+/// translate, 2026-09-02). Same signed-token contract as the blank version:
+/// `generatedQuestionId` goes back unmodified when answering, and the
+/// response never says which option is correct.
+class GeneratedTranslateQuestion {
+  const GeneratedTranslateQuestion({required this.generatedQuestionId, required this.prompt, required this.word, required this.options});
+
+  factory GeneratedTranslateQuestion.fromJson(Map<String, dynamic> json) => GeneratedTranslateQuestion(
+        generatedQuestionId: json['generatedQuestionId'] as String,
+        prompt: json['prompt'] as String,
+        word: json['word'] as String,
+        options: (json['options'] as List<dynamic>).map((o) => BlankOption.fromJson(o as Map<String, dynamic>)).toList(),
+      );
+
+  final String generatedQuestionId;
+  final String prompt;
+  final String word;
+  final List<BlankOption> options;
+}
+
 /// Raw shape a LessonQuestion row round-trips as (server's to_question_dto)
 /// — the input to toExercise(), one level below the final Exercise shape.
 class QuestionDto {
@@ -134,6 +164,7 @@ class QuestionDto {
     this.pairs = const [],
     this.questionId,
     this.phraseIndex,
+    this.slotIndex,
   });
 
   factory QuestionDto.fromJson(Map<String, dynamic> json) => QuestionDto(
@@ -150,6 +181,7 @@ class QuestionDto {
             const [],
         questionId: json['questionId'] as String?,
         phraseIndex: json['phraseIndex'] as int?,
+        slotIndex: json['slotIndex'] as int?,
       );
 
   // Real, stable Question/LessonQuestion id — null only for shapes that
@@ -170,6 +202,8 @@ class QuestionDto {
   // teacher's own order) this slot is.
   final String? questionId;
   final int? phraseIndex;
+  // auto_translate only — which of the question's requested slots this is.
+  final int? slotIndex;
 }
 
 String _explanationFor(String prompt, bool correct) =>
@@ -238,6 +272,8 @@ Exercise toExercise(QuestionDto q, String id) {
       );
     case 'auto_blank':
       return AutoBlankSlot(id: id, placementId: q.placementId, questionId: q.questionId!, phraseIndex: q.phraseIndex!);
+    case 'auto_translate':
+      return AutoTranslateSlot(id: id, placementId: q.placementId, questionId: q.questionId!, slotIndex: q.slotIndex!);
     case 'choice':
     default:
       return ChoiceQuestion(id: id, placementId: q.placementId, prompt: q.prompt, options: q.options, correctAnswer: q.correctAnswer);

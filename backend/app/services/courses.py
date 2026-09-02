@@ -921,6 +921,12 @@ def _block_question_to_row(q: dict) -> dict:
         # column or a child table.
         phrases = [p.strip() for p in q["phrases"] if p.strip()]
         return {"prompt": "", "options": [], "correctAnswer": "", "data": {"phrases": phrases}}
+    if kind == "auto_translate":
+        # Same shape as auto_blank above (§ auto translate, 2026-09-02): the
+        # teacher's whole configuration is the source and the count, stored
+        # in `data`. No word ids are stored — the selection belongs to a
+        # session, not to the block.
+        return {"prompt": "", "options": [], "correctAnswer": "", "data": {"source": q["source"], "count": q["count"]}}
     # choice / cloze / scramble all fit prompt + options + correctAnswer as-is.
     return {"prompt": q["prompt"], "options": q["options"], "correctAnswer": q["correctAnswer"], "data": None}
 

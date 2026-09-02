@@ -534,6 +534,15 @@ class BuilderRepository {
     return (res['questions'] as List<dynamic>).map((q) => VerifyingQuestion.fromJson(q as Map<String, dynamic>)).toList();
   }
 
+  /// How many distinct words a word-pool source can currently offer for
+  /// this lesson (§ auto translate, 2026-09-02) — shown in the builder as
+  /// the ceiling for "Количество вопросов". Advisory: the server validates
+  /// the count on save and applies the real cap when generating.
+  Future<int> wordPoolSize({required String source, required String lessonId}) async {
+    final res = await _api.get('/api/word-pools/size?source=${Uri.encodeComponent(source)}&lessonId=${Uri.encodeComponent(lessonId)}');
+    return (res['size'] as num).toInt();
+  }
+
   /// Read-only overview for the "Карта урока" screen (§8, 2026-09-01).
   Future<LessonConnectionsMap> lessonConnectionsMap(String courseId, String lessonId) async {
     final res = await _api.get('/api/courses/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/connections-map');

@@ -17,6 +17,7 @@ String poolQuestionPreviewText(QuestionDraft d) => switch (d) {
       ScrambleDraft(:final translation) => translation,
       MatchDraft(:final prompt) => prompt.isEmpty ? 'Сопоставление' : prompt,
       AutoBlankDraft(:final phrases) => phrases.isEmpty ? 'Пропущенное слово (авто)' : '${phrases.length} фраз: ${phrases.first}',
+      AutoTranslateDraft(:final source, :final count) => 'Переведи слово: $count вопр. · ${source.label}',
     };
 
 /// Reusable-question management for one block — shows what's already
@@ -79,6 +80,22 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
   List<PoolQuestion>? _attached;
   List<AdminTopic> _topics = [];
   List<AdminMaterialBlock> _verifyBlocks = [];
+  // How many distinct words each source can currently offer, for the
+  // "Переведи слово" editor's ceiling hint (§ auto translate, 2026-09-02).
+  // Advisory only — the server validates the count on save and applies the
+  // real cap when generating.
+  final Map<WordPoolSource, int> _poolSizes = {};
+
+  Future<void> _loadPoolSize(WordPoolSource source) async {
+    final lessonId = widget.lessonId;
+    if (lessonId == null || _poolSizes.containsKey(source)) return;
+    try {
+      final size = await ref.read(builderRepositoryProvider).wordPoolSize(source: source.wire, lessonId: lessonId);
+      if (mounted) setState(() => _poolSizes[source] = size);
+    } catch (_) {
+      // Non-critical — the editor just shows its generic hint instead.
+    }
+  }
 
   bool get _showsVerifiesPicker => widget.lessonBlockId != null && widget.lessonId != null;
 
@@ -149,12 +166,15 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
     }
   }
 
-  void _startNew(QuestionDraft blank) => setState(() {
+  void _startNew(QuestionDraft blank) {
+    if (blank is AutoTranslateDraft) _loadPoolSize(blank.source);
+    setState(() {
         _draft = blank;
         _draftTopicId = widget.topicId;
         _draftVerifiesBlockId = null;
         _searching = false;
       });
+  }
 
   /// "+ Задание" (§ course-builder redesign, "один вход", 2026-09-01) —
   /// always creates a pool question (confirmed with the user: going
@@ -193,6 +213,11 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
                 title: 'Пропущенное слово (авто)',
                 note: 'пропуск и неверные варианты система подбирает сама, для каждого ученика свои',
                 onTap: () => Navigator.of(context).pop(AutoBlankDraft.blank),
+              ),
+              _TypeRow(
+                title: 'Переведи слово (авто)',
+                note: 'слова берутся из выбранного источника, варианты система подбирает сама',
+                onTap: () => Navigator.of(context).pop(AutoTranslateDraft.blank),
               ),
               const SizedBox(height: 8),
             ],
@@ -312,6 +337,14 @@ class _PoolQuestionsSectionState extends ConsumerState<PoolQuestionsSection> {
         ScrambleDraft d => ScrambleEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
         MatchDraft d => MatchEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
         AutoBlankDraft d => AutoBlankEditor(draft: d, onChanged: (v) => setState(() => _draft = v)),
+        AutoTranslateDraft d => AutoTranslateEditor(
+            draft: d,
+            poolSize: _poolSizes[d.source],
+            onChanged: (v) {
+              setState(() => _draft = v);
+              if (v is AutoTranslateDraft) _loadPoolSize(v.source);
+            },
+          ),
       };
 
   @override
@@ -716,6 +749,8 @@ class _ReadOnlyQuestionContent extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [for (final p in phrases) Text('• $p', style: AdminTypography.body)],
         ),
+      AutoTranslateDraft(:final source, :final count) =>
+        Text('$count вопр. · ${source.label}', style: AdminTypography.body),
     };
   }
 }

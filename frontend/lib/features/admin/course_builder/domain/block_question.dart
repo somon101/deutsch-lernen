@@ -225,6 +225,46 @@ class AutoBlankDraft extends QuestionDraft {
   };
 }
 
+/// Word sources an auto-generated exercise can draw from (§ auto translate,
+/// 2026-09-02). Mirrors the server's own list; a future source (e.g. a
+/// practice algorithm's prioritised words) is one more entry here and one
+/// more provider there — no exercise changes.
+enum WordPoolSource {
+  lesson('lesson', 'Из этого урока'),
+  learned('learned', 'Из изученных слов пользователя');
+
+  const WordPoolSource(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static WordPoolSource fromWire(String? v) =>
+      WordPoolSource.values.firstWhere((s) => s.wire == v, orElse: () => WordPoolSource.lesson);
+}
+
+/// The teacher configures only a source and how many questions to make; the
+/// words, the correct answer and the wrong options are all decided per
+/// learner, per session, on the server.
+class AutoTranslateDraft extends QuestionDraft {
+  const AutoTranslateDraft({required this.source, required this.count});
+
+  factory AutoTranslateDraft.blank() => const AutoTranslateDraft(source: WordPoolSource.lesson, count: 5);
+
+  factory AutoTranslateDraft.fromWire(Map<String, dynamic> json) => AutoTranslateDraft(
+        source: WordPoolSource.fromWire(json['source'] as String?),
+        count: (json['count'] as num?)?.toInt() ?? 0,
+      );
+
+  final WordPoolSource source;
+  final int count;
+
+  @override
+  Map<String, dynamic> toWire() => {
+    'kind': 'auto_translate',
+    'source': source.wire,
+    'count': count,
+  };
+}
+
 QuestionDraft questionDraftFromWire(Map<String, dynamic> json) =>
     switch (json['kind'] as String) {
       'truefalse' => TrueFalseDraft.fromWire(json),
@@ -232,6 +272,7 @@ QuestionDraft questionDraftFromWire(Map<String, dynamic> json) =>
       'scramble' => ScrambleDraft.fromWire(json),
       'match' => MatchDraft.fromWire(json),
       'auto_blank' => AutoBlankDraft.fromWire(json),
+      'auto_translate' => AutoTranslateDraft.fromWire(json),
       _ => ChoiceDraft.fromWire(json),
     };
 
@@ -242,4 +283,5 @@ String questionKindLabel(QuestionDraft d) => switch (d) {
   ScrambleDraft() => 'Собери фразу',
   MatchDraft() => 'Сопоставление',
   AutoBlankDraft() => 'Пропущенное слово (авто)',
+  AutoTranslateDraft() => 'Переведи слово (авто)',
 };

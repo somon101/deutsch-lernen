@@ -9,6 +9,7 @@ import '../../domain/progress.dart';
 import '../../domain/stage.dart';
 import '../lesson_runner_controller.dart';
 import '../widgets/auto_blank_question.dart';
+import '../widgets/auto_translate_question.dart';
 import '../widgets/choice_question.dart';
 import '../widgets/cloze_question.dart';
 import '../widgets/match_question.dart';
@@ -34,6 +35,7 @@ String _kindLabel(Exercise e) => switch (e) {
       ScrambleExercise() => 'Собери фразу',
       ClozeExercise() => 'Заполни пропуск',
       AutoBlankSlot() => 'Пропущенное слово',
+      AutoTranslateSlot() => 'Переведи слово',
     };
 
 String _prompt(Exercise e) => switch (e) {
@@ -46,6 +48,10 @@ String _prompt(Exercise e) => switch (e) {
       // by the widget itself (§ auto blank, 2026-08-31) — not on the
       // static Exercise the results screen re-reads after the fact.
       AutoBlankSlot() => 'Пропущенное слово',
+      // Same as the blank slots: the word this slot resolved to lives in
+      // the generated version the widget held, not on the static Exercise
+      // the results screen re-reads afterwards.
+      AutoTranslateSlot() => 'Переведи слово',
     };
 
 String _correctAnswerLabel(Exercise e) => switch (e) {
@@ -55,6 +61,7 @@ String _correctAnswerLabel(Exercise e) => switch (e) {
       ScrambleExercise() => 'Правильно: «${e.answer.join(" ")}»',
       ClozeExercise() => 'Правильное слово: «${e.answer}»',
       AutoBlankSlot() => 'Подробности — в истории ответов',
+      AutoTranslateSlot() => 'Подробности — в истории ответов',
     };
 
 /// Mirrors ExerciseRunner.tsx: runs one stage's flat exercise list
@@ -89,6 +96,8 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   // request; a cached null means generation genuinely failed for that slot,
   // not "not tried yet".
   final Map<int, Future<GeneratedBlankQuestion?>> _blankBuffer = {};
+  // Same prefetch buffer, for "translate the word" slots.
+  final Map<int, Future<GeneratedTranslateQuestion?>> _translateBuffer = {};
 
   @override
   void initState() {
@@ -102,6 +111,9 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
       final ex = _exercises[i];
       if (ex is AutoBlankSlot) {
         _blankBuffer.putIfAbsent(i, () => ref.read(lessonRepositoryProvider).generateBlankQuestion(ex.questionId, ex.phraseIndex));
+      }
+      if (ex is AutoTranslateSlot) {
+        _translateBuffer.putIfAbsent(i, () => ref.read(lessonRepositoryProvider).generateTranslateQuestion(ex.questionId, ex.slotIndex));
       }
     }
   }
@@ -141,7 +153,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
     // too would either double-write history or (since this slot's `id` is
     // a synthetic "questionId::phraseIndex" string, not a real Question/
     // LessonQuestion row) just 404 harmlessly. Either way, skip it.
-    if (_exercises[_index] is! AutoBlankSlot) {
+    if (_exercises[_index] is! AutoBlankSlot && _exercises[_index] is! AutoTranslateSlot) {
       try {
         await ref
             .read(lessonRepositoryProvider)
@@ -283,6 +295,16 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
           prefetched: _blankBuffer.putIfAbsent(
             _index,
             () => ref.read(lessonRepositoryProvider).generateBlankQuestion(exercise.questionId, exercise.phraseIndex),
+          ),
+          onAnswered: _handleAnswered,
+          onSkip: _next,
+        ),
+      AutoTranslateSlot() => AutoTranslateQuestionView(
+          key: ValueKey(exercise.id),
+          exercise: exercise,
+          prefetched: _translateBuffer.putIfAbsent(
+            _index,
+            () => ref.read(lessonRepositoryProvider).generateTranslateQuestion(exercise.questionId, exercise.slotIndex),
           ),
           onAnswered: _handleAnswered,
           onSkip: _next,

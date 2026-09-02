@@ -326,6 +326,7 @@ class _QuestionCard extends StatelessWidget {
     TrueFalseDraft d => TrueFalseEditor(draft: d, onChanged: onChanged),
     ScrambleDraft d => ScrambleEditor(draft: d, onChanged: onChanged),
     MatchDraft d => MatchEditor(draft: d, onChanged: onChanged),
+    AutoTranslateDraft d => AutoTranslateEditor(draft: d, onChanged: onChanged),
     // Not reachable in practice (see _previewText above) - no button here
     // ever creates one - but still handled so this editor keeps working
     // unmodified if an auto_blank draft somehow ends up here.

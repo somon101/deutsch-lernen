@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
@@ -369,6 +370,72 @@ class MatchEditor extends StatelessWidget {
           label: '+ Пара',
           onPressed: () => onChanged(MatchDraft(prompt: draft.prompt, pairs: [...draft.pairs, const MatchPairDraft(left: '', right: '')])),
         ),
+      ],
+    );
+  }
+}
+
+/// The teacher picks only where the words come from and how many questions
+/// to make (§ auto translate, 2026-09-02) — never which words, which answer
+/// is right, or what the wrong options are; all of that is decided per
+/// learner, per session, on the server.
+///
+/// [poolSize] is how many distinct words the chosen source can currently
+/// offer, shown purely so the teacher can see the ceiling. It is advisory:
+/// the count is validated on the server, which is also where the real cap
+/// is applied when the exercise is generated.
+class AutoTranslateEditor extends StatelessWidget {
+  const AutoTranslateEditor({super.key, required this.draft, required this.onChanged, this.poolSize});
+  final AutoTranslateDraft draft;
+  final ValueChanged<QuestionDraft> onChanged;
+  final int? poolSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final overPool = poolSize != null && draft.count > poolSize!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<WordPoolSource>(
+          initialValue: draft.source,
+          decoration: adminInputDecoration(label: 'Источник слов'),
+          items: [
+            for (final s in WordPoolSource.values) DropdownMenuItem(value: s, child: Text(s.label)),
+          ],
+          onChanged: (v) => onChanged(AutoTranslateDraft(source: v ?? draft.source, count: draft.count)),
+        ),
+        const SizedBox(height: AdminMetrics.fieldGap),
+        TextField(
+          decoration: adminInputDecoration(
+            label: 'Количество вопросов',
+            hint: 'например, 5',
+          ),
+          keyboardType: TextInputType.number,
+          // Whole numbers only: the field simply cannot hold a letter, a
+          // separator or a sign, so a decimal or free text never even
+          // reaches the draft. The server validates it again on save.
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          controller: TextEditingController(text: draft.count == 0 ? '' : '${draft.count}')
+            ..selection = TextSelection.collapsed(offset: draft.count == 0 ? 0 : '${draft.count}'.length),
+          onChanged: (v) => onChanged(AutoTranslateDraft(source: draft.source, count: int.tryParse(v) ?? 0)),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          poolSize == null
+              ? 'Система сама подберёт слова из выбранного источника, перемешает варианты и порядок вопросов. '
+                  'При каждом прохождении набор может быть другим.'
+              : 'Доступно слов в источнике: $poolSize. '
+                  'Система сама подберёт слова, перемешает варианты и порядок вопросов; при каждом прохождении набор может быть другим.',
+          style: AdminTypography.caption,
+        ),
+        if (overPool)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Запрошено больше, чем есть слов в источнике — будет показано не более $poolSize вопросов.',
+              style: AdminTypography.caption.copyWith(color: AdminColors.warn),
+            ),
+          ),
       ],
     );
   }

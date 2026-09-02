@@ -244,6 +244,10 @@ class _InlineCheckpointQuestion extends ConsumerWidget {
           ClozeExercise e => ClozeQuestionView(exercise: e, onAnswered: onAnswered),
           ScrambleExercise e => ScrambleQuestionView(exercise: e, onAnswered: onAnswered),
           MatchExercise e => MatchQuestionView(exercise: e, onAnswered: onAnswered),
+          // Auto-translate blocks are a quiz-stage exercise; they are never
+          // placed inline in a material block, so this branch only exists to
+          // keep the switch exhaustive.
+          AutoTranslateSlot() => const SizedBox.shrink(),
           // No prefetch buffer here (there's no linear "next slot" concept
           // reading through material blocks) - the widget generates its own
           // question on first build, and already writes its own AnswerLog
