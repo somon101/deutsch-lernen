@@ -40,7 +40,7 @@ from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
 from app.services.content import normalize_word
 from app.services.progress import submit_answer
-from app.services.word_pool import build_word_pool
+from app.services.word_pool import DEFAULT_SOURCE, build_word_pool
 
 _TOKEN_TYP = "auto_translate_v1"
 _TOKEN_EXPIRY = timedelta(minutes=30)
@@ -78,7 +78,7 @@ def read_config(question: Question) -> tuple[str, int]:
     """The stored (source, count). Count is clamped at zero here so a bad
     stored value can never turn into a negative slice."""
     data = question.data or {}
-    source = data.get("source") or "lesson"
+    source = data.get("source") or DEFAULT_SOURCE
     try:
         count = int(data.get("count") or 0)
     except (TypeError, ValueError):

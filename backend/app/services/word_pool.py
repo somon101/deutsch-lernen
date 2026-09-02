@@ -37,6 +37,12 @@ WordPoolSource = Literal["lesson", "learned"]
 
 WORD_POOL_SOURCES: tuple[str, ...] = ("lesson", "learned")
 
+# Used when a stored question somehow carries no source at all. It lives
+# here, not in any generator: which sources exist, and which one stands in
+# for a missing value, is this layer's business — a generator that hardcoded
+# a source name would be encoding knowledge it is supposed not to have.
+DEFAULT_SOURCE = "lesson"
+
 SOURCE_LABELS = {
     "lesson": "Из этого урока",
     "learned": "Из изученных слов пользователя",
