@@ -31,16 +31,36 @@ class AppShell extends ConsumerWidget {
       );
     }
 
+    // Reference layout (§ shell card treatment, 2026-09-02): the page itself
+    // is the soft lavender ground, the purple rail hugs the left edge with
+    // its inner corners rounded, and the routed screen floats on top as one
+    // big rounded card with a little breathing room around it.
+    final c = context.colors;
     return Scaffold(
+      backgroundColor: c.bg,
       body: Row(
         children: [
           _NavRail(currentPath: currentPath, user: user),
-          Expanded(child: child),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(_shellGap, _shellGap, _shellGap, _shellGap),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_shellRadius),
+                child: child,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
+
+/// Gap of page-ground left visible around the floating content card, and the
+/// radius of that card — the rail reuses the same radius on its inner edge so
+/// the two curves read as one shape (§ shell card treatment, 2026-09-02).
+const _shellGap = 10.0;
+const _shellRadius = 22.0;
 
 class _NavItem {
   const _NavItem({required this.icon, required this.activeIcon, required this.label, required this.path});
@@ -101,7 +121,16 @@ class _NavRail extends ConsumerWidget {
 
     return Container(
       width: 88,
-      color: c.primary,
+      decoration: BoxDecoration(
+        color: c.primary,
+        // Only the inner (content-facing) corners are rounded — the rail
+        // still bleeds to the window's own left edge, exactly like the
+        // reference (§ shell card treatment, 2026-09-02).
+        borderRadius: const BorderRadius.only(
+          topRight: Radius.circular(_shellRadius),
+          bottomRight: Radius.circular(_shellRadius),
+        ),
+      ),
       child: SafeArea(
         child: Column(
           children: [
