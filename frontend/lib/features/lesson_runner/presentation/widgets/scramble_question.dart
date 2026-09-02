@@ -45,6 +45,23 @@ class _ScrambleQuestionViewState extends State<ScrambleQuestionView> {
     });
   }
 
+  /// Two ways to be ready, because "every piece used" isn't always the same
+  /// as "the phrase is complete":
+  ///
+  /// - every piece placed — the usual case, and the only one that works when
+  ///   a piece holds several words ("every day" as one draggable chunk), for
+  ///   which there are fewer pieces than the answer has words;
+  /// - as many pieces placed as the answer has words — what makes an
+  ///   exercise with distractor words solvable at all. Requiring every piece
+  ///   there would force the learner to place the distractors too, and the
+  ///   grader compares the placed pieces against the phrase, so such an
+  ///   exercise could never be answered correctly.
+  ///
+  /// When there are no distractors and no multi-word chunks the two counts
+  /// are equal, so this changes nothing for the exercises that already work.
+  bool get _canCheck =>
+      _placed.length == widget.exercise.tokens.length || _placed.length == widget.exercise.answer.length;
+
   void _check() {
     final correct = gradeScramble(_placed.map((t) => t.word).toList(), widget.exercise.answer);
     setState(() {
@@ -90,11 +107,7 @@ class _ScrambleQuestionViewState extends State<ScrambleQuestionView> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.tonal(
-              // Compares against the token count, not the answer's word
-              // count — a multi-word option chunk (e.g. "every day" as one
-              // draggable token) means those two can differ, and the user
-              // only ever places whole tokens, never individual words.
-              onPressed: _placed.length == widget.exercise.tokens.length ? _check : null,
+              onPressed: _canCheck ? _check : null,
               child: const Text('Проверить'),
             ),
           ),
