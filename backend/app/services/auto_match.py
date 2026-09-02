@@ -69,14 +69,18 @@ def _seed(*parts: str) -> int:
 
 
 def read_config(question: Question) -> int:
-    """The stored pair count, or 0 if it isn't one of the allowed values —
-    a question configured with anything else generates nothing rather than
-    quietly rounding to something the teacher never chose."""
-    try:
-        count = int((question.data or {}).get("count") or 0)
-    except (TypeError, ValueError):
+    """The stored pair count, or 0 if it isn't one of the allowed values.
+
+    Strict on purpose: a value that isn't already a whole number is rejected
+    rather than coerced, so a stored 2.5 can't quietly become a 2 the
+    teacher never chose. The schema refuses such values on save; this is the
+    second line for anything that reached the row another way. bool is
+    excluded explicitly — in Python it would otherwise pass as an int.
+    """
+    raw = (question.data or {}).get("count")
+    if isinstance(raw, bool) or not isinstance(raw, int):
         return 0
-    return count if count in ALLOWED_PAIR_COUNTS else 0
+    return raw if raw in ALLOWED_PAIR_COUNTS else 0
 
 
 # ---------------------------------------------------------------------------
