@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../admin_tokens.dart';
 
 /// Shared feedback helpers for the admin screens — a native SnackBar stands
 /// in for the old React admin's transient "Сохранено" flash /
@@ -19,7 +20,7 @@ String adminErrorMessage(
 
 void showSuccessSnack(BuildContext context, [String message = 'Сохранено']) {
   ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message), backgroundColor: Colors.green.shade700),
+    SnackBar(content: Text(message), backgroundColor: AdminColors.success),
   );
 }
 

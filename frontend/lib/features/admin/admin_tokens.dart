@@ -2,46 +2,55 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Design tokens for the admin course-builder/lesson-editor screen family —
-/// a dense, compact "working tool" look, deliberately distinct from both the
-/// general app theme (core/theme/app_theme.dart's AppColors) and the profile
-/// feature's own tokens (profile_tokens.dart's ProfileColors). Fixed light
-/// palette only — the reference design has no dark variant, so (like
-/// ProfileQrCard) this doesn't follow the app's light/dark toggle.
+/// a dense, compact "working tool" look. Fixed light palette only: the
+/// reference design has no dark variant, so (like ProfileQrCard) this
+/// doesn't follow the app's light/dark toggle.
 ///
-/// § course-builder redesign, 2026-09-01, phase 1 (tokens only — every
-/// screen still uses the exact same widget structure as before, just with
-/// these updated values, per the redesign's own "step 1: tokens into their
-/// own file, migrate existing screens onto them, no markup changes yet").
-/// One deliberate resolution of an inconsistency in that spec: §2 says the
-/// one accent color means only "this connects to that" and buttons stay
-/// neutral, while §10's button recipe says the primary button is filled
-/// with the accent — confirmed with the user, §2 wins: `accent` is
-/// reserved for connectivity indicators (the future "verifies block Б2"
-/// chip) only. Buttons render with neutral ink/paper, never the accent.
+/// § builder palette unification, 2026-09-02: these values used to be a
+/// deliberately separate warm-paper + teal family, kept distinct from the
+/// app theme on purpose. That stopped working once the builder screens
+/// moved inside the app's own shell chrome — a warm beige card with teal
+/// accents sitting inside a cool indigo frame reads as two different
+/// products bolted together. Every value below is now taken from
+/// core/theme/app_theme.dart's AppColors.light, so the builder is the same
+/// product as the rest of the app; what stays its own is the *structure*
+/// (denser metrics, its own typography, fixed light), not the hues.
+///
+/// Roles are still separated the way the redesign spec asked, just inside
+/// one hue family now: [accent] marks connectivity ("this checks that") as
+/// a soft tinted chip, while a primary button is the same accent as a solid
+/// fill. Shape and weight carry the difference, exactly as they already do
+/// on the student-facing screens.
 class AdminColors {
   AdminColors._();
 
-  static const bg = Color(0xFFF6F7F4);
+  static const bg = Color(0xFFF5F6FB);
   static const card = Color(0xFFFFFFFF);
-  static const border = Color(0xFFE0E3DD);
-  /// Border of an expanded/active card, 1.5px — distinct from the resting
-  /// [border] without reaching for the accent (§2: accent means "connects
-  /// to", not "focused/expanded").
-  static const borderStrong = Color(0xFFC7CCC4);
-  static const text = Color(0xFF15181A);
-  static const textSecondary = Color(0xFF5C6560);
-  static const textMuted = Color(0xFF939B96);
-  /// The one accent in the whole admin family — reserved for connectivity
-  /// indicators only (see class doc). Never a button fill.
-  static const accent = Color(0xFF0E7C86);
-  static const accentHover = Color(0xFF0B6068);
-  static const accentSoft = Color(0xFFE4F1F2);
-  static const danger = Color(0xFFB42318);
+  static const border = Color(0xFFE6E8F2);
+  /// Border of an expanded/active card, 1.5px — a heavier neutral rather
+  /// than the accent, so "focused/expanded" never reads as "connected to".
+  static const borderStrong = Color(0xFFC9CEE3);
+  static const text = Color(0xFF1C1F33);
+  static const textSecondary = Color(0xFF676C85);
+  static const textMuted = Color(0xFF9297AB);
+  /// The one accent in the admin family: connectivity chips use [accentSoft]
+  /// behind [accentHover] text, primary buttons use it as a solid fill.
+  static const accent = Color(0xFF4A5CF0);
+  static const accentHover = Color(0xFF3745C2);
+  static const accentSoft = Color(0xFFECEEFF);
+  static const danger = Color(0xFFE5484D);
+  static const dangerSoft = Color(0xFFFDEAEA);
+  /// "Published", "answer is correct" — the status green. Previously each
+  /// call site hardcoded its own #16A34A/#DC2626 pair, which drifted from
+  /// the app's greens; both now come from here (§ builder palette
+  /// unification, 2026-09-02).
+  static const success = Color(0xFF1FA974);
+  static const successSoft = Color(0xFFE4F7EF);
   /// Warnings that aren't errors — e.g. "a block has no checks yet" — soft
   /// amber, never the accent and never [danger].
-  static const warn = Color(0xFF9A6B1E);
-  static const warnSoft = Color(0xFFFBF3E4);
-  static const blockBg = Color(0xFFFAFBF9);
+  static const warn = Color(0xFFB8860B);
+  static const warnSoft = Color(0xFFFFF6E0);
+  static const blockBg = Color(0xFFFAFBFF);
 }
 
 class AdminMetrics {
@@ -101,13 +110,15 @@ class AdminTypography {
 class AdminButtonStyles {
   AdminButtonStyles._();
 
-  /// Filled pill in neutral ink — never the accent (§2: accent means
-  /// "connects to", reserved for the verifies-block chip; a save/create
-  /// button isn't a connectivity indicator).
+  /// Filled pill in the accent, matching the app's own primary button
+  /// (§ builder palette unification, 2026-09-02 — it used to be neutral ink
+  /// so the accent could mean "connects to" exclusively; now that both live
+  /// in one hue family, a solid fill vs a soft tinted chip carries that
+  /// difference instead).
   static ButtonStyle primary() => FilledButton.styleFrom(
-    backgroundColor: AdminColors.text,
+    backgroundColor: AdminColors.accent,
     foregroundColor: Colors.white,
-    disabledBackgroundColor: AdminColors.text.withValues(alpha: 0.4),
+    disabledBackgroundColor: AdminColors.accent.withValues(alpha: 0.4),
     minimumSize: const Size(0, AdminMetrics.buttonHeight),
     padding: const EdgeInsets.symmetric(horizontal: AdminMetrics.buttonHPad),
     shape: RoundedRectangleBorder(
@@ -165,9 +176,9 @@ InputDecoration adminInputDecoration({String? label, String? hint}) =>
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(AdminMetrics.inputRadius),
-        // Neutral, not the accent (§2) — a focus ring isn't a connectivity
-        // indicator, so it stays in the ink/paper vocabulary, just heavier.
-        borderSide: const BorderSide(color: AdminColors.text, width: 1.5),
+        // Accent focus ring, same as the app's own inputs (§ builder palette
+        // unification, 2026-09-02).
+        borderSide: const BorderSide(color: AdminColors.accent, width: 1.5),
       ),
     );
 

@@ -700,7 +700,7 @@ class _ReadOnlyQuestionContent extends StatelessWidget {
               Text(
                 i == correctIndex ? '✓ ${options[i]}' : '• ${options[i]}',
                 style: i == correctIndex
-                    ? AdminTypography.body.copyWith(color: const Color(0xFF16A34A), fontWeight: FontWeight.w600)
+                    ? AdminTypography.body.copyWith(color: AdminColors.success, fontWeight: FontWeight.w600)
                     : AdminTypography.body,
               ),
           ],

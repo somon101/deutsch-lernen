@@ -83,8 +83,8 @@ class AdminStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = published ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
-    final bg = published ? const Color(0xFFE7F7EE) : const Color(0xFFFDEAEA);
+    final color = published ? AdminColors.success : AdminColors.danger;
+    final bg = published ? AdminColors.successSoft : AdminColors.dangerSoft;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(

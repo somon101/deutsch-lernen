@@ -629,7 +629,7 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
             const SizedBox(height: 8),
             Text(
               'Добавлено слов: ${_result!.addedCount}.',
-              style: const TextStyle(color: Color(0xFF16A34A), fontSize: 14),
+              style: const TextStyle(color: AdminColors.success, fontSize: 14),
             ),
             for (final s in _result!.skipped)
               Text(
