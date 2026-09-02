@@ -72,12 +72,15 @@ class AdminLessonEditScreen extends ConsumerWidget {
         // No AdminMaxWidth — same full-width rail+working-area layout as the
         // builder's own lesson screen (§ builder full-width layout,
         // 2026-09-02).
-        data: (l) => ListView(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
-            children: [
-              LessonEditorPanel(
+        // Padding + a bounded-height panel rather than a ListView — the panel
+        // scrolls its working area itself so the step rail stays put
+        // (§ pinned header + independent scroll, 2026-09-02).
+        data: (l) => Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: LessonEditorPanel(
                 courseId: 'legacy',
                 lesson: l,
+                scrollBottomInset: bottomBarClearance(context),
                 // The media library is global/cross-course (builder.py's
                 // /api/builder/media/library) — legacy lessons reuse it too.
                 libraryLoader: (kind) =>
@@ -121,7 +124,6 @@ class AdminLessonEditScreen extends ConsumerWidget {
                 },
                 onReload: reload,
               ),
-            ],
           ),
       ),
       ),

@@ -82,15 +82,25 @@ class BuilderLessonEditScreen extends ConsumerWidget {
               // working area takes everything else, so a wide monitor
               // actually buys the teacher room to edit rather than empty
               // margins.
-              return ListView(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomBarClearance(context)),
+              //
+              // A Column, not a ListView: the header below is pinned and the
+              // panel does its own scrolling, so that scrolling a long word
+              // list never carries the lesson header and the step rail off
+              // screen with it (§ pinned header + independent scroll,
+              // 2026-09-02).
+              return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     AdminCard(child: LessonNameCard(courseId: courseId, lesson: lesson)),
                     const SizedBox(height: AdminMetrics.fieldGap),
-                    LessonEditorPanel(
+                    Expanded(
+                      child: LessonEditorPanel(
                       courseId: courseId,
                       lesson: lesson,
                       languageId: languageId,
+                      scrollBottomInset: bottomBarClearance(context),
                       libraryLoader: (kind) => ref.read(builderRepositoryProvider).listMediaLibrary(kind),
                       onUploadMedia: (kind, bytes, filename) async {
                         try {
@@ -119,7 +129,9 @@ class BuilderLessonEditScreen extends ConsumerWidget {
                       },
                       onReload: reload,
                     ),
+                    ),
                   ],
+                  ),
                 );
             },
           ),
@@ -144,6 +156,12 @@ class _LessonNameCardState extends ConsumerState<LessonNameCard> {
   late final _title = TextEditingController(text: widget.lesson.title);
   late final _description = TextEditingController(text: widget.lesson.description);
   bool _busy = false;
+  // Collapsed by default (§ pinned header + independent scroll, 2026-09-02).
+  // This card is pinned above the working area now, so every pixel it takes
+  // is a pixel the word/question list never gets back — the teacher comes
+  // here to edit content, not to re-read the lesson's own description. Same
+  // collapse pattern as the course screen's own settings section.
+  bool _expanded = false;
 
   @override
   void dispose() {
@@ -170,18 +188,42 @@ class _LessonNameCardState extends ConsumerState<LessonNameCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TextField(controller: _title, decoration: adminInputDecoration(label: 'Название урока')),
-        const SizedBox(height: AdminMetrics.fieldGap),
-        TextField(controller: _description, decoration: adminInputDecoration(label: 'Описание')),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: _busy ? null : _save,
-            style: AdminButtonStyles.text(),
-            child: const Text('Сохранить название'),
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Row(
+            children: [
+              Icon(
+                _expanded ? Icons.expand_less : Icons.expand_more,
+                size: 20,
+                color: AdminColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  _expanded ? 'Название и описание' : widget.lesson.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AdminTypography.cardTitle,
+                ),
+              ),
+            ],
           ),
         ),
+        if (_expanded) ...[
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _title, decoration: adminInputDecoration(label: 'Название урока')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _description, decoration: adminInputDecoration(label: 'Описание')),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _busy ? null : _save,
+              style: AdminButtonStyles.text(),
+              child: const Text('Сохранить название'),
+            ),
+          ),
+        ],
       ],
     );
   }

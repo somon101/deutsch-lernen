@@ -89,7 +89,15 @@ class LessonEditorPanel extends ConsumerStatefulWidget {
     required this.onReuseMedia,
     required this.onReload,
     this.languageId,
+    this.scrollBottomInset = 0,
   });
+
+  /// Padding added at the bottom of the panel's own scroll areas — the
+  /// mobile tab bar's height, so the last row isn't hidden behind it. Sits
+  /// here rather than on the screen's outer padding because the scrolling
+  /// moved inside the panel (§ pinned header + independent scroll,
+  /// 2026-09-02).
+  final double scrollBottomInset;
 
   final String courseId;
   final AdminLesson lesson;
@@ -249,9 +257,15 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
     }
   }
 
+  /// The panel owns the scrolling now (§ pinned header + independent scroll,
+  /// 2026-09-02) and therefore needs a bounded height — callers hand it an
+  /// Expanded, never a ListView child. Only the working area scrolls: the
+  /// rail stays put, so switching from a long word list to "Мини-тест" never
+  /// means scrolling back to the top first.
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.sizeOf(context).width >= _railBreakpoint;
+    final bottomInset = widget.scrollBottomInset;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -263,18 +277,40 @@ class _LessonEditorPanelState extends ConsumerState<LessonEditorPanel> {
           const SizedBox(height: AdminMetrics.cardGap),
         ],
         if (isWide)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(width: AdminMetrics.railWidth, child: _rail(context)),
-              const SizedBox(width: 20),
-              Expanded(child: _workingArea(context)),
-            ],
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: AdminMetrics.railWidth,
+                  // The rail gets its own scroll purely as an overflow escape
+                  // hatch — on a short window the 8 steps plus the map button
+                  // can outgrow the viewport, and clipping them would hide
+                  // exactly the navigation this change exists to keep visible.
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: _rail(context),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(bottom: bottomInset),
+                    child: _workingArea(context),
+                  ),
+                ),
+              ],
+            ),
           )
         else ...[
           _horizontalRail(context),
           const SizedBox(height: AdminMetrics.cardGap),
-          _workingArea(context),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: _workingArea(context),
+            ),
+          ),
         ],
       ],
     );
