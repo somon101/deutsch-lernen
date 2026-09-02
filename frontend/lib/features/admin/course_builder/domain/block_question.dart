@@ -148,7 +148,14 @@ class ScrambleDraft extends QuestionDraft {
   Map<String, dynamic> toWire() => {
     'kind': 'scramble',
     'prompt': translation,
-    'options': [...correctTokens, ...extraWords],
+    // Auto mode (§ auto scramble, 2026-09-02): with no extra distractor
+    // words there is nothing to store that the phrase doesn't already say,
+    // so `options` goes over empty and the server derives the pieces from
+    // `correctAnswer` at serve time. The phrase stays the single source of
+    // truth, and no shuffle order is ever persisted. Extra words are not
+    // derivable, so as soon as the teacher adds one the full explicit list
+    // is sent instead — exactly what hand-built exercises already store.
+    'options': extraWords.isEmpty ? const <String>[] : [...correctTokens, ...extraWords],
     'correctAnswer': correctTokens.join(' '),
   };
 }

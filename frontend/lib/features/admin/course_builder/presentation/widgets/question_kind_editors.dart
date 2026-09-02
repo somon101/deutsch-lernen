@@ -217,7 +217,12 @@ class ScrambleEditor extends StatelessWidget {
         if (draft.correctTokens.isNotEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text('Слова из фразы: ${draft.correctTokens.join(', ')} (ученик увидит их вперемешку)', style: AdminTypography.caption),
+            child: Text(
+              'Система сама разберёт фразу на части: ${draft.correctTokens.join(', ')}. '
+              'Ученик увидит их вперемешку, и порядок будет новым при каждом прохождении. '
+              'Лишние слова ниже добавлять не обязательно.',
+              style: AdminTypography.caption,
+            ),
           ),
         for (var i = 0; i < draft.extraWords.length; i++)
           Row(

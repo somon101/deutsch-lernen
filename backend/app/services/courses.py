@@ -833,13 +833,14 @@ def clean_questions_payload(raw: dict) -> dict:
             continue
         kind = q.get("kind")
         if kind in ("choice", "cloze", "scramble"):
-            cleaned.append(
-                {
-                    **q,
-                    "options": [clean_field(o) for o in q["options"]] if isinstance(q.get("options"), list) else q.get("options"),
-                    "correctAnswer": clean_field(q.get("correctAnswer")),
-                }
-            )
+            # Only rewrite `options` when it actually is a list. A scramble in
+            # auto mode may legitimately omit it (§ auto scramble,
+            # 2026-09-02), and forcing a None in here would turn "absent, use
+            # the schema default" into an explicit null that fails validation.
+            cleaned_q = {**q, "correctAnswer": clean_field(q.get("correctAnswer"))}
+            if isinstance(q.get("options"), list):
+                cleaned_q["options"] = [clean_field(o) for o in q["options"]]
+            cleaned.append(cleaned_q)
         elif kind == "match":
             pairs = q.get("pairs")
             cleaned.append(

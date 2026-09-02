@@ -9,6 +9,8 @@ pre-parsed content instead of raw text, without a second parser
 implementation existing anywhere.
 """
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +20,22 @@ from app.models.material import Material
 from app.models.material_block import MaterialBlock
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
+
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def scramble_tokens(correct_answer: str) -> list[str]:
+    """The draggable pieces of a "Собери фразу" exercise, derived from the
+    correct phrase itself (§ auto scramble, 2026-09-02).
+
+    Split on whitespace only, so punctuation stays attached to its own word
+    ("müde." is one token) — the learner reassembles the phrase exactly as
+    written, and the grader joins the placed tokens back with single spaces
+    before comparing, so this split is the exact inverse of that join.
+    Repeated words are kept as separate entries on purpose: the phrase needs
+    as many copies of "ich" as it actually contains, and the runner keys
+    tokens by position rather than text, so duplicates never collapse."""
+    return [t for t in _WHITESPACE_RE.split(correct_answer.strip()) if t]
 
 
 def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_answer: str, data) -> dict:
@@ -31,7 +49,16 @@ def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_a
     if kind == "cloze":
         return {"kind": "cloze", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
     if kind == "scramble":
-        return {"kind": "scramble", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
+        # No stored options means the auto mode (§ auto scramble,
+        # 2026-09-02): the teacher saved only a translation and the correct
+        # phrase, so the pieces are derived from that phrase here, at serve
+        # time. Nothing about the shuffle is stored — the phrase stays the
+        # single source of truth, and the runner reshuffles on every pass.
+        # A question WITH stored options is a hand-built one (its extra
+        # distractor words aren't derivable from the phrase) and is passed
+        # through untouched, so existing exercises keep working exactly as
+        # before.
+        return {"kind": "scramble", "prompt": prompt, "options": options or scramble_tokens(correct_answer), "correctAnswer": correct_answer}
     if kind == "match":
         return {"kind": "match", "prompt": prompt, "pairs": data or []}
     if kind == "auto_blank":

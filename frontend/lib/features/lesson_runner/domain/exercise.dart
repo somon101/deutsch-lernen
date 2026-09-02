@@ -221,8 +221,15 @@ Exercise toExercise(QuestionDto q, String id) {
         answer: q.correctAnswer,
       );
     case 'scramble':
-      final answer = q.correctAnswer.split(' ').where((w) => w.isNotEmpty).toList();
-      return ScrambleExercise(id: id, placementId: q.placementId, translation: q.prompt, tokens: _shuffle(q.options), answer: answer);
+      final answer = q.correctAnswer.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+      // The server already derives the pieces from the phrase when a
+      // question is in auto mode (§ auto scramble, 2026-09-02); deriving
+      // them again here keeps a payload that predates that — a cached
+      // lesson on disk, say — from rendering an exercise with no tokens at
+      // all. The shuffle itself stays here, unseeded and recomputed every
+      // time this runs, so each pass through the stage gets a fresh order.
+      final pieces = q.options.isNotEmpty ? q.options : answer;
+      return ScrambleExercise(id: id, placementId: q.placementId, translation: q.prompt, tokens: _shuffle(pieces), answer: answer);
     case 'match':
       return MatchExercise(
         id: id,

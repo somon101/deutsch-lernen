@@ -116,9 +116,16 @@ class ClozeQuestionInput(BaseModel):
 
 
 class ScrambleQuestionInput(BaseModel):
+    """`options` is optional (§ auto scramble, 2026-09-02): left empty, the
+    draggable pieces are derived from `correctAnswer` at serve time, so the
+    phrase is the only stored source of truth and nothing about the shuffle
+    is persisted. It is only filled when the teacher adds extra distractor
+    words, which genuinely can't be derived from the phrase — that keeps
+    every hand-built exercise working unchanged."""
+
     kind: Literal["scramble"]
     prompt: str = Field(min_length=1)
-    options: list[str] = Field(min_length=1)
+    options: list[str] = Field(default_factory=list)
     correctAnswer: str = Field(min_length=1)
 
     @field_validator("prompt")
