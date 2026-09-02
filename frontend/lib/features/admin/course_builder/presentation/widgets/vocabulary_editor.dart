@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import '../../../admin_widgets.dart';
 import '../../../widgets/admin_feedback.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
+import '../../domain/vocabulary_import.dart';
 
 /// Mirrors BuilderVocabularyEditor.tsx — per-word rows (edit/delete/audio),
 /// a new-word row with cross-lesson library suggestions, and a JSON bulk
@@ -490,29 +490,13 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
       _preview = null;
       _result = null;
     });
-    dynamic parsed;
-    try {
-      parsed = jsonDecode(_text.text);
-    } catch (_) {
-      setState(
-        () => _error = 'Некорректный JSON: не удалось разобрать текст. Проверьте синтаксис.',
-      );
+    final parse = parseVocabularyImport(_text.text);
+    if (parse.error != null) {
+      setState(() => _error = parse.error);
       return;
     }
-    if (parsed is! List) {
-      setState(() => _error = 'Корневой элемент JSON должен быть массивом.');
-      return;
-    }
-    final words = <Map<String, String>>[];
-    for (final item in parsed) {
-      if (item is Map) {
-        words.add({
-          'original': (item['original'] ?? '').toString(),
-          'transcription': (item['transcription'] ?? '').toString(),
-          'translation': (item['translation'] ?? '').toString(),
-        });
-      }
-    }
+    final words = parse.words;
+
     setState(() => _busy = true);
     try {
       final preview = await ref
@@ -575,6 +559,30 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Stays on screen while the teacher types. The hint inside the
+          // field vanished at the first keystroke — exactly when the format
+          // is needed most.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AdminColors.blockBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AdminColors.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Все три поля обязательны:', style: AdminTypography.fieldLabel),
+                const SizedBox(height: 6),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Text(vocabularyImportExample, style: AdminTypography.mono),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
           TextField(
             controller: _text,
             maxLines: 8,
