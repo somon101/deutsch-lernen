@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db import async_session
 from app.errors import ApiError
-from app.routers import admin, auth, auto_blank, auto_match, auto_translate, builder, content, daily_goal, leaderboard, learner_courses, me, notifications, social, taxonomy, words
+from app.routers import admin, auth, auto_blank, auto_match, auto_translate, builder, content, daily_goal, leaderboard, learner_courses, me, notifications, preferences, social, taxonomy, words
 from app.services.bootstrap import ensure_admin_exists
 from app.services.schema_bootstrap import ensure_daily_goal_tables
 from app.uploads.storage import UPLOADS_ROOT, ensure_storage_bucket
@@ -93,3 +93,4 @@ app.include_router(auto_translate.word_pool_router)
 app.include_router(auto_match.router)
 app.include_router(auto_match.breakdown_router)
 app.include_router(daily_goal.router)
+app.include_router(preferences.router)

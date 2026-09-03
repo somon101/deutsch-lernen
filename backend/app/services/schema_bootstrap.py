@@ -36,6 +36,10 @@ _STATEMENTS = (
     )
     """,
     'CREATE UNIQUE INDEX IF NOT EXISTS "UserPreference_userId_key" ON "UserPreference"("userId")',
+    # Sound settings (§ sound settings, 2026-09-03) — added to the existing
+    # preferences row rather than to a table of their own.
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "lessonSoundEnabled" BOOLEAN NOT NULL DEFAULT true',
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "wordAudioEnabled" BOOLEAN NOT NULL DEFAULT true',
     """
     CREATE TABLE IF NOT EXISTS "DailyGoalAward" (
         "id" TEXT NOT NULL,

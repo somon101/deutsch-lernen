@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -27,6 +27,11 @@ class UserPreference(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"), nullable=False, unique=True)
     dailyGoalMinutes: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
+    # The two sound settings (§ sound settings, 2026-09-03). Separate columns
+    # on purpose: silencing the exercise chimes and silencing word
+    # pronunciation are different wishes, and one flag could not express both.
+    lessonSoundEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    wordAudioEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../core/settings/sound_preferences.dart';
 import '../../../../core/utils/word_audio.dart';
 
 /// One word card's data (§ word card deck, 2026-08-31) — named `WordDeckCard`
@@ -138,6 +139,8 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
     _focusNode.dispose();
     super.dispose();
   }
+
+  bool get _audioEnabled => ref.watch(soundPreferencesProvider.select((s) => s.wordAudioEnabled));
 
   String? _resolvedImage(WordDeckCard card) {
     final url = card.imageUrl;
@@ -364,7 +367,14 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
             alignment: const Alignment(0, 0.8),
             child: Opacity(
               opacity: t,
-              child: _WordCardFace(card: card, width: width, imageUrl: _resolvedImage(card), playing: false, onPlayAudio: () {}),
+              child: _WordCardFace(
+                card: card,
+                width: width,
+                imageUrl: _resolvedImage(card),
+                playing: false,
+                onPlayAudio: () {},
+                audioEnabled: _audioEnabled,
+              ),
             ),
           ),
         ),
@@ -430,6 +440,7 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
                   imageUrl: _resolvedImage(card),
                   playing: isFront && _playingAudio,
                   onPlayAudio: () => _playAudio(card),
+                  audioEnabled: _audioEnabled,
                 ),
               ),
             ),
@@ -441,13 +452,25 @@ class _WordCardDeckState extends ConsumerState<WordCardDeck> with SingleTickerPr
 }
 
 class _WordCardFace extends StatelessWidget {
-  const _WordCardFace({required this.card, required this.width, required this.imageUrl, required this.playing, required this.onPlayAudio});
+  const _WordCardFace({
+    required this.card,
+    required this.width,
+    required this.imageUrl,
+    required this.playing,
+    required this.onPlayAudio,
+    this.audioEnabled = true,
+  });
 
   final WordDeckCard card;
   final double width;
   final String? imageUrl;
   final bool playing;
   final VoidCallback onPlayAudio;
+
+  /// "Озвучка слов" (§ sound settings, 2026-09-03) — false removes the
+  /// speaker control entirely, not just its tap handler. A visible but inert
+  /// button would still read as "you can listen to this".
+  final bool audioEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -512,6 +535,7 @@ class _WordCardFace extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (audioEnabled)
                 Positioned(
                   right: 20,
                   bottom: -28,

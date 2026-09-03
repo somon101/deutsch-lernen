@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/cache/cache_store.dart';
+import '../../../core/settings/sound_preferences.dart';
 import '../../../core/locale/locale_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/back_guard.dart';
@@ -206,17 +207,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         value: settings.languageLevel.label,
                         onTap: () => _pickLanguageLevel(context, settings.languageLevel),
                       ),
+                      // Both switches read/write the server-backed
+                      // soundPreferencesProvider (§ sound settings,
+                      // 2026-09-03), not the device-local settingsProvider —
+                      // this is the one setting group that follows the
+                      // account. Two independent tiles, two independent
+                      // flags: silencing lesson chimes must never silence
+                      // word pronunciation, or the other way around.
                       SettingsSwitchTile(
                         icon: Icons.volume_up_outlined,
                         label: l10n.lessonSounds,
-                        value: settings.lessonSounds,
-                        onChanged: (v) => ref.read(settingsProvider.notifier).setLessonSounds(v),
+                        value: ref.watch(soundPreferencesProvider.select((s) => s.lessonSoundEnabled)),
+                        onChanged: (v) => ref.read(soundPreferencesProvider.notifier).setLessonSound(v),
                       ),
                       SettingsSwitchTile(
                         icon: Icons.record_voice_over_outlined,
                         label: l10n.wordPronunciation,
-                        value: settings.wordPronunciation,
-                        onChanged: (v) => ref.read(settingsProvider.notifier).setWordPronunciation(v),
+                        value: ref.watch(soundPreferencesProvider.select((s) => s.wordAudioEnabled)),
+                        onChanged: (v) => ref.read(soundPreferencesProvider.notifier).setWordAudio(v),
                       ),
                     ],
                   ),

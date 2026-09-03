@@ -3,15 +3,20 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../api/api_client.dart';
+import '../settings/sound_preferences.dart';
 
 /// Mirrors src/lib/speech.ts's playWord: plays an admin-uploaded recording
 /// when there is one, otherwise falls back to on-device TTS. A recording
 /// always wins over the synthesised voice; a word that cannot be voiced
 /// simply stays silent (never throws to the caller).
 class WordAudioService {
-  WordAudioService(this._api);
+  WordAudioService(this._api, this._wordAudioEnabled);
 
   final ApiClient _api;
+
+  /// Asked at the moment of playing, so flipping the switch takes effect on
+  /// the very next tap.
+  final bool Function() _wordAudioEnabled;
   final Player _player = Player();
   final FlutterTts _tts = FlutterTts();
   bool _ttsConfigured = false;
@@ -24,6 +29,13 @@ class WordAudioService {
   }
 
   Future<void> play(String word, {String? audioUrl}) async {
+    // The single gate for the "Озвучка слов" setting (§ sound settings,
+    // 2026-09-03). Placed before the recording/TTS split on purpose: the
+    // setting is about whether the learner may hear the word at all, not
+    // about which mechanism would have said it. Hiding the buttons is the
+    // visible half of the feature; this is the half that holds even if some
+    // future screen forgets to hide its own control.
+    if (!_wordAudioEnabled()) return;
     final src = _api.assetUrl(audioUrl);
     if (src.isNotEmpty) {
       try {
@@ -48,7 +60,12 @@ class WordAudioService {
 }
 
 final wordAudioServiceProvider = Provider<WordAudioService>((ref) {
-  final service = WordAudioService(ref.watch(apiClientProvider));
+  // `read` inside the callback rather than `watch` at build time: watching
+  // would rebuild the player and the TTS engine on every toggle.
+  final service = WordAudioService(
+    ref.watch(apiClientProvider),
+    () => ref.read(soundPreferencesProvider).wordAudioEnabled,
+  );
   ref.onDispose(service.dispose);
   return service;
 });

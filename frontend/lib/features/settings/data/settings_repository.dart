@@ -19,12 +19,13 @@ extension LanguageLevelLabel on LanguageLevel {
       };
 }
 
+// Lesson-sound and word-pronunciation toggles live in
+// core/settings/sound_preferences.dart (soundPreferencesProvider) —
+// server-backed, unlike everything else in this file.
 class SettingsPrefs {
   const SettingsPrefs({
     required this.dailyGoalMinutes,
     required this.languageLevel,
-    required this.lessonSounds,
-    required this.wordPronunciation,
     required this.pushNotifications,
     required this.lessonReminder,
     required this.lessonReminderHour,
@@ -34,8 +35,6 @@ class SettingsPrefs {
 
   final int dailyGoalMinutes;
   final LanguageLevel languageLevel;
-  final bool lessonSounds;
-  final bool wordPronunciation;
   final bool pushNotifications;
   final bool lessonReminder;
   final int lessonReminderHour;
@@ -45,8 +44,6 @@ class SettingsPrefs {
   static const defaults = SettingsPrefs(
     dailyGoalMinutes: 20,
     languageLevel: LanguageLevel.a1,
-    lessonSounds: true,
-    wordPronunciation: true,
     pushNotifications: true,
     lessonReminder: false,
     lessonReminderHour: 19,
@@ -57,8 +54,6 @@ class SettingsPrefs {
   SettingsPrefs copyWith({
     int? dailyGoalMinutes,
     LanguageLevel? languageLevel,
-    bool? lessonSounds,
-    bool? wordPronunciation,
     bool? pushNotifications,
     bool? lessonReminder,
     int? lessonReminderHour,
@@ -68,8 +63,6 @@ class SettingsPrefs {
       SettingsPrefs(
         dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
         languageLevel: languageLevel ?? this.languageLevel,
-        lessonSounds: lessonSounds ?? this.lessonSounds,
-        wordPronunciation: wordPronunciation ?? this.wordPronunciation,
         pushNotifications: pushNotifications ?? this.pushNotifications,
         lessonReminder: lessonReminder ?? this.lessonReminder,
         lessonReminderHour: lessonReminderHour ?? this.lessonReminderHour,
@@ -80,8 +73,6 @@ class SettingsPrefs {
 
 const _kDailyGoal = 'settings_daily_goal';
 const _kLevel = 'settings_level';
-const _kLessonSounds = 'settings_lesson_sounds';
-const _kWordPronunciation = 'settings_word_pronunciation';
 const _kPush = 'settings_push';
 const _kLessonReminder = 'settings_lesson_reminder';
 const _kReminderHour = 'settings_reminder_hour';
@@ -101,8 +92,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
     state = SettingsPrefs(
       dailyGoalMinutes: prefs.getInt(_kDailyGoal) ?? d.dailyGoalMinutes,
       languageLevel: LanguageLevel.values.byName(prefs.getString(_kLevel) ?? d.languageLevel.name),
-      lessonSounds: prefs.getBool(_kLessonSounds) ?? d.lessonSounds,
-      wordPronunciation: prefs.getBool(_kWordPronunciation) ?? d.wordPronunciation,
       pushNotifications: prefs.getBool(_kPush) ?? d.pushNotifications,
       lessonReminder: prefs.getBool(_kLessonReminder) ?? d.lessonReminder,
       lessonReminderHour: prefs.getInt(_kReminderHour) ?? d.lessonReminderHour,
@@ -116,8 +105,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kDailyGoal, next.dailyGoalMinutes);
     await prefs.setString(_kLevel, next.languageLevel.name);
-    await prefs.setBool(_kLessonSounds, next.lessonSounds);
-    await prefs.setBool(_kWordPronunciation, next.wordPronunciation);
     await prefs.setBool(_kPush, next.pushNotifications);
     await prefs.setBool(_kLessonReminder, next.lessonReminder);
     await prefs.setInt(_kReminderHour, next.lessonReminderHour);
@@ -127,8 +114,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
 
   Future<void> setDailyGoal(int minutes) => _apply(state.copyWith(dailyGoalMinutes: minutes));
   Future<void> setLanguageLevel(LanguageLevel level) => _apply(state.copyWith(languageLevel: level));
-  Future<void> setLessonSounds(bool value) => _apply(state.copyWith(lessonSounds: value));
-  Future<void> setWordPronunciation(bool value) => _apply(state.copyWith(wordPronunciation: value));
   Future<void> setPushNotifications(bool value) => _apply(state.copyWith(pushNotifications: value));
   Future<void> setLessonReminder(bool value) => _apply(state.copyWith(lessonReminder: value));
   Future<void> setLessonReminderTime(int hour, int minute) =>

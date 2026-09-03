@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../settings/sound_preferences.dart';
 import '../utils/word_audio.dart';
 
 /// Mirrors WordAudioButton.tsx — a speaker control next to a German word.
@@ -33,6 +34,13 @@ class _WordAudioButtonState extends ConsumerState<WordAudioButton> {
 
   @override
   Widget build(BuildContext context) {
+    // The single place every current AND future word-audio button hides
+    // itself (§ sound settings, 2026-09-03) — the request's own §9: the
+    // check belongs in the shared component, not copied into each screen
+    // that uses it. `.select` so this widget rebuilds only on the one flag
+    // it cares about.
+    final enabled = ref.watch(soundPreferencesProvider.select((s) => s.wordAudioEnabled));
+    if (!enabled) return const SizedBox.shrink();
     return IconButton(
       icon: Icon(
         Icons.volume_up,
