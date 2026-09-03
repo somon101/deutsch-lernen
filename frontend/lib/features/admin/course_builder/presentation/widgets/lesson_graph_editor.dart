@@ -47,6 +47,42 @@ const Map<String, ({String label, IconData icon, Color color})> _nodeStyle = {
   'review': (label: 'Закрепление', icon: Icons.flag_outlined, color: Color(0xFF4A5CF0)),
 };
 
+/// 1-based "which number in the walk-through" per node id (§ lesson graph
+/// follow-up, 2026-09-03) — the backend now refuses a second incoming or
+/// outgoing flow edge on any node (add_edge), so the graph is always a set
+/// of simple chains, never a merge/branch; this is exactly the topological
+/// flatten the student runner computes (see lesson_runner's flattenGraph),
+/// duplicated here (small and self-contained) so the canvas can show a
+/// teacher the same order live while editing, right on each block.
+/// Roots (no incoming edge) are walked in the server's own node order
+/// (created-at, see services/lesson_graph.py's _real_nodes) so numbering is
+/// stable across reloads.
+Map<String, int> _computeOrder(AdminLessonGraph graph) {
+  final hasIncoming = {for (final e in graph.edges) e.toNodeId};
+  final outgoing = {for (final e in graph.edges) e.fromNodeId: e.toNodeId};
+  final order = <String, int>{};
+  var next = 1;
+  void walk(String id) {
+    var current = id;
+    while (!order.containsKey(current)) {
+      order[current] = next++;
+      final child = outgoing[current];
+      if (child == null) break;
+      current = child;
+    }
+  }
+
+  for (final n in graph.nodes) {
+    if (!hasIncoming.contains(n.id)) walk(n.id);
+  }
+  // Defensive: a node that somehow wasn't reached (e.g. mid-edit transient
+  // state) still gets a number rather than showing blank.
+  for (final n in graph.nodes) {
+    if (!order.containsKey(n.id)) order[n.id] = next++;
+  }
+  return order;
+}
+
 class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
   String? _selectedNodeId;
   String? _connectFromId;
@@ -118,8 +154,11 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
     final isWide = MediaQuery.sizeOf(context).width >= 900;
     final selected = _selectedNodeId == null ? null : _graph.nodes.cast<AdminGraphNode?>().firstWhere((n) => n!.id == _selectedNodeId, orElse: () => null);
 
+    final order = _computeOrder(_graph);
+
     final canvas = _GraphCanvas(
       graph: _graph,
+      order: order,
       posOf: _posOf,
       connectFromId: _connectFromId,
       selectedNodeId: _selectedNodeId,
@@ -138,6 +177,7 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
       connecting: _connectFromId != null,
       onAdd: _addNode,
       onToggleConnect: () => setState(() => _connectFromId = _connectFromId == null ? (_selectedNodeId ?? '') : null),
+      onExit: () => Navigator.of(context).maybePop(),
     );
 
     final body = Column(
@@ -212,32 +252,47 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
 }
 
 class _GraphToolbar extends StatelessWidget {
-  const _GraphToolbar({required this.busy, required this.connecting, required this.onAdd, required this.onToggleConnect});
+  const _GraphToolbar({required this.busy, required this.connecting, required this.onAdd, required this.onToggleConnect, required this.onExit});
   final bool busy;
   final bool connecting;
   final ValueChanged<String> onAdd;
   final VoidCallback onToggleConnect;
+  final VoidCallback onExit;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        for (final type in _nodeStyle.keys)
-          OutlinedButton.icon(
-            onPressed: busy ? null : () => onAdd(type),
-            style: AdminButtonStyles.secondary(),
-            icon: Icon(_nodeStyle[type]!.icon, size: 16),
-            label: Text('+ ${_nodeStyle[type]!.label}'),
+        Expanded(
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final type in _nodeStyle.keys)
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => onAdd(type),
+                  style: AdminButtonStyles.secondary(),
+                  icon: Icon(_nodeStyle[type]!.icon, size: 16),
+                  label: Text('+ ${_nodeStyle[type]!.label}'),
+                ),
+              const SizedBox(width: 4),
+              OutlinedButton.icon(
+                onPressed: busy ? null : onToggleConnect,
+                style: connecting ? AdminButtonStyles.primary() : AdminButtonStyles.secondary(),
+                icon: const Icon(Icons.arrow_right_alt, size: 18),
+                label: Text(connecting ? 'Отменить соединение' : 'Соединить блоки'),
+              ),
+            ],
           ),
-        const SizedBox(width: 4),
-        OutlinedButton.icon(
-          onPressed: busy ? null : onToggleConnect,
-          style: connecting ? AdminButtonStyles.primary() : AdminButtonStyles.secondary(),
-          icon: const Icon(Icons.arrow_right_alt, size: 18),
-          label: Text(connecting ? 'Отменить соединение' : 'Соединить блоки'),
+        ),
+        const SizedBox(width: 8),
+        TextButton.icon(
+          onPressed: onExit,
+          style: AdminButtonStyles.text(),
+          icon: const Icon(Icons.logout, size: 16),
+          label: const Text('Выйти из графа'),
         ),
       ],
     );
@@ -288,6 +343,7 @@ class _EdgeList extends StatelessWidget {
 class _GraphCanvas extends StatelessWidget {
   const _GraphCanvas({
     required this.graph,
+    required this.order,
     required this.posOf,
     required this.connectFromId,
     required this.selectedNodeId,
@@ -297,6 +353,7 @@ class _GraphCanvas extends StatelessWidget {
   });
 
   final AdminLessonGraph graph;
+  final Map<String, int> order;
   final Offset Function(AdminGraphNode) posOf;
   final String? connectFromId;
   final String? selectedNodeId;
@@ -341,6 +398,7 @@ class _GraphCanvas extends StatelessWidget {
                     top: posOf(node).dy,
                     child: _NodeCard(
                       node: node,
+                      number: order[node.id],
                       selected: node.id == selectedNodeId,
                       connecting: connectFromId == node.id,
                       onTap: () => onNodeTap(node),
@@ -411,6 +469,7 @@ class _EdgePainter extends CustomPainter {
 class _NodeCard extends StatelessWidget {
   const _NodeCard({
     required this.node,
+    required this.number,
     required this.selected,
     required this.connecting,
     required this.onTap,
@@ -419,6 +478,10 @@ class _NodeCard extends StatelessWidget {
   });
 
   final AdminGraphNode node;
+  // Position in the walk-through order (§ lesson graph follow-up,
+  // 2026-09-03) — null only defensively (see _computeOrder), never in
+  // practice once every node has been assigned one.
+  final int? number;
   final bool selected;
   final bool connecting;
   final VoidCallback onTap;
@@ -435,33 +498,57 @@ class _NodeCard extends StatelessWidget {
       child: SizedBox(
         width: _nodeWidth,
         height: _nodeHeight,
-        child: Material(
-          color: AdminColors.card,
-          borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
-          elevation: selected ? 3 : 1,
-          child: Container(
-            decoration: BoxDecoration(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Material(
+              color: AdminColors.card,
               borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
-              border: Border.all(color: connecting ? AdminColors.accent : (selected ? style.color : AdminColors.border), width: selected || connecting ? 2 : 1),
+              elevation: selected ? 3 : 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+                  border: Border.all(color: connecting ? AdminColors.accent : (selected ? style.color : AdminColors.border), width: selected || connecting ? 2 : 1),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  children: [
+                    Icon(style.icon, size: 20, color: style.color),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(style.label, style: AdminTypography.caption),
+                          Text(node.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AdminTypography.body.copyWith(fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(style.icon, size: 20, color: style.color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(style.label, style: AdminTypography.caption),
-                      Text(node.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: AdminTypography.body.copyWith(fontWeight: FontWeight.w600)),
-                    ],
+            if (number != null)
+              Positioned(
+                left: -8,
+                top: -8,
+                child: Container(
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AdminColors.accent,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  child: Text(
+                    '$number',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white),
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+          ],
         ),
       ),
     );

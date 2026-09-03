@@ -76,7 +76,12 @@ def edge_dto(edge: LessonEdge) -> dict:
 
 
 async def _real_nodes(db: AsyncSession, lesson_id: str) -> list[LessonNode]:
-    return (await db.execute(select(LessonNode).where(LessonNode.lessonId == lesson_id))).scalars().all()
+    # Ordered by creation time so the client's "which node came first" tie-
+    # break (numbering unconnected/root nodes on the canvas, § lesson graph
+    # follow-up) is deterministic across reloads, not query-plan-dependent.
+    return (
+        await db.execute(select(LessonNode).where(LessonNode.lessonId == lesson_id).order_by(LessonNode.createdAt))
+    ).scalars().all()
 
 
 async def _real_edges(db: AsyncSession, lesson_id: str) -> list[LessonEdge]:
@@ -97,7 +102,9 @@ async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str]) -> di
     unconverted lesson on every request."""
     if not lesson_ids:
         return {}
-    nodes = (await db.execute(select(LessonNode).where(LessonNode.lessonId.in_(lesson_ids)))).scalars().all()
+    nodes = (
+        await db.execute(select(LessonNode).where(LessonNode.lessonId.in_(lesson_ids)).order_by(LessonNode.lessonId, LessonNode.createdAt))
+    ).scalars().all()
     if not nodes:
         return {}
     edges = (await db.execute(select(LessonEdge).where(LessonEdge.lessonId.in_(lesson_ids)))).scalars().all()
@@ -373,6 +380,19 @@ async def add_edge(db: AsyncSession, course_id: str, lesson_id: str, from_node_i
         raise ApiError(409, "Такая связь уже есть")
 
     edges = await _real_edges(db, lesson_id)
+
+    # Every node has at most one outgoing and one incoming flow edge (§
+    # lesson graph follow-up, 2026-09-03 — a teacher-reported point of
+    # confusion: several blocks feeding into one, or one block branching
+    # into several, made the walk-through order hard to predict). This
+    # keeps the graph a set of simple chains, so the student route is
+    # always an unambiguous, fully numbered sequence — delete the existing
+    # edge first to rewire either end.
+    if any(e.fromNodeId == from_node_id for e in edges):
+        raise ApiError(400, "У этого блока уже есть исходящая связь — сначала удалите её")
+    if any(e.toNodeId == to_node_id for e in edges):
+        raise ApiError(400, "У этого блока уже есть входящая связь — сначала удалите её")
+
     # Adding from -> to would close a cycle iff `to` can already reach `from`.
     if from_node_id in await _reachable(edges, to_node_id):
         raise ApiError(400, "Эта связь создала бы цикл в маршруте")
