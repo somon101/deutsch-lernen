@@ -18,8 +18,10 @@ from app.legacy_parser.parse_lesson_text import parse_lesson_text
 from app.legacy_parser.text_utils import normalize_answer
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
+from app.models.material_block_translation import MaterialBlockTranslation
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
+from app.models.question_translation import QuestionTranslation
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -77,7 +79,7 @@ def to_question_dto(kind: str, prompt: str, options: list[str] | None, correct_a
     return {"kind": "choice", "prompt": prompt, "options": options or [], "correctAnswer": correct_answer}
 
 
-def to_question_dtos(question: Question, placement_id: str) -> list[dict]:
+def to_question_dtos(question: Question, placement_id: str, translation: QuestionTranslation | None = None) -> list[dict]:
     """Same shape to_question_dto returns, wrapped with id/placementId —
     except an "auto_blank" question (§ auto blank, 2026-08-31) expands into
     one lightweight placeholder entry PER PHRASE instead of one entry for
@@ -121,12 +123,22 @@ def to_question_dtos(question: Question, placement_id: str) -> list[dict]:
             {"id": f"{question.id}::{i}", "placementId": placement_id, "kind": "auto_translate", "questionId": question.id, "slotIndex": i, "source": "pool"}
             for i in range(int(count))
         ]
+    # Only these plain-text kinds (choice/truefalse/cloze/scramble/match)
+    # take a `translation` override (§ course content language, 2026-09-04)
+    # — auto_blank/auto_translate/auto_match's stored data is target-language
+    # sentences/words (invariant across instructional locale, same bucket as
+    # VocabularyItem.german) or pure config, resolved above before reaching
+    # here, so they never look at `translation`.
+    prompt = translation.prompt if translation and translation.prompt else question.prompt
+    options = translation.options if translation and translation.options else question.options
+    correct_answer = translation.correctAnswer if translation and translation.correctAnswer else question.correctAnswer
+    data = translation.data if translation and translation.data else question.data
     return [
         {
             "id": question.id,
             "placementId": placement_id,
             "source": "pool",
-            **to_question_dto(question.kind, question.prompt, question.options, question.correctAnswer, question.data),
+            **to_question_dto(question.kind, prompt, options, correct_answer, data),
         }
     ]
 
@@ -153,7 +165,7 @@ def parse_material(material_text: str, vocabulary: list[dict]) -> dict:
     return {"blocks": blocks, "phrases": phrases}
 
 
-async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: list[str]) -> dict[str, list[dict]]:
+async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: list[str], locale: str | None = None) -> dict[str, list[dict]]:
     """Renders the new block-based editor's Material/MaterialBlock rows
     (content-taxonomy plan, 2026-08-26) into the same {type, ...} shape
     MaterialStage already renders. Keyed by lessonId; a lesson present here
@@ -202,18 +214,57 @@ async def get_new_material_blocks(db: AsyncSession, course_id: str, lesson_ids: 
                 .order_by(QuestionPlacement.materialBlockId, QuestionPlacement.position)
             )
         ).all()
+        question_translations = await _question_translations_by_id(db, [q.id for _, q in placement_rows], locale)
         for placement, question in placement_rows:
-            questions_by_block.setdefault(placement.materialBlockId, []).extend(to_question_dtos(question, placement.id))
+            questions_by_block.setdefault(placement.materialBlockId, []).extend(
+                to_question_dtos(question, placement.id, question_translations.get(question.id))
+            )
 
+    block_translations = await _block_translations_by_id(db, block_ids, locale)
     result: dict[str, list[dict]] = {m.lessonId: [] for m in materials}
     for b in rows:
+        bt = block_translations.get(b.id)
         result[lesson_by_material[b.materialId]].append(
-            {"type": "block", "id": b.id, "title": b.title, "content": b.content, "questions": questions_by_block.get(b.id, [])}
+            {
+                "type": "block",
+                "id": b.id,
+                "title": bt.title if bt else b.title,
+                "content": bt.content if bt else b.content,
+                "questions": questions_by_block.get(b.id, []),
+            }
         )
     return result
 
 
-async def get_pool_questions_for_lesson_blocks(db: AsyncSession, lesson_block_ids: list[str]) -> dict[str, list[dict]]:
+async def _question_translations_by_id(db: AsyncSession, question_ids: list[str], locale: str | None) -> dict[str, QuestionTranslation]:
+    """`{questionId: the ONE translation row for `locale`}` (§ course content
+    language, 2026-09-04) — `locale=None` (every caller that hasn't opted
+    in yet) returns an empty map, so to_question_dtos falls through to the
+    base Question columns exactly as before."""
+    if not locale or not question_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(QuestionTranslation).where(QuestionTranslation.questionId.in_(question_ids), QuestionTranslation.locale == locale)
+        )
+    ).scalars().all()
+    return {r.questionId: r for r in rows}
+
+
+async def _block_translations_by_id(db: AsyncSession, block_ids: list[str], locale: str | None) -> dict[str, MaterialBlockTranslation]:
+    if not locale or not block_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(MaterialBlockTranslation).where(
+                MaterialBlockTranslation.materialBlockId.in_(block_ids), MaterialBlockTranslation.locale == locale
+            )
+        )
+    ).scalars().all()
+    return {r.materialBlockId: r for r in rows}
+
+
+async def get_pool_questions_for_lesson_blocks(db: AsyncSession, lesson_block_ids: list[str], locale: str | None = None) -> dict[str, list[dict]]:
     """Reusable-pool Questions placed in a quiz LessonBlock (minitest/
     practice/review), keyed by lessonBlockId — mirrors
     get_new_material_blocks's placement lookup exactly, just scoped to
@@ -232,9 +283,12 @@ async def get_pool_questions_for_lesson_blocks(db: AsyncSession, lesson_block_id
             .order_by(QuestionPlacement.lessonBlockId, QuestionPlacement.position)
         )
     ).all()
+    question_translations = await _question_translations_by_id(db, [q.id for _, q in placement_rows], locale)
     result: dict[str, list[dict]] = {}
     for placement, question in placement_rows:
-        result.setdefault(placement.lessonBlockId, []).extend(to_question_dtos(question, placement.id))
+        result.setdefault(placement.lessonBlockId, []).extend(
+            to_question_dtos(question, placement.id, question_translations.get(question.id))
+        )
     return result
 
 

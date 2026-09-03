@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../lesson_runner_controller.dart';
 import '../widgets/playback_time_tracker.dart';
 
@@ -61,6 +62,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
     final rawUrl = widget.graphNodeMediaUrl ? widget.mediaUrlOverride : data.content.videoUrl;
 
@@ -70,11 +72,11 @@ class _VideoStageState extends ConsumerState<VideoStage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Видео не найдено', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(l10n.videoStageNotFound, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('Для этого урока не загружено видео.', textAlign: TextAlign.center),
+            Text(l10n.videoStageNotUploaded, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: widget.onComplete, child: const Text('Пропустить и продолжить')),
+            ElevatedButton(onPressed: widget.onComplete, child: Text(l10n.lessonStageSkip)),
           ],
         ),
       );
@@ -107,7 +109,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Посмотрите видео', style: Theme.of(context).textTheme.headlineSmall),
+          Text(l10n.videoStageWatch, style: Theme.of(context).textTheme.headlineSmall),
           Text(_basename(rawUrl), style: Theme.of(context).textTheme.bodySmall),
           const SizedBox(height: 12),
           Expanded(
@@ -117,7 +119,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
           ),
           const SizedBox(height: 12),
           Text(
-            _watched ? '✓ Видео просмотрено' : 'Досмотрите видео до конца, чтобы продолжить',
+            _watched ? l10n.videoStageWatched : l10n.videoStageWatchToContinue,
             style: TextStyle(
               color: _watched ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -128,7 +130,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
             alignment: Alignment.centerRight,
             child: ElevatedButton(
               onPressed: _watched ? widget.onComplete : null,
-              child: Text(widget.nextLabel ?? 'Перейти к мини-тесту →'),
+              child: Text(widget.nextLabel ?? l10n.videoStageDefaultNextMinitest),
             ),
           ),
         ],

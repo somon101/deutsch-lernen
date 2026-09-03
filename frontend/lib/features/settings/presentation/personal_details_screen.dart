@@ -15,6 +15,17 @@ import '../../profile/presentation/widgets/profile_card.dart';
 
 const _usernamePattern = r'^[A-Za-z0-9_]{3,32}$';
 
+/// Falls back to "ru" when the app's locale has no `intl` date-symbol data
+/// of its own — the same gap as flutter_localizations (see
+/// core/locale/framework_locale_fallback.dart's docstring), just in a
+/// separate package with its own separate locale data, so it needed its own
+/// separate check: `intl` bundles zero symbol data for "tg" either,
+/// and DateFormat throws for a locale it has no data for.
+String _dateFormatLocale(BuildContext context) {
+  final locale = Localizations.localeOf(context).toString();
+  return DateFormat.localeExists(locale) ? locale : 'ru';
+}
+
 class PersonalDetailsScreen extends ConsumerStatefulWidget {
   const PersonalDetailsScreen({super.key});
 
@@ -226,7 +237,7 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
                         decoration: InputDecoration(labelText: l10n.personalDetailsBirthDate),
                         child: Text(
                           _birthDate != null
-                              ? DateFormat.yMMMMd(Localizations.localeOf(context).toString()).format(_birthDate!)
+                              ? DateFormat.yMMMMd(_dateFormatLocale(context)).format(_birthDate!)
                               : l10n.personalDetailsSelectDate,
                           style: ProfileTypography.body(context).copyWith(color: _birthDate != null ? c.text : c.textMuted),
                         ),

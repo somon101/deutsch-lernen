@@ -2,9 +2,12 @@ import 'dart:developer' as developer;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../auth/secure_storage.dart';
+import '../locale/locale_provider.dart';
 
 /// Fields that must never reach the debug log, no matter which endpoint
 /// they pass through (login, create-user, reset-password, ...).
@@ -56,7 +59,7 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  ApiClient(this._secureStorage) {
+  ApiClient(this._secureStorage, this._localeOf) {
     // 60s, not 15s: free-tier hosts (e.g. Render) sleep after ~15 min idle
     // and take 30-50s to wake on the next request — a short timeout fails
     // that very first request before the server even finishes starting up.
@@ -91,6 +94,11 @@ class ApiClient {
   }
 
   final SecureStorage _secureStorage;
+  // A getter, not a captured value: this client is a long-lived singleton
+  // (see apiClientProvider), so it must ask for the CURRENT locale each
+  // time it builds an error message, not freeze whatever locale was active
+  // when the provider first constructed it.
+  final Locale Function() _localeOf;
   late final Dio _dio;
 
   DioException _normalizeError(DioException error) {
@@ -110,20 +118,29 @@ class ApiClient {
     // The server never answered at all — classify by *why*, so "wrong
     // password" (a real response, handled above) is never confused with
     // "couldn't even reach the server" (no response at all).
-    message ??= switch (error.type) {
-      DioExceptionType.connectionTimeout ||
-      DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout =>
-        'Сервер не отвечает (превышено время ожидания). Проверьте интернет-соединение.',
-      DioExceptionType.connectionError => 'Нет соединения с сервером. Проверьте интернет и адрес сервера.',
-      DioExceptionType.badCertificate => 'Ошибка проверки сертификата сервера (SSL).',
-      DioExceptionType.cancel => 'Запрос отменён.',
-      _ => switch (error.response?.statusCode) {
-          null => 'Неизвестная ошибка сети',
-          >= 500 => 'Ошибка сервера. Попробуйте позже.',
-          _ => 'Ошибка сети',
-        },
-    };
+    //
+    // lookupAppLocalizations(Locale), not AppLocalizations.of(context): this
+    // client is a long-lived singleton created outside the widget tree, so
+    // there is no BuildContext here at all — this is the generated l10n
+    // package's own context-free lookup (§ interface localization,
+    // 2026-09-03).
+    if (message == null) {
+      final l10n = lookupAppLocalizations(_localeOf());
+      message = switch (error.type) {
+        DioExceptionType.connectionTimeout ||
+        DioExceptionType.sendTimeout ||
+        DioExceptionType.receiveTimeout =>
+          l10n.errorServerTimeout,
+        DioExceptionType.connectionError => l10n.errorConnectionFailed,
+        DioExceptionType.badCertificate => l10n.errorSslCertificate,
+        DioExceptionType.cancel => l10n.errorRequestCancelled,
+        _ => switch (error.response?.statusCode) {
+            null => l10n.errorUnknownNetwork,
+            >= 500 => l10n.errorServerError,
+            _ => l10n.errorNetworkGeneric,
+          },
+      };
+    }
     return error.copyWith(error: ApiException(error.response?.statusCode ?? 0, message));
   }
 
@@ -206,5 +223,11 @@ class ApiClient {
 }
 
 final apiClientProvider = Provider<ApiClient>((ref) {
-  return ApiClient(ref.watch(secureStorageProvider));
+  // `ref.read` inside the closure, not `ref.watch` on the outer provider:
+  // ApiClient is a long-lived singleton holding a live Dio instance, and
+  // watching localeProvider here would rebuild the whole client (and its
+  // interceptors) on every language change. The closure instead re-reads
+  // the current locale only at the moment an error message is actually
+  // built, which is exactly when it's needed.
+  return ApiClient(ref.watch(secureStorageProvider), () => ref.read(localeProvider) ?? const Locale('ru'));
 });

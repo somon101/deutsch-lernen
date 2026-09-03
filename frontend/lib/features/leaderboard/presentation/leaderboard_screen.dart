@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/back_guard.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../../social/data/social_repository.dart';
 import '../../social/presentation/widgets/user_list_row.dart';
@@ -43,6 +44,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final leaderboard = ref.watch(leaderboardProvider);
     final me = ref.watch(authProvider).value;
 
@@ -50,7 +52,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
       fallbackPath: '/',
       child: Scaffold(
         backgroundColor: c.bg,
-        appBar: AppBar(title: const Text('Рейтинг')),
+        appBar: AppBar(title: Text(l10n.leaderboardTitle)),
         body: Column(
           children: [
             Padding(
@@ -58,7 +60,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
               child: TextField(
                 controller: _searchController,
                 decoration: InputDecoration(
-                  hintText: 'Найти по нику или ID',
+                  hintText: l10n.leaderboardSearchHint,
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _query.isEmpty
                       ? null
@@ -81,10 +83,10 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                   ? _SearchResults(query: _query.trim(), onTap: _openProfile)
                   : leaderboard.when(
                       loading: () => const Center(child: CircularProgressIndicator()),
-                      error: (err, st) => Center(child: Text('Не удалось загрузить рейтинг: $err', style: ProfileTypography.body(context))),
+                      error: (err, st) => Center(child: Text(l10n.leaderboardLoadError(err), style: ProfileTypography.body(context))),
                       data: (board) {
                         if (board.entries.isEmpty) {
-                          return Center(child: Text('Пока нет участников рейтинга', style: ProfileTypography.body(context)));
+                          return Center(child: Text(l10n.leaderboardEmpty, style: ProfileTypography.body(context)));
                         }
                         return RefreshIndicator(
                           onRefresh: () async => ref.invalidate(leaderboardProvider),
@@ -122,13 +124,14 @@ class _SearchResults extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     final results = ref.watch(_searchResultsProvider(query));
     return results.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, st) => Center(child: Text('Не удалось выполнить поиск: $err', style: ProfileTypography.body(context))),
+      error: (err, st) => Center(child: Text(l10n.leaderboardSearchError(err), style: ProfileTypography.body(context))),
       data: (users) {
         if (users.isEmpty) {
-          return Center(child: Text('Пользователь не найден', style: ProfileTypography.body(context)));
+          return Center(child: Text(l10n.leaderboardUserNotFound, style: ProfileTypography.body(context)));
         }
         return ListView.builder(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),

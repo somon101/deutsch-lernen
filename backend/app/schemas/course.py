@@ -92,3 +92,36 @@ MediaKind = Literal["video", "audio"]
 class MediaReuseInput(BaseModel):
     kind: MediaKind
     url: str
+
+
+class CourseTranslationInput(BaseModel):
+    """One locale's variant of a Course's own text (§ course content
+    language, 2026-09-04). A full replace of that locale's row, not a
+    partial patch — a course/lesson translation is small enough that the
+    admin UI always edits it as one unit, so there is no "leave title
+    unchanged but clear description" case to support."""
+
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=4000)
+
+    @field_validator("title")
+    @classmethod
+    def _trim_title(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Название курса не может быть пустым")
+        return v
+
+
+class CourseLessonTranslationInput(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=4000)
+    materialText: str = Field(default="")
+
+    @field_validator("title")
+    @classmethod
+    def _trim_title(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Название урока не может быть пустым")
+        return v

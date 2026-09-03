@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../settings/sound_preferences.dart';
 import '../utils/word_audio.dart';
 
@@ -47,7 +48,7 @@ class _WordAudioButtonState extends ConsumerState<WordAudioButton> {
         size: widget.size,
         color: _playing ? Theme.of(context).colorScheme.primary : null,
       ),
-      tooltip: 'Прослушать произношение',
+      tooltip: AppLocalizations.of(context).wordAudioTooltip,
       onPressed: _handleTap,
     );
   }

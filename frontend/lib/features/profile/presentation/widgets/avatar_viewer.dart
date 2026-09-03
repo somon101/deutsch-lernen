@@ -10,6 +10,7 @@ import '../../../../core/auth/online_status_provider.dart';
 import '../../../../core/auth/user.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../../../core/utils/image_crop.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../profile_tokens.dart';
 
 enum _AvatarViewMode { normal, expanded }
@@ -336,7 +337,7 @@ class _NormalAvatar extends StatelessWidget {
         if (hasPhoto)
           TextButton(
             onPressed: busy ? null : onDelete,
-            child: Text('Удалить фото', style: ProfileTypography.caption(context).copyWith(color: c.danger)),
+            child: Text(AppLocalizations.of(context).avatarRemovePhoto, style: ProfileTypography.caption(context).copyWith(color: c.danger)),
           ),
       ],
     );
@@ -452,7 +453,10 @@ class _ExpandedBanner extends ConsumerWidget {
                       children: [
                         Container(width: 8, height: 8, decoration: BoxDecoration(color: online ? c.success : Colors.white38, shape: BoxShape.circle)),
                         const SizedBox(width: 6),
-                        Text(online ? 'в сети' : 'не в сети', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text(
+                          online ? AppLocalizations.of(context).avatarOnline : AppLocalizations.of(context).avatarOffline,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
                       ],
                     ),
                   ],

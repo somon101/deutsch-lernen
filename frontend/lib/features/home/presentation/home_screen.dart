@@ -10,6 +10,7 @@ import '../../courses/presentation/courses_overview.dart';
 import '../../courses/presentation/widgets/lesson_grid_card.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
+import '../../../l10n/app_localizations.dart';
 import 'widgets/lesson_download_gate.dart';
 
 /// Which language the lesson list below is showing — deliberately
@@ -45,7 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     _lastBackPress = now;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Нажмите ещё раз для выхода'), duration: Duration(seconds: 2)),
+      SnackBar(content: Text(AppLocalizations.of(context).homeExitConfirmation), duration: const Duration(seconds: 2)),
     );
   }
 
@@ -63,7 +64,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                child: Align(alignment: Alignment.centerLeft, child: Text('Язык', style: ProfileTypography.sectionTitle(sheetContext))),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(AppLocalizations.of(sheetContext).homeLanguagePickerTitle, style: ProfileTypography.sectionTitle(sheetContext)),
+                ),
               ),
               for (final lang in languages)
                 ListTile(
@@ -86,6 +90,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final themeMode = ref.watch(themeModeProvider);
     final languagesAsync = ref.watch(availableLanguagesProvider);
     final override = ref.watch(homeLanguageIdProvider);
+    final l10n = AppLocalizations.of(context);
 
     return PopScope(
       canPop: false,
@@ -98,7 +103,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           title: const Text('Deutsch Lernen'),
           actions: [
             IconButton(
-              tooltip: themeMode == ThemeMode.dark ? 'Светлая тема' : 'Тёмная тема',
+              tooltip: themeMode == ThemeMode.dark ? l10n.homeThemeLight : l10n.homeThemeDark,
               icon: Icon(themeMode == ThemeMode.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
               onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
             ),
@@ -106,10 +111,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         body: languagesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, st) => Center(child: Text('Не удалось загрузить языки: $err')),
+          error: (err, st) => Center(child: Text(l10n.homeLanguagesLoadError(err))),
           data: (languages) {
             if (languages.isEmpty) {
-              return const Center(child: Text('Курсы пока не опубликованы'));
+              return Center(child: Text(l10n.homeNoCourses));
             }
             final selectedId = languages.any((l) => l.id == override) ? override! : languages.first.id;
             final selected = languages.firstWhere((l) => l.id == selectedId);
@@ -121,7 +126,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 if (user != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                    child: Text('Привет, ${user.firstName}!', style: Theme.of(context).textTheme.titleLarge),
+                    child: Text(l10n.homeGreeting(user.firstName), style: Theme.of(context).textTheme.titleLarge),
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -148,10 +153,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Expanded(
                   child: lessonsAsync.when(
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (err, st) => Center(child: Text('Не удалось загрузить уроки: $err')),
+                    error: (err, st) => Center(child: Text(l10n.homeLessonsLoadError(err))),
                     data: (lessons) {
                       if (lessons.isEmpty) {
-                        return const Center(child: Text('Уроков пока нет'));
+                        return Center(child: Text(l10n.homeNoLessons));
                       }
                       return RefreshIndicator(
                         onRefresh: () async => ref.invalidate(homeLessonsProvider((id: selected.id, name: selected.name))),

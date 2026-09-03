@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
+import '../../../l10n/app_localizations.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -43,7 +44,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // shape mismatch, secure storage error, etc.) — every real network/
       // auth failure is an ApiException and caught above. Debug builds
       // show the real exception instead of guessing at a category.
-      setState(() => _error = kDebugMode ? 'Не удалось войти: $e' : 'Не удалось войти в аккаунт');
+      if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
+      setState(() => _error = kDebugMode ? l10n.authSignInFailedDebug(e) : l10n.authSignInFailed);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -51,6 +54,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -70,24 +74,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Войдите, чтобы продолжить обучение',
+                    l10n.authTagline,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
                     controller: _loginController,
-                    decoration: const InputDecoration(labelText: 'Логин или email'),
+                    decoration: InputDecoration(labelText: l10n.authLoginOrEmail),
                     autofillHints: const [AutofillHints.username],
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Введите логин' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty) ? l10n.authLoginRequired : null,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Пароль'),
+                    decoration: InputDecoration(labelText: l10n.authPasswordLabel),
                     obscureText: true,
                     autofillHints: const [AutofillHints.password],
-                    validator: (v) => (v == null || v.isEmpty) ? 'Введите пароль' : null,
+                    validator: (v) => (v == null || v.isEmpty) ? l10n.authPasswordRequired : null,
                     onFieldSubmitted: (_) => _submit(),
                   ),
                   if (_error != null) ...[
@@ -103,7 +107,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('Войти'),
+                        : Text(l10n.authSignIn),
                   ),
                 ],
               ),

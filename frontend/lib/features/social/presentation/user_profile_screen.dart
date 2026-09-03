@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/widgets/back_guard.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../profile/data/profile_gamification_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../../profile/presentation/widgets/level_card.dart';
@@ -46,13 +47,14 @@ class UserProfileScreen extends ConsumerWidget {
     // pop back there, not always jump to Рейтинг the way the original
     // go()-only leaderboard tap-through needed.
     final canPop = Navigator.of(context).canPop();
+    final l10n = AppLocalizations.of(context);
 
     return BackGuard(
       fallbackPath: '/leaderboard',
       child: Scaffold(
         backgroundColor: c.bg,
         appBar: AppBar(
-          title: const Text('Профиль'),
+          title: Text(l10n.socialProfileTitle),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: canPop ? () => context.pop() : () => context.go('/leaderboard'),
@@ -60,7 +62,7 @@ class UserProfileScreen extends ConsumerWidget {
         ),
         body: profile.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, st) => Center(child: Text('Не удалось загрузить профиль: $err', style: ProfileTypography.body(context))),
+          error: (err, st) => Center(child: Text(l10n.socialProfileLoadError(err), style: ProfileTypography.body(context))),
           data: (p) {
             final avatarUrl = ref.read(apiClientProvider).assetUrl(p.avatarUrl);
             final initials = ((p.firstName.isNotEmpty ? p.firstName[0] : '') + (p.lastName.isNotEmpty ? p.lastName[0] : '')).toUpperCase();
@@ -80,9 +82,9 @@ class UserProfileScreen extends ConsumerWidget {
                   Text('@${p.username}', style: ProfileTypography.caption(context)),
                   const SizedBox(height: 20),
                   StatRow(items: [
-                    StatRowItem(value: '${p.followersCount}', label: 'Подписчики', onTap: () => context.push('/users/${p.id}/followers')),
-                    StatRowItem(value: '${p.mutualCount}', label: 'Взаимные', onTap: () => context.push('/users/${p.id}/mutual')),
-                    StatRowItem(value: '${p.followingCount}', label: 'Подписки', onTap: () => context.push('/users/${p.id}/following')),
+                    StatRowItem(value: '${p.followersCount}', label: l10n.socialFollowers, onTap: () => context.push('/users/${p.id}/followers')),
+                    StatRowItem(value: '${p.mutualCount}', label: l10n.socialMutual, onTap: () => context.push('/users/${p.id}/mutual')),
+                    StatRowItem(value: '${p.followingCount}', label: l10n.socialFollowing, onTap: () => context.push('/users/${p.id}/following')),
                   ]),
                   const SizedBox(height: 20),
                   if (!p.isSelf) ...[
@@ -91,7 +93,7 @@ class UserProfileScreen extends ConsumerWidget {
                   ],
                   ref.watch(userStatsProvider(p.id)).when(
                         loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-                        error: (err, st) => Text('Не удалось загрузить статистику: $err', style: ProfileTypography.body(context)),
+                        error: (err, st) => Text(l10n.socialStatsLoadError(err), style: ProfileTypography.body(context)),
                         data: (s) => Column(
                           children: [
                             MetricsRow(
@@ -158,8 +160,9 @@ class _FollowButtonState extends ConsumerState<_FollowButton> {
       if (mounted) setState(() => _optimistic = updated.isFollowing);
     } catch (e) {
       if (mounted) {
-        final action = wasFollowing ? 'отписаться' : 'подписаться';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Не удалось $action: $e')));
+        final l10n = AppLocalizations.of(context);
+        final message = wasFollowing ? l10n.socialUnfollowError(e) : l10n.socialFollowError(e);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -168,17 +171,18 @@ class _FollowButtonState extends ConsumerState<_FollowButton> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final following = _following;
     return SizedBox(
       width: double.infinity,
       child: following
           ? OutlinedButton(
               onPressed: _busy ? null : _toggle,
-              child: Text(_busy ? 'Отписываемся…' : 'Отписаться'),
+              child: Text(_busy ? l10n.socialUnfollowing : l10n.socialUnfollow),
             )
           : FilledButton(
               onPressed: _busy ? null : _toggle,
-              child: Text(_busy ? 'Подписываемся…' : 'Подписаться'),
+              child: Text(_busy ? l10n.socialFollowingInProgress : l10n.socialFollow),
             ),
     );
   }

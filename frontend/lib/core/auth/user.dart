@@ -32,6 +32,7 @@ class AppUser {
     required this.lastLoginAt,
     required this.lastActiveAt,
     this.selectedLanguageId,
+    this.contentLocale,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -53,6 +54,7 @@ class AppUser {
         lastLoginAt: json['lastLoginAt'] as String?,
         lastActiveAt: json['lastActiveAt'] as String?,
         selectedLanguageId: json['selectedLanguageId'] as String?,
+        contentLocale: json['contentLocale'] as String?,
       );
 
   final String id;
@@ -70,6 +72,11 @@ class AppUser {
   final String? lastLoginAt;
   final String? lastActiveAt;
   final String? selectedLanguageId;
+  // Which locale a course's own text/media is shown in (§ course content
+  // language, 2026-09-04) — "ru" | "tg", independent of both the system UI
+  // language and selectedLanguageId (statistics scope). Null means no
+  // explicit choice yet; the UI falls back to defaultContentLocale.
+  final String? contentLocale;
 
   bool get isStaff => role == UserRole.admin || role == UserRole.teacher;
   bool get isAdmin => role == UserRole.admin;
@@ -90,5 +97,6 @@ class AppUser {
         'lastLoginAt': lastLoginAt,
         'lastActiveAt': lastActiveAt,
         'selectedLanguageId': selectedLanguageId,
+        'contentLocale': contentLocale,
       };
 }

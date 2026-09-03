@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/back_guard.dart';
+import '../../../l10n/app_localizations.dart';
 import '../domain/stage.dart';
 import 'graph_lesson_runner_screen.dart';
 import 'lesson_runner_controller.dart';
@@ -34,8 +35,8 @@ class LessonRunnerEntryScreen extends ConsumerWidget {
     return async.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, st) => Scaffold(
-        appBar: AppBar(title: const Text('Урок')),
-        body: Center(child: Text('Не удалось загрузить урок: $err')),
+        appBar: AppBar(title: Text(AppLocalizations.of(context).lessonTitle)),
+        body: Center(child: Text(AppLocalizations.of(context).lessonLoadError(err))),
       ),
       data: (data) => data.content.graph != null
           ? GraphLessonRunnerScreen(courseId: courseId, lessonId: lessonId, nodeId: stage)
@@ -68,8 +69,8 @@ class LessonRunnerScreen extends ConsumerWidget {
       child: async.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (err, st) => Scaffold(
-        appBar: AppBar(title: const Text('Урок')),
-        body: Center(child: Text('Не удалось загрузить урок: $err')),
+        appBar: AppBar(title: Text(AppLocalizations.of(context).lessonTitle)),
+        body: Center(child: Text(AppLocalizations.of(context).lessonLoadError(err))),
       ),
       data: (data) {
         final requestedStage = stageFromId(stage);
@@ -112,6 +113,7 @@ class _StageRail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SizedBox(
       height: 64,
       child: ListView(
@@ -131,7 +133,7 @@ class _StageRail extends StatelessWidget {
                   size: 18,
                   color: completed.contains(s) ? Colors.green : null,
                 ),
-                label: Text(stageLabels[s]!),
+                label: Text(stageLabel(s, l10n)),
                 backgroundColor: s == currentStage ? Theme.of(context).colorScheme.primaryContainer : null,
               ),
             ),

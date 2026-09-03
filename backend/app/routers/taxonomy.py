@@ -5,13 +5,16 @@ from app.auth.deps import require_auth, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
+from app.schemas.block import QuestionTranslationInput
 from app.schemas.lesson_state import ActivityTimeInput, DailyActivityInput
 from app.services import daily_goal as daily_goal_svc
+from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
 from app.schemas.taxonomy import (
     AnswerSubmitInput,
     LanguageInput,
     MaterialBlockInput,
     MaterialBlockReorderInput,
+    MaterialBlockTranslationInput,
     MaterialInput,
     MaterialUpdateInput,
     PlacementVerifiesBlockInput,
@@ -180,6 +183,18 @@ async def update_material_block(block_id: str, body: MaterialBlockInput, admin: 
     return {"block": _material_block_dto(block)}
 
 
+@router.put("/materials/blocks/{block_id}/translations/{locale}")
+async def put_material_block_translation(
+    block_id: str, locale: str, body: MaterialBlockTranslationInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)
+):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    block = await svc.set_material_block_translation(db, block_id, locale, body.title, body.content)
+    if not block:
+        raise ApiError(404, "Блок не найден")
+    return {"block": _material_block_dto(block)}
+
+
 @router.delete("/materials/blocks/{block_id}")
 async def delete_material_block(block_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
     ok = await svc.delete_material_block(db, block_id)
@@ -321,6 +336,18 @@ async def search_questions(
 async def create_question(body: QuestionCreateInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
     question, similar = await svc.create_question(db, body)
     return {"question": svc.question_dto(question), "similarWarnings": similar}
+
+
+@router.put("/questions/{question_id}/translations/{locale}")
+async def put_question_translation(
+    question_id: str, locale: str, body: QuestionTranslationInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)
+):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    question = await svc.set_question_translation(db, question_id, locale, body.prompt, body.options, body.correctAnswer, body.data)
+    if not question:
+        raise ApiError(404, "Вопрос не найден")
+    return {"question": svc.question_dto(question)}
 
 
 @router.post("/questions/reuse", status_code=201)

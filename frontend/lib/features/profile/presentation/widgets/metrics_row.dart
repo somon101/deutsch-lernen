@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../profile_tokens.dart';
 import 'profile_card.dart';
 
@@ -38,26 +39,27 @@ class MetricsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final totalMinutes = (timeSeconds ?? 0) ~/ 60;
     final hours = totalMinutes ~/ 60;
     final minutes = totalMinutes % 60;
     final items = [
-      (emoji: '🔥', icon: null, color: null, value: '$streakDays', label: 'Серия'),
+      (emoji: '🔥', icon: null, color: null, value: '$streakDays', label: l10n.metricsStreak),
       (
         emoji: null,
         icon: Icons.trending_up,
         color: c.success,
         value: progressPercent == null ? '—' : '$progressPercent%',
-        label: 'Прогресс',
+        label: l10n.metricsProgress,
       ),
       (
         emoji: null,
         icon: Icons.schedule,
         color: c.accent,
-        value: timeSeconds == null ? '—' : '$hoursч $minutesм',
-        label: 'Время',
+        value: timeSeconds == null ? '—' : l10n.metricsTimeFormat(hours, minutes),
+        label: l10n.metricsTime,
       ),
-      (emoji: null, icon: Icons.star, color: c.warning, value: '$points', label: 'Очки'),
+      (emoji: null, icon: Icons.star, color: c.warning, value: '$points', label: l10n.metricsPoints),
     ];
 
     return ProfileCard(

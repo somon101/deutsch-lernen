@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/locale/content_locale.dart';
+import '../../../../core/locale/locale_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/presentation/profile_tokens.dart';
@@ -350,8 +352,118 @@ class _LessonNameCardState extends ConsumerState<LessonNameCard> {
               child: const Text('Сохранить название'),
             ),
           ),
+          const SizedBox(height: AdminMetrics.cardGap),
+          _LessonTranslationsSection(courseId: widget.courseId, lesson: widget.lesson),
         ],
       ],
+    );
+  }
+}
+
+/// Lesson-level counterpart of _CourseTranslationsSection in
+/// builder_course_edit_screen.dart (§ course content language, 2026-09-04,
+/// spec §5) — same locale-tab pattern, plus the lesson's material text.
+/// Only meaningful for a lesson still on its flat fields, or a converted
+/// graph lesson's legacy rollback copy (see CourseLessonTranslation's
+/// docstring) — a graph lesson's real material-node content is localized
+/// through its own MaterialBlock editors instead, not built yet.
+class _LessonTranslationsSection extends ConsumerStatefulWidget {
+  const _LessonTranslationsSection({required this.courseId, required this.lesson});
+  final String courseId;
+  final AdminLesson lesson;
+
+  @override
+  ConsumerState<_LessonTranslationsSection> createState() => _LessonTranslationsSectionState();
+}
+
+class _LessonTranslationsSectionState extends ConsumerState<_LessonTranslationsSection> {
+  String _locale = supportedContentLocales.first;
+  late final _title = TextEditingController(text: widget.lesson.translations[_locale]?.title ?? '');
+  late final _description = TextEditingController(text: widget.lesson.translations[_locale]?.description ?? '');
+  late final _materialText = TextEditingController(text: widget.lesson.translations[_locale]?.materialText ?? '');
+  bool _busy = false;
+
+  void _switchLocale(String locale) {
+    final t = widget.lesson.translations[locale];
+    setState(() {
+      _locale = locale;
+      _title.text = t?.title ?? '';
+      _description.text = t?.description ?? '';
+      _materialText.text = t?.materialText ?? '';
+    });
+  }
+
+  Future<void> _save() async {
+    if (_title.text.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(builderRepositoryProvider).setLessonTranslation(
+            widget.courseId,
+            widget.lesson.id,
+            _locale,
+            title: _title.text.trim(),
+            description: _description.text.trim(),
+            materialText: _materialText.text,
+          );
+      ref.invalidate(builderCourseProvider(widget.courseId));
+      if (mounted) showSuccessSnack(context);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить перевод');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    _materialText.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Языковые версии урока', style: AdminTypography.cardTitle),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              for (final locale in supportedContentLocales)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(
+                      '${localeDisplayName(Locale(locale))}${widget.lesson.translations.containsKey(locale) ? '' : ' — нет перевода'}',
+                    ),
+                    selected: _locale == locale,
+                    onSelected: (_) => _switchLocale(locale),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _title, decoration: adminInputDecoration(label: 'Название урока')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _description, decoration: adminInputDecoration(label: 'Описание')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _materialText, maxLines: 8, decoration: adminInputDecoration(label: 'Текст урока (materialText)')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              style: AdminButtonStyles.primary(),
+              child: Text('Сохранить перевод (${localeDisplayName(Locale(_locale))})'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

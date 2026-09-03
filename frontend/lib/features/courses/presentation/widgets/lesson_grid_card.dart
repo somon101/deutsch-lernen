@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../courses_overview.dart';
 
 /// Mirrors the .lesson-card styling shared by Home.tsx/CourseLessonsPage.tsx
@@ -15,6 +16,7 @@ class LessonGridCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -39,7 +41,7 @@ class LessonGridCard extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                lesson.completed ? '✓ Урок завершён' : (lesson.ratio > 0 ? 'Продолжить' : 'Начать урок'),
+                lesson.completed ? l10n.lessonStatusCompleted : (lesson.ratio > 0 ? l10n.lessonStatusContinue : l10n.lessonStatusStart),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: lesson.completed ? Colors.green : theme.colorScheme.primary,
                   fontWeight: FontWeight.w600,

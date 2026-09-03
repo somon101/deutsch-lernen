@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
 import '../../../core/widgets/word_audio_button.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../../profile/presentation/widgets/profile_card.dart';
 import '../data/vocabulary_repository.dart';
@@ -18,21 +19,22 @@ class MyWordsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final words = ref.watch(myWordsProvider);
 
     return Scaffold(
       backgroundColor: c.bg,
-      appBar: AppBar(title: const Text('Мои слова')),
+      appBar: AppBar(title: Text(l10n.myWordsTitle)),
       body: words.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, st) => Center(child: Text('Не удалось загрузить слова: $err', style: ProfileTypography.body(context))),
+        error: (err, st) => Center(child: Text(l10n.myWordsLoadError(err), style: ProfileTypography.body(context))),
         data: (list) {
           if (list.isEmpty) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Пока нет изученных слов — они появятся здесь после завершения уроков.',
+                  l10n.myWordsEmpty,
                   textAlign: TextAlign.center,
                   style: ProfileTypography.body(context),
                 ),
@@ -42,7 +44,7 @@ class MyWordsScreen extends ConsumerWidget {
 
           final groups = <String, List<WordCard>>{};
           for (final w in list) {
-            final key = w.categoryName ?? 'Без категории';
+            final key = w.categoryName ?? l10n.myWordsUncategorized;
             groups.putIfAbsent(key, () => []).add(w);
           }
           final categoryNames = groups.keys.toList()..sort();

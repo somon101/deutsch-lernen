@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/utils/sound_effects.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../domain/progress.dart';
 import '../../domain/stage.dart';
 import '../lesson_runner_controller.dart';
@@ -64,13 +65,14 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
     _runSideEffectsOnce(data.progress.completedStages.contains(Stage.complete));
 
     final stats = [
-      (label: 'мини-тест', value: _pct(data.progress.miniTestResult), color: Colors.green),
-      (label: 'практика', value: _pct(data.progress.practiceResult), color: Theme.of(context).colorScheme.primary),
-      (label: 'закрепление', value: _pct(data.progress.reviewResult), color: Theme.of(context).colorScheme.primary),
+      (label: l10n.lessonCompleteMinitestLabel, value: _pct(data.progress.miniTestResult), color: Colors.green),
+      (label: l10n.lessonCompletePracticeLabel, value: _pct(data.progress.practiceResult), color: Theme.of(context).colorScheme.primary),
+      (label: l10n.lessonCompleteReviewLabel, value: _pct(data.progress.reviewResult), color: Theme.of(context).colorScheme.primary),
     ];
 
     return Padding(
@@ -80,10 +82,10 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
         children: [
           Icon(Icons.emoji_events, size: 56, color: Colors.amber.shade600),
           const SizedBox(height: 12),
-          Text('Отличная работа!', style: Theme.of(context).textTheme.headlineMedium),
+          Text(l10n.lessonCompleteTitle, style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 4),
           Text(
-            'Вы прошли все этапы урока «${data.content.title}». Вот ваши результаты:',
+            l10n.lessonCompleteSubtitleLinear(data.content.title),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -93,7 +95,7 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
             runSpacing: 20,
             alignment: WrapAlignment.center,
             children: [
-              _VocabCountCard(count: data.content.vocabulary.length),
+              _VocabCountCard(count: data.content.vocabulary.length, l10n: l10n),
               for (final s in stats) _RingStat(label: s.label, value: s.value, color: s.color),
             ],
           ),
@@ -102,10 +104,10 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
             spacing: 12,
             alignment: WrapAlignment.center,
             children: [
-              OutlinedButton(onPressed: () => context.go('/'), child: const Text('На главную')),
+              OutlinedButton(onPressed: () => context.go('/'), child: Text(l10n.forbiddenGoHome)),
               FilledButton(
                 onPressed: _restarting ? null : _restart,
-                child: Text(_restarting ? 'Начинаем…' : 'Пройти ещё раз'),
+                child: Text(_restarting ? l10n.lessonCompleteRestarting : l10n.lessonCompleteRestart),
               ),
             ],
           ),
@@ -116,8 +118,9 @@ class _CompleteStageState extends ConsumerState<CompleteStage> {
 }
 
 class _VocabCountCard extends StatelessWidget {
-  const _VocabCountCard({required this.count});
+  const _VocabCountCard({required this.count, required this.l10n});
   final int count;
+  final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
@@ -132,7 +135,7 @@ class _VocabCountCard extends StatelessWidget {
             builder: (context, value, _) => Text('$value', style: Theme.of(context).textTheme.headlineMedium),
           ),
           const SizedBox(height: 4),
-          const Text('слов изучено', textAlign: TextAlign.center),
+          Text(l10n.lessonCompleteWordsLearned, textAlign: TextAlign.center),
         ],
       ),
     );

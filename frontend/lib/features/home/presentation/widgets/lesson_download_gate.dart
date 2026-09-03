@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/api/api_client.dart';
 import '../../../../core/cache/image_prefetch.dart';
+import '../../../../l10n/app_localizations.dart';
 
 /// Pulls a lesson's word photos onto the device before the lesson opens
 /// (§ pre-download word photos, 2026-09-02).
@@ -56,6 +57,7 @@ class _DownloadSheetState extends State<_DownloadSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final value = _total == 0 ? null : _done / _total;
     return PopScope(
       canPop: false,
@@ -65,10 +67,10 @@ class _DownloadSheetState extends State<_DownloadSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Загружаем фото слов', style: Theme.of(context).textTheme.titleMedium),
+            Text(l10n.lessonDownloadTitle, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 6),
             Text(
-              'Один раз — дальше урок открывается мгновенно и работает без интернета.',
+              l10n.lessonDownloadSubtitle,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 18),
@@ -77,7 +79,7 @@ class _DownloadSheetState extends State<_DownloadSheet> {
               child: LinearProgressIndicator(value: value, minHeight: 6),
             ),
             const SizedBox(height: 10),
-            Text('$_done из $_total', style: Theme.of(context).textTheme.bodySmall),
+            Text(l10n.lessonDownloadProgress(_done, _total), style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerRight,
@@ -86,7 +88,7 @@ class _DownloadSheetState extends State<_DownloadSheet> {
                   setState(() => _cancelled = true);
                   Navigator.of(context).pop(false);
                 },
-                child: const Text('Отмена'),
+                child: Text(l10n.cancel),
               ),
             ),
           ],

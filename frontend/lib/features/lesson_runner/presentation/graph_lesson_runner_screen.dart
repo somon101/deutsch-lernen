@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/sound_effects.dart';
 import '../../../core/widgets/back_guard.dart';
+import '../../../l10n/app_localizations.dart';
 import '../data/lesson_repository.dart';
 import '../domain/exercise.dart';
 import '../domain/lesson_content.dart';
 import '../domain/lesson_graph.dart';
+import '../domain/stage.dart' show Stage, stageLabel;
 import 'lesson_runner_controller.dart';
 import 'stages/audio_stage.dart';
 import 'stages/exercise_stage.dart';
@@ -17,15 +19,17 @@ import 'stages/vocabulary_stage.dart';
 
 const _kComplete = 'complete';
 
-const Map<String, String> _typeLabels = {
-  'vocabulary': 'Слова',
-  'material': 'Материал',
-  'video': 'Видео',
-  'audio': 'Аудио',
-  'minitest': 'Мини-тест',
-  'practice': 'Практика',
-  'review': 'Закрепление',
-};
+// A graph node's `type` string is spelled identically to a Stage enum name
+// (see NODE_TYPES in the backend and Stage in domain/stage.dart), so the
+// SAME localized labels apply — reusing stageLabel here instead of a second
+// map keeps them from ever drifting apart (§ interface localization,
+// 2026-09-03).
+String? _typeLabel(String type, AppLocalizations l10n) {
+  for (final s in Stage.values) {
+    if (s.name == type) return stageLabel(s, l10n);
+  }
+  return null;
+}
 
 /// Student runner for a converted lesson (§ lesson graph, 2026-09-03) —
 /// executes the graph the teacher built instead of a fixed chain: the URL's
@@ -55,8 +59,8 @@ class GraphLessonRunnerScreen extends ConsumerWidget {
       child: async.when(
         loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
         error: (err, st) => Scaffold(
-          appBar: AppBar(title: const Text('Урок')),
-          body: Center(child: Text('Не удалось загрузить урок: $err')),
+          appBar: AppBar(title: Text(AppLocalizations.of(context).lessonTitle)),
+          body: Center(child: Text(AppLocalizations.of(context).lessonLoadError(err))),
         ),
         data: (data) {
           final flat = flattenGraph(data.content.graph!);
@@ -176,6 +180,7 @@ class _GraphNodeBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     void onComplete() => _completeAndAdvance(context, ref);
+    final l10n = AppLocalizations.of(context);
 
     switch (node.type) {
       case 'vocabulary':
@@ -192,7 +197,7 @@ class _GraphNodeBody extends ConsumerWidget {
           onComplete: onComplete,
           graphNodeMediaUrl: true,
           mediaUrlOverride: node.mediaUrl,
-          nextLabel: _nextLabel(),
+          nextLabel: _nextLabel(l10n),
         );
       case 'audio':
         return AudioStage(
@@ -200,14 +205,14 @@ class _GraphNodeBody extends ConsumerWidget {
           onComplete: onComplete,
           graphNodeMediaUrl: true,
           mediaUrlOverride: node.mediaUrl,
-          nextLabel: _nextLabel(),
+          nextLabel: _nextLabel(l10n),
         );
       case 'material':
         return FutureBuilder<List<MaterialBlock>>(
           future: ref.read(lessonRepositoryProvider).fetchMaterialBlocksForNode(node.refId!),
           builder: (context, snapshot) {
             if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-            return MaterialStage(runnerKey: runnerKey, onComplete: onComplete, materialOverride: snapshot.data, nextLabel: _nextLabel());
+            return MaterialStage(runnerKey: runnerKey, onComplete: onComplete, materialOverride: snapshot.data, nextLabel: _nextLabel(l10n));
           },
         );
       case 'minitest':
@@ -222,13 +227,13 @@ class _GraphNodeBody extends ConsumerWidget {
           onComplete: onComplete,
         );
       default:
-        return Center(child: Text('Неизвестный тип блока: ${node.type}'));
+        return Center(child: Text(l10n.lessonUnknownBlockType(node.type)));
     }
   }
 
-  String? _nextLabel() {
+  String? _nextLabel(AppLocalizations l10n) {
     final next = _next;
-    return next == null ? 'Завершить урок' : 'Далее: ${next.title} →';
+    return next == null ? l10n.lessonFinish : l10n.lessonNext(next.title);
   }
 }
 
@@ -275,6 +280,7 @@ class _GraphCompleteScreenState extends ConsumerState<_GraphCompleteScreen> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(graphLessonRunnerControllerProvider(widget.runnerKey)).value!;
+    final l10n = AppLocalizations.of(context);
     _runSideEffectsOnce(data.progress.completedAt != null);
 
     final byType = <String, ({int correct, int total})>{};
@@ -295,10 +301,10 @@ class _GraphCompleteScreenState extends ConsumerState<_GraphCompleteScreen> {
           children: [
             Icon(Icons.emoji_events, size: 56, color: Colors.amber.shade600),
             const SizedBox(height: 12),
-            Text('Отличная работа!', style: Theme.of(context).textTheme.headlineMedium),
+            Text(l10n.lessonCompleteTitle, style: Theme.of(context).textTheme.headlineMedium),
             const SizedBox(height: 4),
             Text(
-              'Вы прошли урок «${data.content.title}». Вот ваши результаты:',
+              l10n.lessonCompleteSubtitleGraph(data.content.title),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -308,10 +314,10 @@ class _GraphCompleteScreenState extends ConsumerState<_GraphCompleteScreen> {
               runSpacing: 20,
               alignment: WrapAlignment.center,
               children: [
-                _StatCard(label: 'слов изучено', value: '${data.content.vocabulary.length}'),
+                _StatCard(label: l10n.lessonCompleteWordsLearned, value: '${data.content.vocabulary.length}'),
                 for (final entry in byType.entries)
                   _StatCard(
-                    label: _typeLabels[entry.key] ?? entry.key,
+                    label: _typeLabel(entry.key, l10n) ?? entry.key,
                     value: entry.value.total > 0 ? '${((entry.value.correct / entry.value.total) * 100).round()}%' : '—',
                   ),
               ],
@@ -321,10 +327,10 @@ class _GraphCompleteScreenState extends ConsumerState<_GraphCompleteScreen> {
               spacing: 12,
               alignment: WrapAlignment.center,
               children: [
-                OutlinedButton(onPressed: () => context.go('/'), child: const Text('На главную')),
+                OutlinedButton(onPressed: () => context.go('/'), child: Text(l10n.forbiddenGoHome)),
                 FilledButton(
                   onPressed: _restarting ? null : _restart,
-                  child: Text(_restarting ? 'Начинаем…' : 'Пройти ещё раз'),
+                  child: Text(_restarting ? l10n.lessonCompleteRestarting : l10n.lessonCompleteRestart),
                 ),
               ],
             ),

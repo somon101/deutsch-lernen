@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../../leaderboard/data/leaderboard_repository.dart';
 import '../profile_tokens.dart';
 import 'profile_card.dart';
@@ -17,6 +18,7 @@ class RankCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     // Rank 1 always reads as "Топ 1%" — the single best position shouldn't
     // show a worse-looking number just because the pool is still small
     // (e.g. 1st of 8 is mathematically the "top 13%", which reads as wrong
@@ -41,7 +43,7 @@ class RankCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Ваш рейтинг', style: ProfileTypography.caption(context)),
+              Text(l10n.rankCardTitle, style: ProfileTypography.caption(context)),
               const SizedBox(height: 2),
               Row(
                 mainAxisSize: MainAxisSize.min,
@@ -82,8 +84,8 @@ class RankCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _RankFact(value: 'Топ $topPercent%', label: 'Глобально', alignEnd: false),
-                    _RankFact(value: 'из ${summary.totalParticipants}', label: 'Среди всех студентов', alignEnd: true),
+                    _RankFact(value: l10n.rankTop(topPercent), label: l10n.rankGlobal, alignEnd: false),
+                    _RankFact(value: l10n.rankOutOf(summary.totalParticipants), label: l10n.rankAmongAllStudents, alignEnd: true),
                   ],
                 ),
               ],

@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import ApiError
 from app.models.course import Course
+from app.models.course_lesson_media import CourseLessonMedia
+from app.models.course_lesson_translation import CourseLessonTranslation
+from app.models.course_translation import CourseTranslation
 from app.models.enums import CourseStatus
 from app.models.course_lesson import CourseLesson
 from app.models.language import Language
@@ -21,14 +24,19 @@ from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
 from app.models.lesson_edge import LessonEdge
 from app.models.lesson_node import LessonNode
+from app.models.lesson_node_media import LessonNodeMedia
 from app.models.lesson_question import LessonQuestion
 from app.models.level import Level
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
+from app.models.material_block_translation import MaterialBlockTranslation
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
+from app.models.question_translation import QuestionTranslation
 from app.models.vocabulary_item import VocabularyItem
+from app.models.vocabulary_translation import VocabularyTranslation
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
+from app.services.content_locale import DEFAULT_CONTENT_LOCALE, SUPPORTED_CONTENT_LOCALES, translations_by_locale
 from app.services.lesson_graph import bulk_graphs_for_lessons
 from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
 from app.services.vocabulary import get_or_create_category
@@ -94,13 +102,52 @@ async def list_courses(db: AsyncSession, language_id: str | None = None) -> list
     ]
 
 
-async def get_course(db: AsyncSession, course_id: str) -> dict | None:
+async def get_course(db: AsyncSession, course_id: str, locale: str | None = None) -> dict | None:
+    """`locale` (§ course content language, 2026-09-04) is optional and
+    additive: omitted (every existing caller, e.g. the admin course
+    builder), the returned "title"/"description"/"materialText" fields are
+    exactly the base Course/CourseLesson columns, byte-for-byte as before —
+    just with a new "translations" dict alongside them so an editor can see
+    every locale at once. Passed (the student-facing path), those three
+    fields are overridden with the requested locale's text where a
+    CourseTranslation/CourseLessonTranslation row exists; where one does
+    not, the base (original-language) text is used as a visible, flagged
+    fallback (see "contentLocaleComplete") rather than a blank field —
+    required text a learner has never seen a real translation for is still
+    better shown than hidden, but the incompleteness is never silent."""
     course = await db.get(Course, course_id)
     if not course:
         return None
     lessons_result = await db.execute(select(CourseLesson).where(CourseLesson.courseId == course_id).order_by(CourseLesson.position))
     lessons = lessons_result.scalars().all()
     lesson_ids = [l.id for l in lessons]
+
+    course_translations = translations_by_locale(
+        (await db.execute(select(CourseTranslation).where(CourseTranslation.courseId == course_id))).scalars().all()
+    )
+    lesson_translations_result = (
+        (await db.execute(select(CourseLessonTranslation).where(CourseLessonTranslation.courseLessonId.in_(lesson_ids))))
+        .scalars()
+        .all()
+        if lesson_ids
+        else []
+    )
+    lesson_translations_by_lesson: dict[str, dict[str, CourseLessonTranslation]] = {}
+    for row in lesson_translations_result:
+        lesson_translations_by_lesson.setdefault(row.courseLessonId, {})[row.locale] = row
+
+    # CourseLessonMedia (§ course content language, 2026-09-04) — only for
+    # the requested locale, keyed by (lessonId, mediaType), since that's all
+    # a resolved read ever needs (unlike translations, no admin editor for
+    # this exists yet, so there is no "every locale" case to support here).
+    lesson_media_by_lesson_type: dict[tuple[str, str], str] = {}
+    if locale and lesson_ids:
+        media_rows = (
+            await db.execute(
+                select(CourseLessonMedia).where(CourseLessonMedia.courseLessonId.in_(lesson_ids), CourseLessonMedia.locale == locale)
+            )
+        ).scalars().all()
+        lesson_media_by_lesson_type = {(m.courseLessonId, m.mediaType): m.url for m in media_rows}
 
     words = (
         (await db.execute(select(VocabularyItem).where(VocabularyItem.lessonId.in_(lesson_ids)).order_by(VocabularyItem.position)))
@@ -109,6 +156,17 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         if lesson_ids
         else []
     )
+    word_ids = [w.id for w in words]
+    word_translations_result = (
+        (await db.execute(select(VocabularyTranslation).where(VocabularyTranslation.vocabularyItemId.in_(word_ids))))
+        .scalars()
+        .all()
+        if word_ids
+        else []
+    )
+    word_translations_by_word: dict[str, dict[str, VocabularyTranslation]] = {}
+    for row in word_translations_result:
+        word_translations_by_word.setdefault(row.vocabularyItemId, {})[row.locale] = row
     questions = (
         (
             await db.execute(
@@ -138,36 +196,57 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
         new_vocab_keys_by_lesson[lesson.id] = set(taught_so_far)
         taught_so_far |= {w.germanKey for w in words if w.lessonId == lesson.id}
 
-    new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids)
-    pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks])
-    graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids)
+    new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids, locale)
+    pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks], locale)
+    graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids, locale)
 
     def lesson_dto(lesson: CourseLesson) -> dict:
         lesson_words = [w for w in words if w.lessonId == lesson.id]
         lesson_questions = [q for q in questions if q.lessonId == lesson.id]
         lesson_blocks = [b for b in blocks if b.lessonId == lesson.id]
-        vocabulary_dtos = [
-            {
+        def word_dto(w: VocabularyItem) -> dict:
+            w_t = word_translations_by_word.get(w.id, {})
+            w_resolved = w_t.get(locale) if locale else None
+            return {
                 "id": w.id,
                 "german": w.german,
-                "translation": w.translation,
+                "translation": w_resolved.translation if w_resolved else w.translation,
                 "pronunciation": w.pronunciation,
                 "audioUrl": w.audioUrl,
                 "imageUrl": w.imageUrl,
+                "translations": {loc: {"translation": row.translation} for loc, row in w_t.items()},
+                # RU is always "complete" via the base column itself, even
+                # with no explicit VocabularyTranslation('ru') row — that
+                # column IS today's Russian text, not a fallback standing in
+                # for one. Only a non-default locale needs an explicit row.
+                "contentLocaleComplete": (locale == DEFAULT_CONTENT_LOCALE or w_resolved is not None) if locale else None,
             }
-            for w in lesson_words
-        ]
+
+        vocabulary_dtos = [word_dto(w) for w in lesson_words]
         parsed_material = parse_material(lesson.materialText, vocabulary_dtos)
         new_blocks = new_material_by_lesson.get(lesson.id)
+        lesson_t = lesson_translations_by_lesson.get(lesson.id, {})
+        resolved = lesson_t.get(locale) if locale else None
+        title = resolved.title if resolved else lesson.title
+        description = resolved.description if resolved else lesson.description
+        material_text = resolved.materialText if resolved else lesson.materialText
+        if resolved and resolved.materialText:
+            parsed_material = parse_material(resolved.materialText, vocabulary_dtos)
         return {
             "id": lesson.id,
-            "title": lesson.title,
-            "description": lesson.description,
-            "materialText": lesson.materialText,
+            "title": title,
+            "description": description,
+            "materialText": material_text,
+            "translations": {
+                loc: {"title": row.title, "description": row.description, "materialText": row.materialText}
+                for loc, row in lesson_t.items()
+            },
+            # See the identical comment on the word-level flag above.
+            "contentLocaleComplete": (locale == DEFAULT_CONTENT_LOCALE or resolved is not None) if locale else None,
             "material": new_blocks if new_blocks is not None else parsed_material["blocks"],
             "phrases": parsed_material["phrases"],
-            "videoUrl": lesson.videoUrl,
-            "audioUrl": lesson.audioUrl,
+            "videoUrl": lesson_media_by_lesson_type.get((lesson.id, "video"), lesson.videoUrl),
+            "audioUrl": lesson_media_by_lesson_type.get((lesson.id, "audio"), lesson.audioUrl),
             "position": lesson.position,
             # None means this lesson is still on the old fixed 8-stage chain
             # (never converted) — the client's existing Stage-enum runner and
@@ -204,10 +283,14 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
             ],
         }
 
+    course_resolved = course_translations.get(locale) if locale else None
     return {
         "id": course.id,
-        "title": course.title,
-        "description": course.description,
+        "title": course_resolved.title if course_resolved else course.title,
+        "description": course_resolved.description if course_resolved else course.description,
+        "translations": {loc: {"title": row.title, "description": row.description} for loc, row in course_translations.items()},
+        # See the identical comment on the word-level flag above.
+        "contentLocaleComplete": (locale == DEFAULT_CONTENT_LOCALE or course_resolved is not None) if locale else None,
         "coverUrl": course.coverUrl,
         "status": course.status.value,
         "position": course.position,
@@ -274,6 +357,47 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
     edge_query = select(func.max(LessonEdge.createdAt), func.count()).select_from(LessonEdge).join(LessonNode, LessonNode.id == LessonEdge.fromNodeId).where(LessonNode.courseId == course_id)
     edge_max_created, edge_count = (await db.execute(edge_query)).one()
 
+    # Course content language (§ course content language, 2026-09-04) — a
+    # translation/media-variant edit touches none of the columns/counts
+    # above, so without this a client's cached course would never notice a
+    # teacher adding or updating a Tajik translation.
+    translation_max_updated = await db.scalar(
+        select(func.max(CourseTranslation.updatedAt)).where(CourseTranslation.courseId == course_id)
+    )
+    lesson_translation_max_updated = await db.scalar(
+        select(func.max(CourseLessonTranslation.updatedAt))
+        .join(CourseLesson, CourseLesson.id == CourseLessonTranslation.courseLessonId)
+        .where(CourseLesson.courseId == course_id)
+    )
+    vocab_translation_max_updated = await db.scalar(
+        select(func.max(VocabularyTranslation.updatedAt))
+        .join(VocabularyItem, VocabularyItem.id == VocabularyTranslation.vocabularyItemId)
+        .where(VocabularyItem.courseId == course_id)
+    )
+    block_translation_max_updated = await db.scalar(
+        select(func.max(MaterialBlockTranslation.updatedAt))
+        .join(MaterialBlock, MaterialBlock.id == MaterialBlockTranslation.materialBlockId)
+        .join(Material, Material.id == MaterialBlock.materialId)
+        .where(Material.courseId == course_id)
+    )
+    question_translation_max_updated = await db.scalar(
+        select(func.max(QuestionTranslation.updatedAt))
+        .select_from(QuestionTranslation)
+        .join(QuestionPlacement, QuestionPlacement.questionId == QuestionTranslation.questionId)
+        .outerjoin(LessonBlock, LessonBlock.id == QuestionPlacement.lessonBlockId)
+        .outerjoin(MaterialBlock, MaterialBlock.id == QuestionPlacement.materialBlockId)
+        .outerjoin(Material, Material.id == MaterialBlock.materialId)
+        .where(or_(LessonBlock.courseId == course_id, Material.courseId == course_id))
+    )
+    node_media_max_updated = await db.scalar(
+        select(func.max(LessonNodeMedia.updatedAt)).join(LessonNode, LessonNode.id == LessonNodeMedia.lessonNodeId).where(LessonNode.courseId == course_id)
+    )
+    lesson_media_max_updated = await db.scalar(
+        select(func.max(CourseLessonMedia.updatedAt))
+        .join(CourseLesson, CourseLesson.id == CourseLessonMedia.courseLessonId)
+        .where(CourseLesson.courseId == course_id)
+    )
+
     fingerprint = "|".join(
         str(v)
         for v in (
@@ -286,6 +410,13 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
             material_block_count,
             pool_question_max_updated,
             pool_question_count,
+            translation_max_updated,
+            lesson_translation_max_updated,
+            vocab_translation_max_updated,
+            block_translation_max_updated,
+            question_translation_max_updated,
+            node_media_max_updated,
+            lesson_media_max_updated,
             node_max_updated,
             node_count,
             edge_max_created,
@@ -302,6 +433,13 @@ async def create_course(db: AsyncSession, title: str, description: str | None, s
     # straight into PUBLISHED must not skip the level check.
     if (status or CourseStatus.DRAFT) == CourseStatus.PUBLISHED and not level_id:
         raise ApiError(400, "Укажите уровень курса — без него ученики не увидят курс")
+    # A brand-new course cannot have a CourseTranslation row yet (that needs
+    # the course's own id first) — so this can never actually be satisfied,
+    # meaning a course can never be created directly as PUBLISHED, only
+    # DRAFT then published later once its Tajik title exists. See
+    # update_course's identical check for the real rule and rationale.
+    if (status or CourseStatus.DRAFT) == CourseStatus.PUBLISHED:
+        raise ApiError(400, "Добавьте таджикский перевод названия курса — без него курс нельзя опубликовать")
     last = await db.scalar(select(Course.position).order_by(Course.position.desc()).limit(1))
     course = Course(
         title=title,
@@ -340,6 +478,22 @@ async def update_course(db: AsyncSession, course_id: str, changes: dict) -> dict
         resulting_level = changes["levelId"] if "levelId" in changes else course.levelId
         if resulting_status == "PUBLISHED" and not resulting_level:
             raise ApiError(400, "Укажите уровень курса — без него ученики не увидят курс")
+
+    # Course content language (§ course content language, 2026-09-04) —
+    # same grandfathering shape as the levelId rule just above: only the
+    # ACT of transitioning into PUBLISHED is judged (course.status was not
+    # already PUBLISHED), never a later, unrelated edit to an already-live
+    # course. RU needs no explicit row (Course.title/description already
+    # ARE the Russian text); only TG must exist and be non-empty. This
+    # blocks the course level only — lesson/word/material/question
+    # completeness is surfaced to the admin UI via "contentLocaleComplete"
+    # but not yet enforced as a hard publish gate (§ see push report).
+    if changes.get("status") == "PUBLISHED" and course.status != CourseStatus.PUBLISHED:
+        tg = (
+            await db.execute(select(CourseTranslation).where(CourseTranslation.courseId == course_id, CourseTranslation.locale == "tg"))
+        ).scalar_one_or_none()
+        if not tg or not tg.title.strip():
+            raise ApiError(400, "Добавьте таджикский перевод названия курса — без него курс нельзя опубликовать")
 
     for field, value in changes.items():
         setattr(course, field, value)
@@ -455,11 +609,93 @@ async def set_lesson_media(db: AsyncSession, course_id: str, lesson_id: str, kin
     return await get_course(db, course_id)
 
 
+async def set_lesson_media_translation(
+    db: AsyncSession, course_id: str, lesson_id: str, kind: str, locale: str, url: str | None
+) -> dict | None:
+    """One locale's variant of a legacy-flat-field lesson's video/audio (§
+    course content language, 2026-09-04) — writes CourseLessonMedia, never
+    the base videoUrl/audioUrl column itself. See LessonNodeMedia's
+    docstring for the identical clone-as-placeholder convention this
+    mirrors for the non-graph lesson path."""
+    lesson = (
+        await db.execute(select(CourseLesson).where(CourseLesson.id == lesson_id, CourseLesson.courseId == course_id))
+    ).scalar_one_or_none()
+    if not lesson:
+        return None
+    existing = (
+        await db.execute(
+            select(CourseLessonMedia).where(
+                CourseLessonMedia.courseLessonId == lesson_id, CourseLessonMedia.mediaType == kind, CourseLessonMedia.locale == locale
+            )
+        )
+    ).scalar_one_or_none()
+    if url is None:
+        if existing:
+            await db.delete(existing)
+    elif existing:
+        existing.url = url
+    else:
+        db.add(CourseLessonMedia(courseLessonId=lesson_id, mediaType=kind, locale=locale, url=url))
+    await db.commit()
+    return await get_course(db, course_id)
+
+
 async def set_course_cover(db: AsyncSession, course_id: str, url: str | None) -> dict | None:
     course = await db.get(Course, course_id)
     if not course:
         return None
     course.coverUrl = url
+    await db.commit()
+    return await get_course(db, course_id)
+
+
+async def set_course_translation(db: AsyncSession, course_id: str, locale: str, title: str, description: str) -> dict | None:
+    """Upsert (§ course content language, 2026-09-04) — a teacher re-saving
+    the same locale's tab just overwrites its own row; the unique
+    (courseId, locale) constraint is what makes "does a row already exist"
+    safe to check-then-write without a race, since only one admin edits a
+    given course at a time in practice and a lost update here just means
+    re-saving."""
+    course = await db.get(Course, course_id)
+    if not course:
+        return None
+    existing = (
+        await db.execute(select(CourseTranslation).where(CourseTranslation.courseId == course_id, CourseTranslation.locale == locale))
+    ).scalar_one_or_none()
+    if existing:
+        existing.title = title
+        existing.description = description
+    else:
+        db.add(CourseTranslation(courseId=course_id, locale=locale, title=title, description=description))
+    await db.commit()
+    return await get_course(db, course_id)
+
+
+async def set_lesson_translation(
+    db: AsyncSession, course_id: str, lesson_id: str, locale: str, title: str, description: str, material_text: str
+) -> dict | None:
+    lesson = (
+        await db.execute(select(CourseLesson).where(CourseLesson.id == lesson_id, CourseLesson.courseId == course_id))
+    ).scalar_one_or_none()
+    if not lesson:
+        return None
+    existing = (
+        await db.execute(
+            select(CourseLessonTranslation).where(
+                CourseLessonTranslation.courseLessonId == lesson_id, CourseLessonTranslation.locale == locale
+            )
+        )
+    ).scalar_one_or_none()
+    if existing:
+        existing.title = title
+        existing.description = description
+        existing.materialText = material_text
+    else:
+        db.add(
+            CourseLessonTranslation(
+                courseLessonId=lesson_id, locale=locale, title=title, description=description, materialText=material_text
+            )
+        )
     await db.commit()
     return await get_course(db, course_id)
 
@@ -683,6 +919,29 @@ async def update_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: st
             raise
         clashes_now = await _find_word_clashes(db, course_id, [new_german_key or word.germanKey], word_id)
         raise DuplicateWordError(_clash_message(clashes_now))
+    return {"ok": True}
+
+
+async def set_vocabulary_translation(
+    db: AsyncSession, course_id: str, lesson_id: str, word_id: str, locale: str, translation: str
+) -> dict | None:
+    """Only `translation` varies by locale — see VocabularyTranslation's
+    docstring for why `german`/`pronunciation` stay put. Same upsert
+    pattern as set_course_translation."""
+    result = await db.execute(select(VocabularyItem).where(VocabularyItem.id == word_id, VocabularyItem.lessonId == lesson_id, VocabularyItem.courseId == course_id))
+    word = result.scalar_one_or_none()
+    if not word:
+        return None
+    existing = (
+        await db.execute(
+            select(VocabularyTranslation).where(VocabularyTranslation.vocabularyItemId == word_id, VocabularyTranslation.locale == locale)
+        )
+    ).scalar_one_or_none()
+    if existing:
+        existing.translation = translation
+    else:
+        db.add(VocabularyTranslation(vocabularyItemId=word_id, locale=locale, translation=translation))
+    await db.commit()
     return {"ok": True}
 
 

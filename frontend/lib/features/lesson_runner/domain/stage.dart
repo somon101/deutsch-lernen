@@ -1,3 +1,5 @@
+import '../../../l10n/app_localizations.dart';
+
 /// Exact port of src/progress/types.ts's stage machinery — same 8 fixed
 /// stages, same order, same unlock rule (a stage is unlocked iff the
 /// immediately-preceding one is complete).
@@ -5,16 +7,20 @@ enum Stage { vocabulary, material, video, minitest, audio, practice, review, com
 
 const stageOrder = Stage.values;
 
-const Map<Stage, String> stageLabels = {
-  Stage.vocabulary: 'Слова',
-  Stage.material: 'Материал',
-  Stage.video: 'Видео',
-  Stage.minitest: 'Мини-тест',
-  Stage.audio: 'Аудио',
-  Stage.practice: 'Практика',
-  Stage.review: 'Закрепление',
-  Stage.complete: 'Итог',
-};
+/// A function, not the `const Map<Stage, String>` this used to be — a const
+/// expression can't hold a locale-dependent value (§ interface localization,
+/// 2026-09-03), so the label is looked up fresh from the current
+/// AppLocalizations instead of frozen at compile time.
+String stageLabel(Stage stage, AppLocalizations l10n) => switch (stage) {
+      Stage.vocabulary => l10n.stageVocabulary,
+      Stage.material => l10n.stageMaterial,
+      Stage.video => l10n.stageVideo,
+      Stage.minitest => l10n.stageMinitest,
+      Stage.audio => l10n.stageAudio,
+      Stage.practice => l10n.stagePractice,
+      Stage.review => l10n.stageReview,
+      Stage.complete => l10n.stageComplete,
+    };
 
 Stage? stageFromId(String id) {
   for (final s in Stage.values) {

@@ -43,11 +43,13 @@ class LocaleNotifier extends Notifier<Locale?> {
 
 final localeProvider = NotifierProvider<LocaleNotifier, Locale?>(LocaleNotifier.new);
 
-/// Display names for the language picker — one entry per supported locale,
-/// in Russian since that's the only shipped UI language today. Falls back
-/// to the language code itself for any locale added without an entry here.
+/// Display names for the language picker — a small flag plus the language's
+/// own native name (§ interface localization, 2026-09-03: shown in every UI
+/// language, not just Russian, since a learner switching TO Tajik must still
+/// recognize the Tajik option by name). Falls back to the bare language code
+/// for any locale added without an entry here.
 String localeDisplayName(Locale locale) => switch (locale.languageCode) {
-      'ru' => 'Русский',
-      'en' => 'English',
+      'ru' => '🇷🇺 Русский',
+      'tg' => '🇹🇯 Тоҷикӣ',
       _ => locale.languageCode,
     };

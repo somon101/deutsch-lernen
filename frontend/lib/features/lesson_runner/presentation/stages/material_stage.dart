@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/widgets/word_audio_button.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../data/lesson_repository.dart';
 import '../../domain/exercise.dart';
 import '../../domain/lesson_content.dart';
@@ -22,14 +23,14 @@ class _Group {
 /// Mirrors MaterialStage.tsx's groupBlocks: a new "step" block starts a new
 /// page; every other block joins the current page. Paginated by page, not
 /// rendered all at once.
-List<_Group> _groupBlocks(List<MaterialBlock> blocks) {
+List<_Group> _groupBlocks(List<MaterialBlock> blocks, AppLocalizations l10n) {
   final groups = <_Group>[];
   var current = _Group();
 
   for (final block in blocks) {
     if (block is MaterialStepBlock) {
       if (current.blocks.isNotEmpty) groups.add(current);
-      current = _Group(title: 'Шаг ${block.number}. ${block.title}')..blocks.add(block);
+      current = _Group(title: l10n.materialStageStepTitle(block.number, block.title))..blocks.add(block);
     } else if (block is MaterialGenericBlock) {
       if (current.blocks.isNotEmpty) groups.add(current);
       current = _Group(title: block.title)..blocks.add(block);
@@ -106,8 +107,9 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
-    final groups = _groupBlocks(widget.materialOverride ?? data.content.material);
+    final groups = _groupBlocks(widget.materialOverride ?? data.content.material, l10n);
 
     if (groups.isEmpty) {
       return Padding(
@@ -115,11 +117,11 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Не хватает материала', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(l10n.materialStageMissing, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('Текст урока не найден.', textAlign: TextAlign.center),
+            Text(l10n.materialStageNotFound, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: widget.onComplete, child: const Text('Пропустить и продолжить')),
+            ElevatedButton(onPressed: widget.onComplete, child: Text(l10n.lessonStageSkip)),
           ],
         ),
       );
@@ -134,7 +136,7 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Раздел ${page + 1} из ${groups.length}', style: Theme.of(context).textTheme.bodyMedium),
+          Text(l10n.materialStageSection(page + 1, groups.length), style: Theme.of(context).textTheme.bodyMedium),
           const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
@@ -157,7 +159,7 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
             children: [
               OutlinedButton(
                 onPressed: page > 0 ? () => _goToPage(page - 1) : null,
-                child: const Text('← Назад'),
+                child: Text(l10n.materialStageBack),
               ),
               ElevatedButton(
                 onPressed: () {
@@ -168,7 +170,7 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
                     _goToPage(page + 1);
                   }
                 },
-                child: Text(isLast ? (widget.nextLabel ?? 'Перейти к видео') : 'Далее →'),
+                child: Text(isLast ? (widget.nextLabel ?? l10n.materialStageDefaultNextVideo) : l10n.materialStageNextArrow),
               ),
             ],
           ),

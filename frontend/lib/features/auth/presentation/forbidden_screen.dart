@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Mirrors src/pages/ForbiddenPage.tsx — shown when go_router's redirect
 /// blocks a role-mismatched route. Message differs slightly for TEACHER,
@@ -15,6 +16,7 @@ class ForbiddenScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authProvider).value;
     final isTeacher = user?.role == UserRole.teacher;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       body: Center(
@@ -25,16 +27,14 @@ class ForbiddenScreen extends ConsumerWidget {
             children: [
               const Icon(Icons.lock_outline, size: 40),
               const SizedBox(height: 16),
-              Text('Доступ запрещён', style: Theme.of(context).textTheme.titleLarge),
+              Text(l10n.forbiddenTitle, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 8),
               Text(
-                isTeacher
-                    ? 'Этот раздел доступен только администраторам.'
-                    : 'У вас нет доступа к этой странице.',
+                isTeacher ? l10n.forbiddenBodyTeacher : l10n.forbiddenBodyDefault,
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              ElevatedButton(onPressed: () => context.go('/'), child: const Text('На главную')),
+              ElevatedButton(onPressed: () => context.go('/'), child: Text(l10n.forbiddenGoHome)),
             ],
           ),
         ),

@@ -81,6 +81,11 @@ class UpdateProfileRequest(BaseModel):
     # null is a valid, explicit "no language chosen" value, not "leave
     # unchanged" (that's what omitting the field from the request does).
     selectedLanguageId: str | None = None
+    # Which instructional-language variant of course content ("ru"/"tg") is
+    # shown — see app/services/content_locale.py. Same "explicit null clears
+    # it" semantics as selectedLanguageId above; validated in the router
+    # against SUPPORTED_CONTENT_LOCALES rather than by a DB FK.
+    contentLocale: str | None = None
 
     @field_validator("username")
     @classmethod

@@ -12,6 +12,7 @@ from app.models.lesson_state import LessonAttempt, LessonState
 from app.models.user import User
 from app.schemas.lesson_state import AttemptRequest, LessonStateRequest
 from app.schemas.user import ChangePasswordRequest, UpdateProfileRequest
+from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
 from app.services.lesson_state import to_dto
 from app.services.progress import AttemptInput, compute_score, get_progress_summary_for_user
 from app.services.serialize import public_user
@@ -53,6 +54,8 @@ async def update_me(
     changes = body.model_dump(exclude_unset=True)
     if changes.get("selectedLanguageId") is not None and not await db.get(Language, changes["selectedLanguageId"]):
         raise ApiError(404, "Язык не найден")
+    if changes.get("contentLocale") is not None and changes["contentLocale"] not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
     username_lower = normalize_username(changes["username"]) if "username" in changes else None
     if "birthDate" in changes:
         changes["birthDate"] = from_iso(changes["birthDate"])

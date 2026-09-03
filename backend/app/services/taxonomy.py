@@ -14,8 +14,10 @@ from app.models.lesson_question import LessonQuestion
 from app.models.level import Level
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
+from app.models.material_block_translation import MaterialBlockTranslation
 from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
+from app.models.question_translation import QuestionTranslation
 from app.models.topic import Topic
 from app.services.content import LEGACY_COURSE_ID
 from app.services.courses import STAGE_TITLES, _block_question_to_row
@@ -209,6 +211,26 @@ async def update_material_block(db: AsyncSession, block_id: str, body) -> Materi
     return block
 
 
+async def set_material_block_translation(db: AsyncSession, block_id: str, locale: str, title: str, content: str) -> MaterialBlock | None:
+    """Upsert (§ course content language, 2026-09-04), same pattern as
+    services/courses.py's set_course_translation."""
+    block = await db.get(MaterialBlock, block_id)
+    if not block:
+        return None
+    existing = (
+        await db.execute(
+            select(MaterialBlockTranslation).where(MaterialBlockTranslation.materialBlockId == block_id, MaterialBlockTranslation.locale == locale)
+        )
+    ).scalar_one_or_none()
+    if existing:
+        existing.title = title
+        existing.content = content
+    else:
+        db.add(MaterialBlockTranslation(materialBlockId=block_id, locale=locale, title=title, content=content))
+    await db.commit()
+    return block
+
+
 async def delete_material_block(db: AsyncSession, block_id: str) -> bool:
     block = await db.get(MaterialBlock, block_id)
     if not block:
@@ -323,6 +345,28 @@ async def create_question(db: AsyncSession, body) -> tuple[Question, list[dict]]
     await db.commit()
     await db.refresh(question)
     return question, [{"question": to_question_dto(s["question"].kind, s["question"].prompt, s["question"].options, s["question"].correctAnswer, s["question"].data), "questionId": s["question"].id, "score": s["score"]} for s in similar]
+
+
+async def set_question_translation(
+    db: AsyncSession, question_id: str, locale: str, prompt: str | None, options: list[str] | None, correct_answer: str | None, data
+) -> Question | None:
+    """Upsert (§ course content language, 2026-09-04) — see
+    QuestionTranslationInput's docstring for why every field is optional."""
+    question = await db.get(Question, question_id)
+    if not question:
+        return None
+    existing = (
+        await db.execute(select(QuestionTranslation).where(QuestionTranslation.questionId == question_id, QuestionTranslation.locale == locale))
+    ).scalar_one_or_none()
+    if existing:
+        existing.prompt = prompt
+        existing.options = options
+        existing.correctAnswer = correct_answer
+        existing.data = data
+    else:
+        db.add(QuestionTranslation(questionId=question_id, locale=locale, prompt=prompt, options=options, correctAnswer=correct_answer, data=data))
+    await db.commit()
+    return question
 
 
 async def reuse_question(db: AsyncSession, body) -> QuestionPlacement | None:

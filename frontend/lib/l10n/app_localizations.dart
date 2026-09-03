@@ -5,8 +5,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
-import 'app_localizations_en.dart';
 import 'app_localizations_ru.dart';
+import 'app_localizations_tg.dart';
 
 // ignore_for_file: type=lint
 
@@ -94,8 +94,8 @@ abstract class AppLocalizations {
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
-    Locale('en'),
     Locale('ru'),
+    Locale('tg'),
   ];
 
   /// Settings screen app bar title
@@ -200,11 +200,23 @@ abstract class AppLocalizations {
   /// **'Язык программы'**
   String get appLanguage;
 
-  /// No description provided for @courseLanguage.
+  /// No description provided for @statisticsLanguage.
+  ///
+  /// In ru, this message translates to:
+  /// **'Статистика курса'**
+  String get statisticsLanguage;
+
+  /// No description provided for @statisticsLanguageNotSet.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выбрать'**
+  String get statisticsLanguageNotSet;
+
+  /// No description provided for @courseContentLanguage.
   ///
   /// In ru, this message translates to:
   /// **'Язык курса'**
-  String get courseLanguage;
+  String get courseContentLanguage;
 
   /// No description provided for @theme.
   ///
@@ -667,6 +679,1044 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Не удалось поделиться карточкой'**
   String get qrCardShareFailed;
+
+  /// No description provided for @errorServerTimeout.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сервер не отвечает (превышено время ожидания). Проверьте интернет-соединение.'**
+  String get errorServerTimeout;
+
+  /// No description provided for @errorConnectionFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Нет соединения с сервером. Проверьте интернет и адрес сервера.'**
+  String get errorConnectionFailed;
+
+  /// No description provided for @errorSslCertificate.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ошибка проверки сертификата сервера (SSL).'**
+  String get errorSslCertificate;
+
+  /// No description provided for @errorRequestCancelled.
+  ///
+  /// In ru, this message translates to:
+  /// **'Запрос отменён.'**
+  String get errorRequestCancelled;
+
+  /// No description provided for @errorUnknownNetwork.
+  ///
+  /// In ru, this message translates to:
+  /// **'Неизвестная ошибка сети'**
+  String get errorUnknownNetwork;
+
+  /// No description provided for @errorServerError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ошибка сервера. Попробуйте позже.'**
+  String get errorServerError;
+
+  /// No description provided for @errorNetworkGeneric.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ошибка сети'**
+  String get errorNetworkGeneric;
+
+  /// No description provided for @wordAudioTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Прослушать произношение'**
+  String get wordAudioTooltip;
+
+  /// No description provided for @lessonStatusCompleted.
+  ///
+  /// In ru, this message translates to:
+  /// **'✓ Урок завершён'**
+  String get lessonStatusCompleted;
+
+  /// No description provided for @lessonStatusContinue.
+  ///
+  /// In ru, this message translates to:
+  /// **'Продолжить'**
+  String get lessonStatusContinue;
+
+  /// No description provided for @lessonStatusStart.
+  ///
+  /// In ru, this message translates to:
+  /// **'Начать урок'**
+  String get lessonStatusStart;
+
+  /// No description provided for @myWordsTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Мои слова'**
+  String get myWordsTitle;
+
+  /// No description provided for @myWordsLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить слова: {error}'**
+  String myWordsLoadError(Object error);
+
+  /// No description provided for @myWordsEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пока нет изученных слов — они появятся здесь после завершения уроков.'**
+  String get myWordsEmpty;
+
+  /// No description provided for @myWordsUncategorized.
+  ///
+  /// In ru, this message translates to:
+  /// **'Без категории'**
+  String get myWordsUncategorized;
+
+  /// No description provided for @leaderboardTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Рейтинг'**
+  String get leaderboardTitle;
+
+  /// No description provided for @leaderboardSearchHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Найти по нику или ID'**
+  String get leaderboardSearchHint;
+
+  /// No description provided for @leaderboardLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить рейтинг: {error}'**
+  String leaderboardLoadError(Object error);
+
+  /// No description provided for @leaderboardEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пока нет участников рейтинга'**
+  String get leaderboardEmpty;
+
+  /// No description provided for @leaderboardSearchError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось выполнить поиск: {error}'**
+  String leaderboardSearchError(Object error);
+
+  /// No description provided for @leaderboardUserNotFound.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пользователь не найден'**
+  String get leaderboardUserNotFound;
+
+  /// No description provided for @authTagline.
+  ///
+  /// In ru, this message translates to:
+  /// **'Войдите, чтобы продолжить обучение'**
+  String get authTagline;
+
+  /// No description provided for @authLoginOrEmail.
+  ///
+  /// In ru, this message translates to:
+  /// **'Логин или email'**
+  String get authLoginOrEmail;
+
+  /// No description provided for @authLoginRequired.
+  ///
+  /// In ru, this message translates to:
+  /// **'Введите логин'**
+  String get authLoginRequired;
+
+  /// No description provided for @authPasswordLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пароль'**
+  String get authPasswordLabel;
+
+  /// No description provided for @authPasswordRequired.
+  ///
+  /// In ru, this message translates to:
+  /// **'Введите пароль'**
+  String get authPasswordRequired;
+
+  /// No description provided for @authSignIn.
+  ///
+  /// In ru, this message translates to:
+  /// **'Войти'**
+  String get authSignIn;
+
+  /// No description provided for @authSignInFailedDebug.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось войти: {error}'**
+  String authSignInFailedDebug(Object error);
+
+  /// No description provided for @authSignInFailed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось войти в аккаунт'**
+  String get authSignInFailed;
+
+  /// No description provided for @forbiddenTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Доступ запрещён'**
+  String get forbiddenTitle;
+
+  /// No description provided for @forbiddenBodyTeacher.
+  ///
+  /// In ru, this message translates to:
+  /// **'Этот раздел доступен только администраторам.'**
+  String get forbiddenBodyTeacher;
+
+  /// No description provided for @forbiddenBodyDefault.
+  ///
+  /// In ru, this message translates to:
+  /// **'У вас нет доступа к этой странице.'**
+  String get forbiddenBodyDefault;
+
+  /// No description provided for @forbiddenGoHome.
+  ///
+  /// In ru, this message translates to:
+  /// **'На главную'**
+  String get forbiddenGoHome;
+
+  /// No description provided for @homeExitConfirmation.
+  ///
+  /// In ru, this message translates to:
+  /// **'Нажмите ещё раз для выхода'**
+  String get homeExitConfirmation;
+
+  /// No description provided for @homeLanguagePickerTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Язык'**
+  String get homeLanguagePickerTitle;
+
+  /// No description provided for @homeThemeLight.
+  ///
+  /// In ru, this message translates to:
+  /// **'Светлая тема'**
+  String get homeThemeLight;
+
+  /// No description provided for @homeThemeDark.
+  ///
+  /// In ru, this message translates to:
+  /// **'Тёмная тема'**
+  String get homeThemeDark;
+
+  /// No description provided for @homeLanguagesLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить языки: {error}'**
+  String homeLanguagesLoadError(Object error);
+
+  /// No description provided for @homeNoCourses.
+  ///
+  /// In ru, this message translates to:
+  /// **'Курсы пока не опубликованы'**
+  String get homeNoCourses;
+
+  /// No description provided for @homeGreeting.
+  ///
+  /// In ru, this message translates to:
+  /// **'Привет, {name}!'**
+  String homeGreeting(String name);
+
+  /// No description provided for @homeLessonsLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить уроки: {error}'**
+  String homeLessonsLoadError(Object error);
+
+  /// No description provided for @homeNoLessons.
+  ///
+  /// In ru, this message translates to:
+  /// **'Уроков пока нет'**
+  String get homeNoLessons;
+
+  /// No description provided for @lessonDownloadTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Загружаем фото слов'**
+  String get lessonDownloadTitle;
+
+  /// No description provided for @lessonDownloadSubtitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Один раз — дальше урок открывается мгновенно и работает без интернета.'**
+  String get lessonDownloadSubtitle;
+
+  /// No description provided for @lessonDownloadProgress.
+  ///
+  /// In ru, this message translates to:
+  /// **'{done} из {total}'**
+  String lessonDownloadProgress(int done, int total);
+
+  /// No description provided for @socialFollowers.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подписчики'**
+  String get socialFollowers;
+
+  /// No description provided for @socialFollowing.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подписки'**
+  String get socialFollowing;
+
+  /// No description provided for @socialMutual.
+  ///
+  /// In ru, this message translates to:
+  /// **'Взаимные'**
+  String get socialMutual;
+
+  /// No description provided for @socialListLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить список: {error}'**
+  String socialListLoadError(Object error);
+
+  /// No description provided for @socialListEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пока пусто'**
+  String get socialListEmpty;
+
+  /// No description provided for @socialThisIsYourProfile.
+  ///
+  /// In ru, this message translates to:
+  /// **'Это ваш профиль'**
+  String get socialThisIsYourProfile;
+
+  /// No description provided for @socialProfileTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Профиль'**
+  String get socialProfileTitle;
+
+  /// No description provided for @socialProfileLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить профиль: {error}'**
+  String socialProfileLoadError(Object error);
+
+  /// No description provided for @socialStatsLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить статистику: {error}'**
+  String socialStatsLoadError(Object error);
+
+  /// No description provided for @socialUnfollowError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось отписаться: {error}'**
+  String socialUnfollowError(Object error);
+
+  /// No description provided for @socialFollowError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось подписаться: {error}'**
+  String socialFollowError(Object error);
+
+  /// No description provided for @socialUnfollowing.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отписываемся…'**
+  String get socialUnfollowing;
+
+  /// No description provided for @socialUnfollow.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отписаться'**
+  String get socialUnfollow;
+
+  /// No description provided for @socialFollowingInProgress.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подписываемся…'**
+  String get socialFollowingInProgress;
+
+  /// No description provided for @socialFollow.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подписаться'**
+  String get socialFollow;
+
+  /// No description provided for @gamificationLevelHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вы близки к следующему уровню!'**
+  String get gamificationLevelHint;
+
+  /// No description provided for @gamificationAchievementFirstLessonTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Первый урок'**
+  String get gamificationAchievementFirstLessonTitle;
+
+  /// No description provided for @gamificationAchievementDone.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пройден'**
+  String get gamificationAchievementDone;
+
+  /// No description provided for @gamificationAchievementWeekTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Неделя 7 дней'**
+  String get gamificationAchievementWeekTitle;
+
+  /// No description provided for @gamificationAchievementGoalTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Цель 10 уроков'**
+  String get gamificationAchievementGoalTitle;
+
+  /// No description provided for @gamificationAchievementActiveTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Активный ученик'**
+  String get gamificationAchievementActiveTitle;
+
+  /// No description provided for @gamificationAchievementLessons10.
+  ///
+  /// In ru, this message translates to:
+  /// **'10 уроков'**
+  String get gamificationAchievementLessons10;
+
+  /// No description provided for @gamificationAchievementWordMasterTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Мастер слов'**
+  String get gamificationAchievementWordMasterTitle;
+
+  /// No description provided for @gamificationAchievementLocked.
+  ///
+  /// In ru, this message translates to:
+  /// **'Заблокировано'**
+  String get gamificationAchievementLocked;
+
+  /// No description provided for @gamificationRankPeriodWeek.
+  ///
+  /// In ru, this message translates to:
+  /// **'По неделе'**
+  String get gamificationRankPeriodWeek;
+
+  /// No description provided for @gamificationLearningLanguageEnglish.
+  ///
+  /// In ru, this message translates to:
+  /// **'английский'**
+  String get gamificationLearningLanguageEnglish;
+
+  /// No description provided for @profileFollowStatsLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить подписки: {error}'**
+  String profileFollowStatsLoadError(Object error);
+
+  /// No description provided for @profileProgressLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить прогресс: {error}'**
+  String profileProgressLoadError(Object error);
+
+  /// No description provided for @profileAchievementsTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Достижения'**
+  String get profileAchievementsTitle;
+
+  /// No description provided for @profileRankLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить рейтинг: {error}'**
+  String profileRankLoadError(Object error);
+
+  /// No description provided for @profileActivityLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить активность: {error}'**
+  String profileActivityLoadError(Object error);
+
+  /// No description provided for @profileShareTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Поделиться профилем'**
+  String get profileShareTooltip;
+
+  /// No description provided for @profileSeeAll.
+  ///
+  /// In ru, this message translates to:
+  /// **'Все'**
+  String get profileSeeAll;
+
+  /// No description provided for @avatarOnline.
+  ///
+  /// In ru, this message translates to:
+  /// **'в сети'**
+  String get avatarOnline;
+
+  /// No description provided for @avatarOffline.
+  ///
+  /// In ru, this message translates to:
+  /// **'не в сети'**
+  String get avatarOffline;
+
+  /// No description provided for @levelCardTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ваш уровень'**
+  String get levelCardTitle;
+
+  /// No description provided for @metricsStreak.
+  ///
+  /// In ru, this message translates to:
+  /// **'Серия'**
+  String get metricsStreak;
+
+  /// No description provided for @metricsProgress.
+  ///
+  /// In ru, this message translates to:
+  /// **'Прогресс'**
+  String get metricsProgress;
+
+  /// No description provided for @metricsTime.
+  ///
+  /// In ru, this message translates to:
+  /// **'Время'**
+  String get metricsTime;
+
+  /// No description provided for @metricsPoints.
+  ///
+  /// In ru, this message translates to:
+  /// **'Очки'**
+  String get metricsPoints;
+
+  /// No description provided for @rankCardTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ваш рейтинг'**
+  String get rankCardTitle;
+
+  /// No description provided for @rankTop.
+  ///
+  /// In ru, this message translates to:
+  /// **'Топ {percent}%'**
+  String rankTop(int percent);
+
+  /// No description provided for @rankGlobal.
+  ///
+  /// In ru, this message translates to:
+  /// **'Глобально'**
+  String get rankGlobal;
+
+  /// No description provided for @rankOutOf.
+  ///
+  /// In ru, this message translates to:
+  /// **'из {total}'**
+  String rankOutOf(int total);
+
+  /// No description provided for @rankAmongAllStudents.
+  ///
+  /// In ru, this message translates to:
+  /// **'Среди всех студентов'**
+  String get rankAmongAllStudents;
+
+  /// No description provided for @weekActivityDayMon.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пн'**
+  String get weekActivityDayMon;
+
+  /// No description provided for @weekActivityDayTue.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вт'**
+  String get weekActivityDayTue;
+
+  /// No description provided for @weekActivityDayWed.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ср'**
+  String get weekActivityDayWed;
+
+  /// No description provided for @weekActivityDayThu.
+  ///
+  /// In ru, this message translates to:
+  /// **'Чт'**
+  String get weekActivityDayThu;
+
+  /// No description provided for @weekActivityDayFri.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пт'**
+  String get weekActivityDayFri;
+
+  /// No description provided for @weekActivityDaySat.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сб'**
+  String get weekActivityDaySat;
+
+  /// No description provided for @weekActivityDaySun.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вс'**
+  String get weekActivityDaySun;
+
+  /// No description provided for @weekActivityTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Активность за неделю'**
+  String get weekActivityTitle;
+
+  /// No description provided for @weekActivityAverage.
+  ///
+  /// In ru, this message translates to:
+  /// **'Средняя активность'**
+  String get weekActivityAverage;
+
+  /// No description provided for @gamificationLevelNameIntermediate.
+  ///
+  /// In ru, this message translates to:
+  /// **'Средний'**
+  String get gamificationLevelNameIntermediate;
+
+  /// No description provided for @metricsTimeFormat.
+  ///
+  /// In ru, this message translates to:
+  /// **'{hours}ч {minutes}м'**
+  String metricsTimeFormat(int hours, int minutes);
+
+  /// No description provided for @weekActivityAvgPerDay.
+  ///
+  /// In ru, this message translates to:
+  /// **'{minutes}м/день'**
+  String weekActivityAvgPerDay(int minutes);
+
+  /// No description provided for @stageVocabulary.
+  ///
+  /// In ru, this message translates to:
+  /// **'Слова'**
+  String get stageVocabulary;
+
+  /// No description provided for @stageMaterial.
+  ///
+  /// In ru, this message translates to:
+  /// **'Материал'**
+  String get stageMaterial;
+
+  /// No description provided for @stageVideo.
+  ///
+  /// In ru, this message translates to:
+  /// **'Видео'**
+  String get stageVideo;
+
+  /// No description provided for @stageMinitest.
+  ///
+  /// In ru, this message translates to:
+  /// **'Мини-тест'**
+  String get stageMinitest;
+
+  /// No description provided for @stageAudio.
+  ///
+  /// In ru, this message translates to:
+  /// **'Аудио'**
+  String get stageAudio;
+
+  /// No description provided for @stagePractice.
+  ///
+  /// In ru, this message translates to:
+  /// **'Практика'**
+  String get stagePractice;
+
+  /// No description provided for @stageReview.
+  ///
+  /// In ru, this message translates to:
+  /// **'Закрепление'**
+  String get stageReview;
+
+  /// No description provided for @stageComplete.
+  ///
+  /// In ru, this message translates to:
+  /// **'Итог'**
+  String get stageComplete;
+
+  /// No description provided for @lessonTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Урок'**
+  String get lessonTitle;
+
+  /// No description provided for @lessonLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить урок: {error}'**
+  String lessonLoadError(Object error);
+
+  /// No description provided for @lessonUnknownBlockType.
+  ///
+  /// In ru, this message translates to:
+  /// **'Неизвестный тип блока: {type}'**
+  String lessonUnknownBlockType(String type);
+
+  /// No description provided for @lessonFinish.
+  ///
+  /// In ru, this message translates to:
+  /// **'Завершить урок'**
+  String get lessonFinish;
+
+  /// No description provided for @lessonNext.
+  ///
+  /// In ru, this message translates to:
+  /// **'Далее: {title} →'**
+  String lessonNext(String title);
+
+  /// No description provided for @lessonCompleteTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отличная работа!'**
+  String get lessonCompleteTitle;
+
+  /// No description provided for @lessonCompleteSubtitleGraph.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вы прошли урок «{title}». Вот ваши результаты:'**
+  String lessonCompleteSubtitleGraph(String title);
+
+  /// No description provided for @lessonCompleteSubtitleLinear.
+  ///
+  /// In ru, this message translates to:
+  /// **'Вы прошли все этапы урока «{title}». Вот ваши результаты:'**
+  String lessonCompleteSubtitleLinear(String title);
+
+  /// No description provided for @lessonCompleteWordsLearned.
+  ///
+  /// In ru, this message translates to:
+  /// **'слов изучено'**
+  String get lessonCompleteWordsLearned;
+
+  /// No description provided for @lessonCompleteRestarting.
+  ///
+  /// In ru, this message translates to:
+  /// **'Начинаем…'**
+  String get lessonCompleteRestarting;
+
+  /// No description provided for @lessonCompleteRestart.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пройти ещё раз'**
+  String get lessonCompleteRestart;
+
+  /// No description provided for @lessonCompleteMinitestLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'мини-тест'**
+  String get lessonCompleteMinitestLabel;
+
+  /// No description provided for @lessonCompletePracticeLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'практика'**
+  String get lessonCompletePracticeLabel;
+
+  /// No description provided for @lessonCompleteReviewLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'закрепление'**
+  String get lessonCompleteReviewLabel;
+
+  /// No description provided for @vocabularyStageEmpty.
+  ///
+  /// In ru, this message translates to:
+  /// **'В этом уроке нет новых слов — все они уже встречались раньше.'**
+  String get vocabularyStageEmpty;
+
+  /// No description provided for @commonNext.
+  ///
+  /// In ru, this message translates to:
+  /// **'Далее'**
+  String get commonNext;
+
+  /// No description provided for @lessonStageSkip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пропустить и продолжить'**
+  String get lessonStageSkip;
+
+  /// No description provided for @materialStageStepTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Шаг {number}. {title}'**
+  String materialStageStepTitle(int number, String title);
+
+  /// No description provided for @materialStageMissing.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не хватает материала'**
+  String get materialStageMissing;
+
+  /// No description provided for @materialStageNotFound.
+  ///
+  /// In ru, this message translates to:
+  /// **'Текст урока не найден.'**
+  String get materialStageNotFound;
+
+  /// No description provided for @materialStageSection.
+  ///
+  /// In ru, this message translates to:
+  /// **'Раздел {page} из {total}'**
+  String materialStageSection(int page, int total);
+
+  /// No description provided for @materialStageDefaultNextVideo.
+  ///
+  /// In ru, this message translates to:
+  /// **'Перейти к видео'**
+  String get materialStageDefaultNextVideo;
+
+  /// No description provided for @materialStageNextArrow.
+  ///
+  /// In ru, this message translates to:
+  /// **'Далее →'**
+  String get materialStageNextArrow;
+
+  /// No description provided for @materialStageBack.
+  ///
+  /// In ru, this message translates to:
+  /// **'← Назад'**
+  String get materialStageBack;
+
+  /// No description provided for @videoStageNotFound.
+  ///
+  /// In ru, this message translates to:
+  /// **'Видео не найдено'**
+  String get videoStageNotFound;
+
+  /// No description provided for @videoStageNotUploaded.
+  ///
+  /// In ru, this message translates to:
+  /// **'Для этого урока не загружено видео.'**
+  String get videoStageNotUploaded;
+
+  /// No description provided for @videoStageWatch.
+  ///
+  /// In ru, this message translates to:
+  /// **'Посмотрите видео'**
+  String get videoStageWatch;
+
+  /// No description provided for @videoStageWatched.
+  ///
+  /// In ru, this message translates to:
+  /// **'✓ Видео просмотрено'**
+  String get videoStageWatched;
+
+  /// No description provided for @videoStageWatchToContinue.
+  ///
+  /// In ru, this message translates to:
+  /// **'Досмотрите видео до конца, чтобы продолжить'**
+  String get videoStageWatchToContinue;
+
+  /// No description provided for @videoStageDefaultNextMinitest.
+  ///
+  /// In ru, this message translates to:
+  /// **'Перейти к мини-тесту →'**
+  String get videoStageDefaultNextMinitest;
+
+  /// No description provided for @audioStageLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить аудиофайл. Проверьте, что файл существует и доступен, и попробуйте ещё раз.'**
+  String get audioStageLoadError;
+
+  /// No description provided for @audioStagePlaybackError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось запустить воспроизведение аудио. Проверьте, не отключён звук, и попробуйте ещё раз.'**
+  String get audioStagePlaybackError;
+
+  /// No description provided for @audioStageNotFound.
+  ///
+  /// In ru, this message translates to:
+  /// **'Аудио не найдено'**
+  String get audioStageNotFound;
+
+  /// No description provided for @audioStageNotUploaded.
+  ///
+  /// In ru, this message translates to:
+  /// **'Для этого урока не загружена аудиозапись.'**
+  String get audioStageNotUploaded;
+
+  /// No description provided for @audioStageListen.
+  ///
+  /// In ru, this message translates to:
+  /// **'Прослушайте аудио'**
+  String get audioStageListen;
+
+  /// No description provided for @audioStageListenHint.
+  ///
+  /// In ru, this message translates to:
+  /// **'Послушайте запись и закрепите произношение фраз из урока.'**
+  String get audioStageListenHint;
+
+  /// No description provided for @audioStageFinished.
+  ///
+  /// In ru, this message translates to:
+  /// **'✓ Запись прослушана'**
+  String get audioStageFinished;
+
+  /// No description provided for @audioStageListenToContinue.
+  ///
+  /// In ru, this message translates to:
+  /// **'Прослушайте запись до конца, чтобы продолжить'**
+  String get audioStageListenToContinue;
+
+  /// No description provided for @audioStageDefaultNextPractice.
+  ///
+  /// In ru, this message translates to:
+  /// **'Перейти к практике →'**
+  String get audioStageDefaultNextPractice;
+
+  /// No description provided for @exerciseKindChoice.
+  ///
+  /// In ru, this message translates to:
+  /// **'Выбор ответа'**
+  String get exerciseKindChoice;
+
+  /// No description provided for @exerciseKindTrueFalse.
+  ///
+  /// In ru, this message translates to:
+  /// **'Верно или неверно'**
+  String get exerciseKindTrueFalse;
+
+  /// No description provided for @exerciseKindMatch.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сопоставление'**
+  String get exerciseKindMatch;
+
+  /// No description provided for @exerciseKindScramble.
+  ///
+  /// In ru, this message translates to:
+  /// **'Собери фразу'**
+  String get exerciseKindScramble;
+
+  /// No description provided for @exerciseKindCloze.
+  ///
+  /// In ru, this message translates to:
+  /// **'Заполни пропуск'**
+  String get exerciseKindCloze;
+
+  /// No description provided for @exerciseKindAutoBlank.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пропущенное слово'**
+  String get exerciseKindAutoBlank;
+
+  /// No description provided for @exerciseKindAutoTranslate.
+  ///
+  /// In ru, this message translates to:
+  /// **'Переведи слово'**
+  String get exerciseKindAutoTranslate;
+
+  /// No description provided for @exercisePromptMatch.
+  ///
+  /// In ru, this message translates to:
+  /// **'Сопоставление слов и переводов'**
+  String get exercisePromptMatch;
+
+  /// No description provided for @exercisePromptScramble.
+  ///
+  /// In ru, this message translates to:
+  /// **'Фраза по переводу «{translation}»'**
+  String exercisePromptScramble(String translation);
+
+  /// No description provided for @exercisePromptCloze.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пропуск во фразе «{translation}»'**
+  String exercisePromptCloze(String translation);
+
+  /// No description provided for @exerciseCorrectAnswer.
+  ///
+  /// In ru, this message translates to:
+  /// **'Правильный ответ: «{answer}»'**
+  String exerciseCorrectAnswer(String answer);
+
+  /// No description provided for @exerciseNotAllPairsMatched.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не все пары были сопоставлены с первой попытки'**
+  String get exerciseNotAllPairsMatched;
+
+  /// No description provided for @exerciseCorrectScramble.
+  ///
+  /// In ru, this message translates to:
+  /// **'Правильно: «{answer}»'**
+  String exerciseCorrectScramble(String answer);
+
+  /// No description provided for @exerciseCorrectWord.
+  ///
+  /// In ru, this message translates to:
+  /// **'Правильное слово: «{answer}»'**
+  String exerciseCorrectWord(String answer);
+
+  /// No description provided for @exerciseDetailsInHistory.
+  ///
+  /// In ru, this message translates to:
+  /// **'Подробности — в истории ответов'**
+  String get exerciseDetailsInHistory;
+
+  /// No description provided for @exerciseStageNotEnoughMaterial.
+  ///
+  /// In ru, this message translates to:
+  /// **'Недостаточно материала для этого блока — переходим дальше.'**
+  String get exerciseStageNotEnoughMaterial;
+
+  /// No description provided for @exerciseStageProgress.
+  ///
+  /// In ru, this message translates to:
+  /// **'Задание {index} из {total}'**
+  String exerciseStageProgress(int index, int total);
+
+  /// No description provided for @exerciseStageCorrectCount.
+  ///
+  /// In ru, this message translates to:
+  /// **'{count} правильно'**
+  String exerciseStageCorrectCount(int count);
+
+  /// No description provided for @exerciseStageNextEnter.
+  ///
+  /// In ru, this message translates to:
+  /// **'Следующее (Enter)'**
+  String get exerciseStageNextEnter;
+
+  /// No description provided for @exerciseStageFinishEnter.
+  ///
+  /// In ru, this message translates to:
+  /// **'Завершить (Enter)'**
+  String get exerciseStageFinishEnter;
+
+  /// No description provided for @exerciseStageResultTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Результат'**
+  String get exerciseStageResultTitle;
+
+  /// No description provided for @exerciseStageAllCorrect.
+  ///
+  /// In ru, this message translates to:
+  /// **'Отлично, всё верно!'**
+  String get exerciseStageAllCorrect;
+
+  /// No description provided for @exerciseStageGoodResult.
+  ///
+  /// In ru, this message translates to:
+  /// **'Хороший результат. Разберём ошибки ниже.'**
+  String get exerciseStageGoodResult;
+
+  /// No description provided for @exerciseStageContinueEnter.
+  ///
+  /// In ru, this message translates to:
+  /// **'Продолжить (Enter)'**
+  String get exerciseStageContinueEnter;
 }
 
 class _AppLocalizationsDelegate
@@ -680,7 +1730,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['en', 'ru'].contains(locale.languageCode);
+      <String>['ru', 'tg'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -689,10 +1739,10 @@ class _AppLocalizationsDelegate
 AppLocalizations lookupAppLocalizations(Locale locale) {
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
-    case 'en':
-      return AppLocalizationsEn();
     case 'ru':
       return AppLocalizationsRu();
+    case 'tg':
+      return AppLocalizationsTg();
   }
 
   throw FlutterError(

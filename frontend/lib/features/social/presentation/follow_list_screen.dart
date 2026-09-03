@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/auth/auth_state.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../data/social_repository.dart';
 import 'widgets/user_list_row.dart';
@@ -20,10 +21,10 @@ class FollowListScreen extends ConsumerWidget {
   final String userId;
   final FollowListKind kind;
 
-  String get _title => switch (kind) {
-        FollowListKind.followers => 'Подписчики',
-        FollowListKind.following => 'Подписки',
-        FollowListKind.mutual => 'Взаимные',
+  String _title(AppLocalizations l10n) => switch (kind) {
+        FollowListKind.followers => l10n.socialFollowers,
+        FollowListKind.following => l10n.socialFollowing,
+        FollowListKind.mutual => l10n.socialMutual,
       };
 
   void _openProfile(BuildContext context, WidgetRef ref, String tappedId) {
@@ -33,7 +34,7 @@ class FollowListScreen extends ConsumerWidget {
       // 2026-08-31) — just tell the user this row is them, same list stays
       // open. The Рейтинг tab's own self-tap (context.go('/profile')) is a
       // separate code path and is intentionally left untouched.
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Это ваш профиль')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).socialThisIsYourProfile)));
     } else {
       context.push('/users/$tappedId');
     }
@@ -42,17 +43,18 @@ class FollowListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final list = ref.watch(followListProvider((kind, userId)));
 
     return Scaffold(
       backgroundColor: c.bg,
-      appBar: AppBar(title: Text(_title)),
+      appBar: AppBar(title: Text(_title(l10n))),
       body: list.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, st) => Center(child: Text('Не удалось загрузить список: $err', style: ProfileTypography.body(context))),
+        error: (err, st) => Center(child: Text(l10n.socialListLoadError(err), style: ProfileTypography.body(context))),
         data: (users) {
           if (users.isEmpty) {
-            return Center(child: Text('Пока пусто', style: ProfileTypography.body(context)));
+            return Center(child: Text(l10n.socialListEmpty, style: ProfileTypography.body(context)));
           }
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(followListProvider((kind, userId))),

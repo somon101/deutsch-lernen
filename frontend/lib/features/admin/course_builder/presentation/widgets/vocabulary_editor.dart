@@ -230,6 +230,36 @@ class _WordRowState extends ConsumerState<_WordRow> {
     }
   }
 
+  /// The base `translation` field above IS the Russian text (§ course
+  /// content language, 2026-09-04) — this only ever edits the Tajik
+  /// variant, kept as a small dialog rather than a permanent 4th field so
+  /// the row's existing layout is untouched for the common case.
+  Future<void> _editTajikTranslation() async {
+    final controller = TextEditingController(text: widget.word.translations['tg'] ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Тоҷикӣ: ${widget.word.german}'),
+        content: TextField(controller: controller, autofocus: true, decoration: adminInputDecoration(label: 'Перевод (тоҷикӣ)')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Сохранить')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || result.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(builderRepositoryProvider).setVocabularyTranslation(widget.courseId, widget.lessonId, widget.word.id, 'tg', result);
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить перевод');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -292,6 +322,15 @@ class _WordRowState extends ConsumerState<_WordRow> {
             onPressed: _busy
                 ? null
                 : (widget.word.imageUrl != null ? _removeImage : _uploadImage),
+          ),
+          IconButton(
+            tooltip: widget.word.translations.containsKey('tg') ? 'Тоҷикӣ: есть перевод' : 'Тоҷикӣ: нет перевода',
+            icon: Icon(
+              Icons.translate,
+              size: 18,
+              color: widget.word.translations.containsKey('tg') ? AdminColors.success : AdminColors.textSecondary,
+            ),
+            onPressed: _busy ? null : _editTajikTranslation,
           ),
           TextButton(
             onPressed: _busy ? null : _save,

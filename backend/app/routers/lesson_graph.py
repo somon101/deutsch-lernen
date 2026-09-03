@@ -7,6 +7,7 @@ from app.errors import ApiError
 from app.schemas.lesson_graph import CreateEdgeInput, CreateNodeInput, NodeMediaReuseInput, UpdateNodeInput
 from app.services import courses as courses_svc
 from app.services import lesson_graph as svc
+from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
 from app.uploads.storage import COURSE_MEDIA_DIR, delete_file, save_course_media
 
 router = APIRouter(prefix="/api/builder", tags=["lesson-graph"], dependencies=[Depends(require_staff)])
@@ -50,6 +51,52 @@ async def upload_node_media(course_id: str, lesson_id: str, node_id: str, file: 
 @router.delete("/courses/{course_id}/lessons/{lesson_id}/graph/nodes/{node_id}/media")
 async def remove_node_media(course_id: str, lesson_id: str, node_id: str, db: AsyncSession = Depends(get_db)):
     result = await svc.set_node_media(db, lesson_id, node_id, None)
+    if result["previousMediaUrl"]:
+        delete_file(COURSE_MEDIA_DIR, result["previousMediaUrl"])
+    return {"node": result["node"]}
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/graph/nodes/{node_id}/media/{locale}")
+async def upload_node_media_translation(
+    course_id: str, lesson_id: str, node_id: str, locale: str, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    stored_url = await save_course_media(file)
+    try:
+        result = await svc.set_node_media_translation(db, lesson_id, node_id, locale, stored_url)
+    except ApiError:
+        delete_file(COURSE_MEDIA_DIR, stored_url)
+        raise
+    # Unlike the legacy media library, a locale's own file is never shared
+    # with another node/locale — see set_node_media's identical comment.
+    if result["previousMediaUrl"]:
+        delete_file(COURSE_MEDIA_DIR, result["previousMediaUrl"])
+    return {"node": result["node"]}
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/graph/nodes/{node_id}/media/{locale}/clone-from-default")
+async def clone_node_media_translation(course_id: str, lesson_id: str, node_id: str, locale: str, db: AsyncSession = Depends(get_db)):
+    """The explicit, intentional placeholder path (§ course content
+    language, 2026-09-04 — see LessonNodeMedia's docstring): points this
+    locale at the SAME file as the node's base mediaUrl, rather than
+    uploading a real recording, when no real localized file exists yet.
+    Never used silently — this is its own endpoint, called only when a
+    teacher deliberately chooses it."""
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    node = await svc.get_node(db, lesson_id, node_id)
+    if not node.mediaUrl:
+        raise ApiError(400, "У этого блока ещё нет файла для клонирования")
+    result = await svc.set_node_media_translation(db, lesson_id, node_id, locale, node.mediaUrl)
+    return {"node": result["node"]}
+
+
+@router.delete("/courses/{course_id}/lessons/{lesson_id}/graph/nodes/{node_id}/media/{locale}")
+async def remove_node_media_translation(course_id: str, lesson_id: str, node_id: str, locale: str, db: AsyncSession = Depends(get_db)):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    result = await svc.set_node_media_translation(db, lesson_id, node_id, locale, None)
     if result["previousMediaUrl"]:
         delete_file(COURSE_MEDIA_DIR, result["previousMediaUrl"])
     return {"node": result["node"]}

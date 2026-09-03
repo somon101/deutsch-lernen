@@ -112,6 +112,22 @@ class MaterialBlockReorderInput(BaseModel):
     blockIds: list[str] = Field(min_length=1)
 
 
+class MaterialBlockTranslationInput(BaseModel):
+    """One locale's variant of a MaterialBlock's text (§ course content
+    language, 2026-09-04)."""
+
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(default="")
+
+    @field_validator("title")
+    @classmethod
+    def _trim_title(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Название блока не может быть пустым")
+        return v
+
+
 # ---------------------------------------------------------------------------
 # Question pool / placement / duplicate check
 # ---------------------------------------------------------------------------

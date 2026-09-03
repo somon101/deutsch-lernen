@@ -141,6 +141,14 @@ class ProfileRepository {
     return AppUser.fromJson(res['user'] as Map<String, dynamic>);
   }
 
+  /// Which locale a course's own text/media is shown in (§ course content
+  /// language, 2026-09-04) — same `/api/me/` mechanism as
+  /// setSelectedLanguage above, just a different field.
+  Future<AppUser> setContentLocale(String contentLocale) async {
+    final res = await _api.patch('/api/me/', body: {'contentLocale': contentLocale});
+    return AppUser.fromJson(res['user'] as Map<String, dynamic>);
+  }
+
   /// Overall progress (§ per-language overall progress, 2026-08-29), scoped
   /// to one language's own courses/levels — independent of every other
   /// language's progress.

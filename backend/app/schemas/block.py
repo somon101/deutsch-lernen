@@ -240,3 +240,19 @@ BlockQuestionInput = Annotated[
 
 class BlockQuestionsPayload(BaseModel):
     questions: list[BlockQuestionInput]
+
+
+class QuestionTranslationInput(BaseModel):
+    """One locale's variant of a pool Question's text (§ course content
+    language, 2026-09-04). Every field optional — unlike the per-kind
+    inputs above, this is one generic shape covering whichever fields the
+    question's own `kind` actually uses (a truefalse question has no
+    options; auto_blank/auto_translate/auto_match never get a row at all —
+    see QuestionTranslation's docstring for why). Not kind-discriminated
+    because the caller already knows the question's kind and simply omits
+    what does not apply."""
+
+    prompt: str | None = None
+    options: list[str] | None = None
+    correctAnswer: str | None = None
+    data: dict | list | None = None

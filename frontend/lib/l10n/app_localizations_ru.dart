@@ -63,7 +63,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get appLanguage => 'Язык программы';
 
   @override
-  String get courseLanguage => 'Язык курса';
+  String get statisticsLanguage => 'Статистика курса';
+
+  @override
+  String get statisticsLanguageNotSet => 'Выбрать';
+
+  @override
+  String get courseContentLanguage => 'Язык курса';
 
   @override
   String get theme => 'Тема';
@@ -307,4 +313,609 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get qrCardShareFailed => 'Не удалось поделиться карточкой';
+
+  @override
+  String get errorServerTimeout =>
+      'Сервер не отвечает (превышено время ожидания). Проверьте интернет-соединение.';
+
+  @override
+  String get errorConnectionFailed =>
+      'Нет соединения с сервером. Проверьте интернет и адрес сервера.';
+
+  @override
+  String get errorSslCertificate =>
+      'Ошибка проверки сертификата сервера (SSL).';
+
+  @override
+  String get errorRequestCancelled => 'Запрос отменён.';
+
+  @override
+  String get errorUnknownNetwork => 'Неизвестная ошибка сети';
+
+  @override
+  String get errorServerError => 'Ошибка сервера. Попробуйте позже.';
+
+  @override
+  String get errorNetworkGeneric => 'Ошибка сети';
+
+  @override
+  String get wordAudioTooltip => 'Прослушать произношение';
+
+  @override
+  String get lessonStatusCompleted => '✓ Урок завершён';
+
+  @override
+  String get lessonStatusContinue => 'Продолжить';
+
+  @override
+  String get lessonStatusStart => 'Начать урок';
+
+  @override
+  String get myWordsTitle => 'Мои слова';
+
+  @override
+  String myWordsLoadError(Object error) {
+    return 'Не удалось загрузить слова: $error';
+  }
+
+  @override
+  String get myWordsEmpty =>
+      'Пока нет изученных слов — они появятся здесь после завершения уроков.';
+
+  @override
+  String get myWordsUncategorized => 'Без категории';
+
+  @override
+  String get leaderboardTitle => 'Рейтинг';
+
+  @override
+  String get leaderboardSearchHint => 'Найти по нику или ID';
+
+  @override
+  String leaderboardLoadError(Object error) {
+    return 'Не удалось загрузить рейтинг: $error';
+  }
+
+  @override
+  String get leaderboardEmpty => 'Пока нет участников рейтинга';
+
+  @override
+  String leaderboardSearchError(Object error) {
+    return 'Не удалось выполнить поиск: $error';
+  }
+
+  @override
+  String get leaderboardUserNotFound => 'Пользователь не найден';
+
+  @override
+  String get authTagline => 'Войдите, чтобы продолжить обучение';
+
+  @override
+  String get authLoginOrEmail => 'Логин или email';
+
+  @override
+  String get authLoginRequired => 'Введите логин';
+
+  @override
+  String get authPasswordLabel => 'Пароль';
+
+  @override
+  String get authPasswordRequired => 'Введите пароль';
+
+  @override
+  String get authSignIn => 'Войти';
+
+  @override
+  String authSignInFailedDebug(Object error) {
+    return 'Не удалось войти: $error';
+  }
+
+  @override
+  String get authSignInFailed => 'Не удалось войти в аккаунт';
+
+  @override
+  String get forbiddenTitle => 'Доступ запрещён';
+
+  @override
+  String get forbiddenBodyTeacher =>
+      'Этот раздел доступен только администраторам.';
+
+  @override
+  String get forbiddenBodyDefault => 'У вас нет доступа к этой странице.';
+
+  @override
+  String get forbiddenGoHome => 'На главную';
+
+  @override
+  String get homeExitConfirmation => 'Нажмите ещё раз для выхода';
+
+  @override
+  String get homeLanguagePickerTitle => 'Язык';
+
+  @override
+  String get homeThemeLight => 'Светлая тема';
+
+  @override
+  String get homeThemeDark => 'Тёмная тема';
+
+  @override
+  String homeLanguagesLoadError(Object error) {
+    return 'Не удалось загрузить языки: $error';
+  }
+
+  @override
+  String get homeNoCourses => 'Курсы пока не опубликованы';
+
+  @override
+  String homeGreeting(String name) {
+    return 'Привет, $name!';
+  }
+
+  @override
+  String homeLessonsLoadError(Object error) {
+    return 'Не удалось загрузить уроки: $error';
+  }
+
+  @override
+  String get homeNoLessons => 'Уроков пока нет';
+
+  @override
+  String get lessonDownloadTitle => 'Загружаем фото слов';
+
+  @override
+  String get lessonDownloadSubtitle =>
+      'Один раз — дальше урок открывается мгновенно и работает без интернета.';
+
+  @override
+  String lessonDownloadProgress(int done, int total) {
+    return '$done из $total';
+  }
+
+  @override
+  String get socialFollowers => 'Подписчики';
+
+  @override
+  String get socialFollowing => 'Подписки';
+
+  @override
+  String get socialMutual => 'Взаимные';
+
+  @override
+  String socialListLoadError(Object error) {
+    return 'Не удалось загрузить список: $error';
+  }
+
+  @override
+  String get socialListEmpty => 'Пока пусто';
+
+  @override
+  String get socialThisIsYourProfile => 'Это ваш профиль';
+
+  @override
+  String get socialProfileTitle => 'Профиль';
+
+  @override
+  String socialProfileLoadError(Object error) {
+    return 'Не удалось загрузить профиль: $error';
+  }
+
+  @override
+  String socialStatsLoadError(Object error) {
+    return 'Не удалось загрузить статистику: $error';
+  }
+
+  @override
+  String socialUnfollowError(Object error) {
+    return 'Не удалось отписаться: $error';
+  }
+
+  @override
+  String socialFollowError(Object error) {
+    return 'Не удалось подписаться: $error';
+  }
+
+  @override
+  String get socialUnfollowing => 'Отписываемся…';
+
+  @override
+  String get socialUnfollow => 'Отписаться';
+
+  @override
+  String get socialFollowingInProgress => 'Подписываемся…';
+
+  @override
+  String get socialFollow => 'Подписаться';
+
+  @override
+  String get gamificationLevelHint => 'Вы близки к следующему уровню!';
+
+  @override
+  String get gamificationAchievementFirstLessonTitle => 'Первый урок';
+
+  @override
+  String get gamificationAchievementDone => 'Пройден';
+
+  @override
+  String get gamificationAchievementWeekTitle => 'Неделя 7 дней';
+
+  @override
+  String get gamificationAchievementGoalTitle => 'Цель 10 уроков';
+
+  @override
+  String get gamificationAchievementActiveTitle => 'Активный ученик';
+
+  @override
+  String get gamificationAchievementLessons10 => '10 уроков';
+
+  @override
+  String get gamificationAchievementWordMasterTitle => 'Мастер слов';
+
+  @override
+  String get gamificationAchievementLocked => 'Заблокировано';
+
+  @override
+  String get gamificationRankPeriodWeek => 'По неделе';
+
+  @override
+  String get gamificationLearningLanguageEnglish => 'английский';
+
+  @override
+  String profileFollowStatsLoadError(Object error) {
+    return 'Не удалось загрузить подписки: $error';
+  }
+
+  @override
+  String profileProgressLoadError(Object error) {
+    return 'Не удалось загрузить прогресс: $error';
+  }
+
+  @override
+  String get profileAchievementsTitle => 'Достижения';
+
+  @override
+  String profileRankLoadError(Object error) {
+    return 'Не удалось загрузить рейтинг: $error';
+  }
+
+  @override
+  String profileActivityLoadError(Object error) {
+    return 'Не удалось загрузить активность: $error';
+  }
+
+  @override
+  String get profileShareTooltip => 'Поделиться профилем';
+
+  @override
+  String get profileSeeAll => 'Все';
+
+  @override
+  String get avatarOnline => 'в сети';
+
+  @override
+  String get avatarOffline => 'не в сети';
+
+  @override
+  String get levelCardTitle => 'Ваш уровень';
+
+  @override
+  String get metricsStreak => 'Серия';
+
+  @override
+  String get metricsProgress => 'Прогресс';
+
+  @override
+  String get metricsTime => 'Время';
+
+  @override
+  String get metricsPoints => 'Очки';
+
+  @override
+  String get rankCardTitle => 'Ваш рейтинг';
+
+  @override
+  String rankTop(int percent) {
+    return 'Топ $percent%';
+  }
+
+  @override
+  String get rankGlobal => 'Глобально';
+
+  @override
+  String rankOutOf(int total) {
+    return 'из $total';
+  }
+
+  @override
+  String get rankAmongAllStudents => 'Среди всех студентов';
+
+  @override
+  String get weekActivityDayMon => 'Пн';
+
+  @override
+  String get weekActivityDayTue => 'Вт';
+
+  @override
+  String get weekActivityDayWed => 'Ср';
+
+  @override
+  String get weekActivityDayThu => 'Чт';
+
+  @override
+  String get weekActivityDayFri => 'Пт';
+
+  @override
+  String get weekActivityDaySat => 'Сб';
+
+  @override
+  String get weekActivityDaySun => 'Вс';
+
+  @override
+  String get weekActivityTitle => 'Активность за неделю';
+
+  @override
+  String get weekActivityAverage => 'Средняя активность';
+
+  @override
+  String get gamificationLevelNameIntermediate => 'Средний';
+
+  @override
+  String metricsTimeFormat(int hours, int minutes) {
+    return '$hoursч $minutesм';
+  }
+
+  @override
+  String weekActivityAvgPerDay(int minutes) {
+    return '$minutesм/день';
+  }
+
+  @override
+  String get stageVocabulary => 'Слова';
+
+  @override
+  String get stageMaterial => 'Материал';
+
+  @override
+  String get stageVideo => 'Видео';
+
+  @override
+  String get stageMinitest => 'Мини-тест';
+
+  @override
+  String get stageAudio => 'Аудио';
+
+  @override
+  String get stagePractice => 'Практика';
+
+  @override
+  String get stageReview => 'Закрепление';
+
+  @override
+  String get stageComplete => 'Итог';
+
+  @override
+  String get lessonTitle => 'Урок';
+
+  @override
+  String lessonLoadError(Object error) {
+    return 'Не удалось загрузить урок: $error';
+  }
+
+  @override
+  String lessonUnknownBlockType(String type) {
+    return 'Неизвестный тип блока: $type';
+  }
+
+  @override
+  String get lessonFinish => 'Завершить урок';
+
+  @override
+  String lessonNext(String title) {
+    return 'Далее: $title →';
+  }
+
+  @override
+  String get lessonCompleteTitle => 'Отличная работа!';
+
+  @override
+  String lessonCompleteSubtitleGraph(String title) {
+    return 'Вы прошли урок «$title». Вот ваши результаты:';
+  }
+
+  @override
+  String lessonCompleteSubtitleLinear(String title) {
+    return 'Вы прошли все этапы урока «$title». Вот ваши результаты:';
+  }
+
+  @override
+  String get lessonCompleteWordsLearned => 'слов изучено';
+
+  @override
+  String get lessonCompleteRestarting => 'Начинаем…';
+
+  @override
+  String get lessonCompleteRestart => 'Пройти ещё раз';
+
+  @override
+  String get lessonCompleteMinitestLabel => 'мини-тест';
+
+  @override
+  String get lessonCompletePracticeLabel => 'практика';
+
+  @override
+  String get lessonCompleteReviewLabel => 'закрепление';
+
+  @override
+  String get vocabularyStageEmpty =>
+      'В этом уроке нет новых слов — все они уже встречались раньше.';
+
+  @override
+  String get commonNext => 'Далее';
+
+  @override
+  String get lessonStageSkip => 'Пропустить и продолжить';
+
+  @override
+  String materialStageStepTitle(int number, String title) {
+    return 'Шаг $number. $title';
+  }
+
+  @override
+  String get materialStageMissing => 'Не хватает материала';
+
+  @override
+  String get materialStageNotFound => 'Текст урока не найден.';
+
+  @override
+  String materialStageSection(int page, int total) {
+    return 'Раздел $page из $total';
+  }
+
+  @override
+  String get materialStageDefaultNextVideo => 'Перейти к видео';
+
+  @override
+  String get materialStageNextArrow => 'Далее →';
+
+  @override
+  String get materialStageBack => '← Назад';
+
+  @override
+  String get videoStageNotFound => 'Видео не найдено';
+
+  @override
+  String get videoStageNotUploaded => 'Для этого урока не загружено видео.';
+
+  @override
+  String get videoStageWatch => 'Посмотрите видео';
+
+  @override
+  String get videoStageWatched => '✓ Видео просмотрено';
+
+  @override
+  String get videoStageWatchToContinue =>
+      'Досмотрите видео до конца, чтобы продолжить';
+
+  @override
+  String get videoStageDefaultNextMinitest => 'Перейти к мини-тесту →';
+
+  @override
+  String get audioStageLoadError =>
+      'Не удалось загрузить аудиофайл. Проверьте, что файл существует и доступен, и попробуйте ещё раз.';
+
+  @override
+  String get audioStagePlaybackError =>
+      'Не удалось запустить воспроизведение аудио. Проверьте, не отключён звук, и попробуйте ещё раз.';
+
+  @override
+  String get audioStageNotFound => 'Аудио не найдено';
+
+  @override
+  String get audioStageNotUploaded =>
+      'Для этого урока не загружена аудиозапись.';
+
+  @override
+  String get audioStageListen => 'Прослушайте аудио';
+
+  @override
+  String get audioStageListenHint =>
+      'Послушайте запись и закрепите произношение фраз из урока.';
+
+  @override
+  String get audioStageFinished => '✓ Запись прослушана';
+
+  @override
+  String get audioStageListenToContinue =>
+      'Прослушайте запись до конца, чтобы продолжить';
+
+  @override
+  String get audioStageDefaultNextPractice => 'Перейти к практике →';
+
+  @override
+  String get exerciseKindChoice => 'Выбор ответа';
+
+  @override
+  String get exerciseKindTrueFalse => 'Верно или неверно';
+
+  @override
+  String get exerciseKindMatch => 'Сопоставление';
+
+  @override
+  String get exerciseKindScramble => 'Собери фразу';
+
+  @override
+  String get exerciseKindCloze => 'Заполни пропуск';
+
+  @override
+  String get exerciseKindAutoBlank => 'Пропущенное слово';
+
+  @override
+  String get exerciseKindAutoTranslate => 'Переведи слово';
+
+  @override
+  String get exercisePromptMatch => 'Сопоставление слов и переводов';
+
+  @override
+  String exercisePromptScramble(String translation) {
+    return 'Фраза по переводу «$translation»';
+  }
+
+  @override
+  String exercisePromptCloze(String translation) {
+    return 'Пропуск во фразе «$translation»';
+  }
+
+  @override
+  String exerciseCorrectAnswer(String answer) {
+    return 'Правильный ответ: «$answer»';
+  }
+
+  @override
+  String get exerciseNotAllPairsMatched =>
+      'Не все пары были сопоставлены с первой попытки';
+
+  @override
+  String exerciseCorrectScramble(String answer) {
+    return 'Правильно: «$answer»';
+  }
+
+  @override
+  String exerciseCorrectWord(String answer) {
+    return 'Правильное слово: «$answer»';
+  }
+
+  @override
+  String get exerciseDetailsInHistory => 'Подробности — в истории ответов';
+
+  @override
+  String get exerciseStageNotEnoughMaterial =>
+      'Недостаточно материала для этого блока — переходим дальше.';
+
+  @override
+  String exerciseStageProgress(int index, int total) {
+    return 'Задание $index из $total';
+  }
+
+  @override
+  String exerciseStageCorrectCount(int count) {
+    return '$count правильно';
+  }
+
+  @override
+  String get exerciseStageNextEnter => 'Следующее (Enter)';
+
+  @override
+  String get exerciseStageFinishEnter => 'Завершить (Enter)';
+
+  @override
+  String get exerciseStageResultTitle => 'Результат';
+
+  @override
+  String get exerciseStageAllCorrect => 'Отлично, всё верно!';
+
+  @override
+  String get exerciseStageGoodResult =>
+      'Хороший результат. Разберём ошибки ниже.';
+
+  @override
+  String get exerciseStageContinueEnter => 'Продолжить (Enter)';
 }

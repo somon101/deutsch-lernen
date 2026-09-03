@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../core/locale/content_locale.dart';
+import '../../../../core/locale/locale_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
 import '../../../profile/presentation/profile_tokens.dart';
@@ -276,6 +278,8 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
               maxLines: 3,
               decoration: adminInputDecoration(label: 'Описание'),
             ),
+            const SizedBox(height: AdminMetrics.cardGap),
+            _CourseTranslationsSection(courseId: widget.course.id, translations: widget.course.translations),
             const SizedBox(height: AdminMetrics.fieldGap),
             if (coverUrl.isNotEmpty) ...[
               ClipRRect(
@@ -361,6 +365,105 @@ class _CourseSettingsCardState extends ConsumerState<_CourseSettingsCard> {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// The teacher-facing side of course content language (§ course content
+/// language, 2026-09-04, spec §5: "преподаватель должен видеть языковые
+/// версии учебного контента"). A locale tab strip plus title/description
+/// fields, each locale saved independently via its own translations/{locale}
+/// endpoint — never touches the base title/description fields above, which
+/// stay whatever the Russian original always was.
+class _CourseTranslationsSection extends ConsumerStatefulWidget {
+  const _CourseTranslationsSection({required this.courseId, required this.translations});
+  final String courseId;
+  final Map<String, AdminCourseTranslation> translations;
+
+  @override
+  ConsumerState<_CourseTranslationsSection> createState() => _CourseTranslationsSectionState();
+}
+
+class _CourseTranslationsSectionState extends ConsumerState<_CourseTranslationsSection> {
+  String _locale = supportedContentLocales.first;
+  late final _title = TextEditingController(text: widget.translations[_locale]?.title ?? '');
+  late final _description = TextEditingController(text: widget.translations[_locale]?.description ?? '');
+  bool _busy = false;
+
+  void _switchLocale(String locale) {
+    setState(() {
+      _locale = locale;
+      _title.text = widget.translations[locale]?.title ?? '';
+      _description.text = widget.translations[locale]?.description ?? '';
+    });
+  }
+
+  Future<void> _save() async {
+    if (_title.text.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(builderRepositoryProvider)
+          .setCourseTranslation(widget.courseId, _locale, title: _title.text.trim(), description: _description.text.trim());
+      ref.invalidate(builderCourseProvider(widget.courseId));
+      if (mounted) showSuccessSnack(context);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить перевод');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AdminColors.blockBg,
+        borderRadius: BorderRadius.circular(AdminMetrics.blockRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Языковые версии курса', style: AdminTypography.cardTitle),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              for (final locale in supportedContentLocales)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(
+                      '${localeDisplayName(Locale(locale))}${widget.translations.containsKey(locale) ? '' : ' — нет перевода'}',
+                    ),
+                    selected: _locale == locale,
+                    onSelected: (_) => _switchLocale(locale),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _title, decoration: adminInputDecoration(label: 'Название курса')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _description, maxLines: 3, decoration: adminInputDecoration(label: 'Описание')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              style: AdminButtonStyles.primary(),
+              child: Text('Сохранить перевод (${localeDisplayName(Locale(_locale))})'),
+            ),
+          ),
         ],
       ),
     );

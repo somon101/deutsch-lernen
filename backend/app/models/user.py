@@ -47,6 +47,17 @@ class User(Base):
     # teacher/admin sets. SET NULL on delete: losing the referenced Language
     # should never block deleting it or break this user's row.
     selectedLanguageId: Mapped[str | None] = mapped_column(String, ForeignKey("Language.id", ondelete="SET NULL"), nullable=True)
+    # Which instructional-language variant of a course's own text/media this
+    # user is shown (§ course content language, 2026-09-04) — "ru" | "tg",
+    # validated against SUPPORTED_CONTENT_LOCALES at the API layer, not a
+    # real FK (these are locale codes, not rows in the Language table — that
+    # table is the language being TAUGHT, e.g. German; this is the language
+    # the course's own explanations are written IN). Null means "no explicit
+    # choice yet", not "ru" — the client falls back to the system UI
+    # language in that case. Independent of selectedLanguageId (statistics
+    # scope) and of the system UI language (locale_provider.dart) — all
+    # three must be free to change without affecting one another.
+    contentLocale: Mapped[str | None] = mapped_column(String, nullable=True)
     lastLoginAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     lastActiveAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     # createdAt has a real DB-level default (confirmed via information_schema:

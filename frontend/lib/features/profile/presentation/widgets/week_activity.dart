@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../data/profile_repository.dart';
 import '../profile_tokens.dart';
 import 'profile_card.dart';
 
-const _dayLabels = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+List<String> _dayLabels(AppLocalizations l10n) => [
+      l10n.weekActivityDayMon,
+      l10n.weekActivityDayTue,
+      l10n.weekActivityDayWed,
+      l10n.weekActivityDayThu,
+      l10n.weekActivityDayFri,
+      l10n.weekActivityDaySat,
+      l10n.weekActivityDaySun,
+    ];
 
 /// Mirrors the "Активность за неделю" mock's layout exactly (§ streak mode,
 /// 2026-08-29 — real data now, not a placeholder): a 7-dot week row, then
@@ -17,19 +26,21 @@ class WeekActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final avgMinutes = activity.avgSecondsPerDay ~/ 60;
     final percent = activity.percentChangeVsYesterday;
+    final dayLabels = _dayLabels(l10n);
 
     return ProfileCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Активность за неделю', style: ProfileTypography.sectionTitle(context)),
+          Text(l10n.weekActivityTitle, style: ProfileTypography.sectionTitle(context)),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              for (var i = 0; i < 7; i++) _DayDot(label: _dayLabels[i], done: activity.days[i].active),
+              for (var i = 0; i < 7; i++) _DayDot(label: dayLabels[i], done: activity.days[i].active),
             ],
           ),
           const SizedBox(height: 16),
@@ -38,7 +49,7 @@ class WeekActivityCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('$avgMinutesм/день', style: ProfileTypography.bigNumber(context)),
+              Text(l10n.weekActivityAvgPerDay(avgMinutes), style: ProfileTypography.bigNumber(context)),
               // No badge at all when yesterday had zero time — a percentage
               // change from zero is undefined, not a real number (§6, 2026-08-29).
               if (percent != null)
@@ -58,7 +69,7 @@ class WeekActivityCard extends StatelessWidget {
                 ),
             ],
           ),
-          Text('Средняя активность', style: ProfileTypography.caption(context)),
+          Text(l10n.weekActivityAverage, style: ProfileTypography.caption(context)),
         ],
       ),
     );

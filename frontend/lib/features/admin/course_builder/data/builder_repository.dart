@@ -53,6 +53,33 @@ class BuilderRepository {
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
 
+  /// One locale's variant of a course's title/description (§ course content
+  /// language, 2026-09-04) — a full replace of that locale's row, matching
+  /// backend/app/schemas/course.py's CourseTranslationInput.
+  Future<AdminCourse> setCourseTranslation(String courseId, String locale, {required String title, required String description}) async {
+    final res = await _api.put(
+      '$_base/${Uri.encodeComponent(courseId)}/translations/${Uri.encodeComponent(locale)}',
+      body: {'title': title, 'description': description},
+    );
+    return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
+  /// Same for a lesson's title/description/materialText.
+  Future<AdminCourse> setLessonTranslation(
+    String courseId,
+    String lessonId,
+    String locale, {
+    required String title,
+    required String description,
+    required String materialText,
+  }) async {
+    final res = await _api.put(
+      '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/translations/${Uri.encodeComponent(locale)}',
+      body: {'title': title, 'description': description, 'materialText': materialText},
+    );
+    return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
   Future<void> deleteCourse(String courseId) async {
     await _api.delete('$_base/${Uri.encodeComponent(courseId)}');
   }
@@ -264,6 +291,16 @@ class BuilderRepository {
   ) async {
     await _api.delete(
       '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}',
+    );
+  }
+
+  /// One locale's variant of a word's translation (§ course content
+  /// language, 2026-09-04) — `german`/`pronunciation` are never part of
+  /// this, see VocabularyTranslation's backend docstring for why.
+  Future<void> setVocabularyTranslation(String courseId, String lessonId, String wordId, String locale, String translation) async {
+    await _api.put(
+      '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}/translations/${Uri.encodeComponent(locale)}',
+      body: {'translation': translation},
     );
   }
 

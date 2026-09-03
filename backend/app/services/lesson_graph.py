@@ -27,6 +27,7 @@ from app.models.course_lesson import CourseLesson
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_edge import LessonEdge
 from app.models.lesson_node import LessonNode
+from app.models.lesson_node_media import LessonNodeMedia
 from app.models.lesson_question import LessonQuestion
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
@@ -59,12 +60,16 @@ async def _owned_lesson(db: AsyncSession, course_id: str, lesson_id: str) -> Cou
     return lesson
 
 
-def node_dto(node: LessonNode) -> dict:
+def node_dto(node: LessonNode, media_override: str | None = None) -> dict:
+    """`media_override` (§ course content language, 2026-09-04) is the
+    resolved LessonNodeMedia row's URL for the caller's requested locale,
+    when one exists — omitted (every admin-builder caller), this returns
+    node.mediaUrl exactly as before."""
     return {
         "id": node.id,
         "type": node.type,
         "refId": node.refId,
-        "mediaUrl": node.mediaUrl,
+        "mediaUrl": media_override if media_override is not None else node.mediaUrl,
         "title": node.title or DEFAULT_TITLES.get(node.type, node.type),
         "posX": node.posX,
         "posY": node.posY,
@@ -93,13 +98,19 @@ async def _real_edges(db: AsyncSession, lesson_id: str) -> list[LessonEdge]:
     ).scalars().all()
 
 
-async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str]) -> dict[str, dict]:
+async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str], locale: str | None = None) -> dict[str, dict]:
     """For services/courses.py's get_course(): every REAL (already
     converted) graph among the given lessons, keyed by lessonId — a lesson
     absent from the result has no graph (still legacy). Never synthesizes a
     preview; that's a builder-only concept for the "Перевести в граф" flow,
     not something the shared course-read path should compute for every
-    unconverted lesson on every request."""
+    unconverted lesson on every request.
+
+    `locale` (§ course content language, 2026-09-04) resolves each
+    video/audio node's LessonNodeMedia row for that locale, when one
+    exists — see node_dto's media_override param. No row for the requested
+    locale falls back to the node's own base mediaUrl (the same "base
+    column IS the ru text" convention as everywhere else in this feature)."""
     if not lesson_ids:
         return {}
     nodes = (
@@ -108,9 +119,16 @@ async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str]) -> di
     if not nodes:
         return {}
     edges = (await db.execute(select(LessonEdge).where(LessonEdge.lessonId.in_(lesson_ids)))).scalars().all()
+    media_by_node: dict[str, str] = {}
+    if locale:
+        node_ids = [n.id for n in nodes]
+        media_rows = (
+            await db.execute(select(LessonNodeMedia).where(LessonNodeMedia.lessonNodeId.in_(node_ids), LessonNodeMedia.locale == locale))
+        ).scalars().all()
+        media_by_node = {m.lessonNodeId: m.mediaUrl for m in media_rows}
     by_lesson: dict[str, dict] = {}
     for n in nodes:
-        by_lesson.setdefault(n.lessonId, {"nodes": [], "edges": []})["nodes"].append(node_dto(n))
+        by_lesson.setdefault(n.lessonId, {"nodes": [], "edges": []})["nodes"].append(node_dto(n, media_by_node.get(n.id)))
     for e in edges:
         by_lesson.setdefault(e.lessonId, {"nodes": [], "edges": []})["edges"].append(edge_dto(e))
     return by_lesson
@@ -310,6 +328,31 @@ async def set_node_media(db: AsyncSession, lesson_id: str, node_id: str, media_u
     await db.commit()
     await db.refresh(node)
     return {"node": node_dto(node), "previousMediaUrl": previous}
+
+
+async def set_node_media_translation(db: AsyncSession, lesson_id: str, node_id: str, locale: str, media_url: str | None) -> dict:
+    """One locale's variant of a video/audio node's file (§ course content
+    language, 2026-09-04) — writes LessonNodeMedia, never node.mediaUrl
+    itself (that stays the pre-migration/default value — see
+    LessonNodeMedia's docstring). `media_url=None` deletes that locale's
+    row (the caller is responsible for cleaning up the underlying file, same
+    as set_node_media)."""
+    node = await _get_owned_node(db, lesson_id, node_id)
+    if node.type not in ("video", "audio"):
+        raise ApiError(400, "У этого типа блока нет своего файла")
+    existing = (
+        await db.execute(select(LessonNodeMedia).where(LessonNodeMedia.lessonNodeId == node_id, LessonNodeMedia.locale == locale))
+    ).scalar_one_or_none()
+    previous = existing.mediaUrl if existing else None
+    if media_url is None:
+        if existing:
+            await db.delete(existing)
+    elif existing:
+        existing.mediaUrl = media_url
+    else:
+        db.add(LessonNodeMedia(lessonNodeId=node_id, locale=locale, mediaUrl=media_url))
+    await db.commit()
+    return {"node": node_dto(node, media_url), "previousMediaUrl": previous}
 
 
 async def delete_node(db: AsyncSession, course_id: str, lesson_id: str, node_id: str) -> str | None:

@@ -11,7 +11,12 @@ from app.db import async_session
 from app.errors import ApiError
 from app.routers import admin, auth, auto_blank, auto_match, auto_translate, builder, content, daily_goal, leaderboard, learner_courses, lesson_graph, me, notifications, preferences, social, taxonomy, words
 from app.services.bootstrap import ensure_admin_exists
-from app.services.schema_bootstrap import ensure_daily_goal_tables, ensure_lesson_graph_tables, ensure_phone_removed
+from app.services.schema_bootstrap import (
+    ensure_content_locale_tables,
+    ensure_daily_goal_tables,
+    ensure_lesson_graph_tables,
+    ensure_phone_removed,
+)
 from app.uploads.storage import UPLOADS_ROOT, ensure_storage_bucket
 
 
@@ -22,6 +27,7 @@ async def lifespan(app: FastAPI):
         await ensure_daily_goal_tables(session)
         await ensure_lesson_graph_tables(session)
         await ensure_phone_removed(session)
+        await ensure_content_locale_tables(session)
         await ensure_admin_exists(session)
     yield
 

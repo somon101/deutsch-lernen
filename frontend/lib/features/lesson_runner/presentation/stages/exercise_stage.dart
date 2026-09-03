@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/utils/sound_effects.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../../data/lesson_repository.dart';
 import '../../domain/exercise.dart';
 import '../../domain/progress.dart';
@@ -28,43 +29,43 @@ const _blankBufferSize = 3;
 /// unlike every other kind here which is answered in one action.
 int _exerciseCapSeconds(Exercise e) => (e is MatchExercise || e is AutoMatchSlot) ? 90 : 60;
 
-String _kindLabel(Exercise e) => switch (e) {
-      ChoiceQuestion() => 'Выбор ответа',
-      TrueFalseQuestion() => 'Верно или неверно',
-      MatchExercise() => 'Сопоставление',
-      ScrambleExercise() => 'Собери фразу',
-      ClozeExercise() => 'Заполни пропуск',
-      AutoBlankSlot() => 'Пропущенное слово',
-      AutoTranslateSlot() => 'Переведи слово',
-      AutoMatchSlot() => 'Сопоставление',
+String _kindLabel(Exercise e, AppLocalizations l10n) => switch (e) {
+      ChoiceQuestion() => l10n.exerciseKindChoice,
+      TrueFalseQuestion() => l10n.exerciseKindTrueFalse,
+      MatchExercise() => l10n.exerciseKindMatch,
+      ScrambleExercise() => l10n.exerciseKindScramble,
+      ClozeExercise() => l10n.exerciseKindCloze,
+      AutoBlankSlot() => l10n.exerciseKindAutoBlank,
+      AutoTranslateSlot() => l10n.exerciseKindAutoTranslate,
+      AutoMatchSlot() => l10n.exerciseKindMatch,
     };
 
-String _prompt(Exercise e) => switch (e) {
+String _prompt(Exercise e, AppLocalizations l10n) => switch (e) {
       ChoiceQuestion() => e.prompt,
       TrueFalseQuestion() => e.statement,
-      MatchExercise() => 'Сопоставление слов и переводов',
-      ScrambleExercise() => 'Фраза по переводу «${e.translation}»',
-      ClozeExercise() => 'Пропуск во фразе «${e.translation}»',
+      MatchExercise() => l10n.exercisePromptMatch,
+      ScrambleExercise() => l10n.exercisePromptScramble(e.translation),
+      ClozeExercise() => l10n.exercisePromptCloze(e.translation),
       // The actual phrase only exists inside the generated version, held
       // by the widget itself (§ auto blank, 2026-08-31) — not on the
       // static Exercise the results screen re-reads after the fact.
-      AutoBlankSlot() => 'Пропущенное слово',
+      AutoBlankSlot() => l10n.exerciseKindAutoBlank,
       // Same as the blank slots: the word this slot resolved to lives in
       // the generated version the widget held, not on the static Exercise
       // the results screen re-reads afterwards.
-      AutoTranslateSlot() => 'Переведи слово',
-      AutoMatchSlot() => 'Сопоставление слов и переводов',
+      AutoTranslateSlot() => l10n.exerciseKindAutoTranslate,
+      AutoMatchSlot() => l10n.exercisePromptMatch,
     };
 
-String _correctAnswerLabel(Exercise e) => switch (e) {
-      ChoiceQuestion() => 'Правильный ответ: «${e.correctAnswer}»',
+String _correctAnswerLabel(Exercise e, AppLocalizations l10n) => switch (e) {
+      ChoiceQuestion() => l10n.exerciseCorrectAnswer(e.correctAnswer),
       TrueFalseQuestion() => e.explanation,
-      MatchExercise() => 'Не все пары были сопоставлены с первой попытки',
-      ScrambleExercise() => 'Правильно: «${e.answer.join(" ")}»',
-      ClozeExercise() => 'Правильное слово: «${e.answer}»',
-      AutoBlankSlot() => 'Подробности — в истории ответов',
-      AutoTranslateSlot() => 'Подробности — в истории ответов',
-      AutoMatchSlot() => 'Подробности — в истории ответов',
+      MatchExercise() => l10n.exerciseNotAllPairsMatched,
+      ScrambleExercise() => l10n.exerciseCorrectScramble(e.answer.join(" ")),
+      ClozeExercise() => l10n.exerciseCorrectWord(e.answer),
+      AutoBlankSlot() => l10n.exerciseDetailsInHistory,
+      AutoTranslateSlot() => l10n.exerciseDetailsInHistory,
+      AutoMatchSlot() => l10n.exerciseDetailsInHistory,
     };
 
 /// Mirrors ExerciseRunner.tsx: runs one flat exercise list, tracks score,
@@ -235,15 +236,16 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (_exercises.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Недостаточно материала для этого блока — переходим дальше.', textAlign: TextAlign.center),
+            Text(l10n.exerciseStageNotEnoughMaterial, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: _finish, child: const Text('Далее')),
+            ElevatedButton(onPressed: _finish, child: Text(l10n.commonNext)),
           ],
         ),
       );
@@ -255,12 +257,12 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
       onKeyEvent: _handleKey,
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: _finished ? _ResultsView(exercises: _exercises, results: _results, correct: _correct, onContinue: _finish) : _buildQuestion(context),
+        child: _finished ? _ResultsView(exercises: _exercises, results: _results, correct: _correct, onContinue: _finish) : _buildQuestion(context, l10n),
       ),
     );
   }
 
-  Widget _buildQuestion(BuildContext context) {
+  Widget _buildQuestion(BuildContext context, AppLocalizations l10n) {
     final current = _exercises[_index];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -268,8 +270,8 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Задание ${_index + 1} из ${_exercises.length}'),
-            Text('$_correct правильно'),
+            Text(l10n.exerciseStageProgress(_index + 1, _exercises.length)),
+            Text(l10n.exerciseStageCorrectCount(_correct)),
           ],
         ),
         const SizedBox(height: 6),
@@ -286,7 +288,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(_kindLabel(current), style: Theme.of(context).textTheme.labelLarge),
+                    Text(_kindLabel(current, l10n), style: Theme.of(context).textTheme.labelLarge),
                     const SizedBox(height: 12),
                     _questionWidget(current),
                   ],
@@ -301,7 +303,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
             alignment: Alignment.centerRight,
             child: ElevatedButton(
               onPressed: _next,
-              child: Text(_index + 1 < _exercises.length ? 'Следующее (Enter)' : 'Завершить (Enter)'),
+              child: Text(_index + 1 < _exercises.length ? l10n.exerciseStageNextEnter : l10n.exerciseStageFinishEnter),
             ),
           ),
         ],
@@ -360,6 +362,7 @@ class _ResultsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final mistakes = [
       for (var i = 0; i < exercises.length; i++)
         if (i >= results.length || !results[i]) exercises[i],
@@ -369,10 +372,10 @@ class _ResultsView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: 8),
-        Text('Результат', style: Theme.of(context).textTheme.labelLarge),
+        Text(l10n.exerciseStageResultTitle, style: Theme.of(context).textTheme.labelLarge),
         Text('$correct / ${exercises.length}', style: Theme.of(context).textTheme.displaySmall),
         const SizedBox(height: 4),
-        Text(correct == exercises.length ? 'Отлично, всё верно!' : 'Хороший результат. Разберём ошибки ниже.'),
+        Text(correct == exercises.length ? l10n.exerciseStageAllCorrect : l10n.exerciseStageGoodResult),
         const SizedBox(height: 16),
         if (mistakes.isNotEmpty)
           Expanded(
@@ -383,7 +386,7 @@ class _ResultsView extends StatelessWidget {
                 final m = mistakes[i];
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('${_prompt(m)} — ${_correctAnswerLabel(m)}'),
+                  child: Text('${_prompt(m, l10n)} — ${_correctAnswerLabel(m, l10n)}'),
                 );
               },
             ),
@@ -391,7 +394,7 @@ class _ResultsView extends StatelessWidget {
         else
           const Spacer(),
         const SizedBox(height: 12),
-        ElevatedButton(onPressed: onContinue, child: const Text('Продолжить (Enter)')),
+        ElevatedButton(onPressed: onContinue, child: Text(l10n.exerciseStageContinueEnter)),
       ],
     );
   }

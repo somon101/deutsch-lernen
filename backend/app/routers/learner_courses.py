@@ -6,6 +6,7 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
 from app.services import courses as svc
+from app.services.content_locale import DEFAULT_CONTENT_LOCALE
 
 router = APIRouter(prefix="/api/courses", tags=["learner-courses"], dependencies=[Depends(require_auth)])
 
@@ -20,7 +21,11 @@ async def list_published_courses(languageId: str | None = Query(default=None), d
 async def get_published_course(course_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     # 404 if the course is missing OR not published — drafts are
     # indistinguishable from nonexistent to a learner, even by guessed id.
-    course = await svc.get_course(db, course_id)
+    # contentLocale (§ course content language, 2026-09-04) is a genuinely
+    # separate preference from the system UI language — see
+    # app/services/content_locale.py's module docstring for why this never
+    # derives from anything else, including a system-language header.
+    course = await svc.get_course(db, course_id, locale=user.contentLocale or DEFAULT_CONTENT_LOCALE)
     if not course or course["status"] != "PUBLISHED":
         raise ApiError(404, "Курс не найден")
     return {"course": course}

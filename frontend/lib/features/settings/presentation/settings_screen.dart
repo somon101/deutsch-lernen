@@ -8,6 +8,7 @@ import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/cache/cache_store.dart';
 import '../../../core/settings/sound_preferences.dart';
+import '../../../core/locale/content_locale.dart';
 import '../../../core/locale/locale_provider.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/back_guard.dart';
@@ -271,9 +272,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SettingsNavTile(
                         icon: Icons.menu_book_outlined,
-                        label: l10n.courseLanguage,
-                        value: _courseLanguageLabel(effectiveLanguage),
-                        onTap: () => _pickCourseLanguage(context, ref, effectiveLanguage),
+                        label: l10n.statisticsLanguage,
+                        value: _statisticsLanguageLabel(l10n, effectiveLanguage),
+                        onTap: () => _pickStatisticsLanguage(context, ref, effectiveLanguage),
+                      ),
+                      SettingsNavTile(
+                        icon: Icons.school_outlined,
+                        label: l10n.courseContentLanguage,
+                        value: localeDisplayName(Locale(user.contentLocale ?? defaultContentLocale)),
+                        onTap: () => _pickCourseContentLanguage(context, ref, user.contentLocale),
                       ),
                       SettingsNavTile(
                         icon: Icons.dark_mode_outlined,
@@ -354,26 +361,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// The language the profile's overall-progress number is shown for (§
   /// per-language overall progress, 2026-08-29) — a real, backend-tracked
   /// preference (`AppUser.selectedLanguageId`), not the old local-only
-  /// placeholder this tile used to show.
-  String _courseLanguageLabel(EffectiveLanguage? effective) {
+  /// placeholder this tile used to show. Renamed from "Язык курса" to
+  /// "Статистика курса" (§ course content language, 2026-09-04) — this
+  /// field only ever scoped displayed statistics, never actual course
+  /// content, and the old label was misleading now that a real course
+  /// CONTENT language exists (see courseContentLanguage below).
+  String _statisticsLanguageLabel(AppLocalizations l10n, EffectiveLanguage? effective) {
     if (effective == null) return '…';
-    if (effective.selectedId == null) return 'Выбрать';
+    if (effective.selectedId == null) return l10n.statisticsLanguageNotSet;
     return effective.languages
         .firstWhere((l) => l.id == effective.selectedId, orElse: () => const LanguageOption(id: '', name: '—'))
         .name;
   }
 
-  Future<void> _pickCourseLanguage(BuildContext context, WidgetRef ref, EffectiveLanguage? effective) async {
+  Future<void> _pickStatisticsLanguage(BuildContext context, WidgetRef ref, EffectiveLanguage? effective) async {
     if (effective == null || effective.languages.isEmpty) return;
     final l10n = AppLocalizations.of(context);
     final picked = await _showOptionSheet<String>(
       context,
-      title: l10n.courseLanguage,
+      title: l10n.statisticsLanguage,
       options: [for (final lang in effective.languages) (value: lang.id, label: lang.name)],
       current: effective.selectedId ?? '',
     );
     if (picked == null || picked == effective.selectedId) return;
     final user = await ref.read(profileRepositoryProvider).setSelectedLanguage(picked);
+    await ref.read(authProvider.notifier).updateLocalUser(user);
+  }
+
+  /// Which locale a course's own text/media is shown in (§ course content
+  /// language, 2026-09-04) — genuinely independent of both the system UI
+  /// language (_pickAppLanguage above) and the statistics scope
+  /// (_pickStatisticsLanguage above): switching this never touches either
+  /// of those, and vice versa. Backed by `AppUser.contentLocale` through
+  /// the same `/api/me/` profile endpoint `selectedLanguageId` already
+  /// uses — no second parallel storage mechanism.
+  Future<void> _pickCourseContentLanguage(BuildContext context, WidgetRef ref, String? current) async {
+    final l10n = AppLocalizations.of(context);
+    final effectiveCurrent = current ?? defaultContentLocale;
+    final picked = await _showOptionSheet<String>(
+      context,
+      title: l10n.courseContentLanguage,
+      options: [for (final code in supportedContentLocales) (value: code, label: localeDisplayName(Locale(code)))],
+      current: effectiveCurrent,
+    );
+    if (picked == null || picked == effectiveCurrent) return;
+    final user = await ref.read(profileRepositoryProvider).setContentLocale(picked);
     await ref.read(authProvider.notifier).updateLocalUser(user);
   }
 
@@ -392,19 +424,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (picked != null) await ref.read(themeModeProvider.notifier).setMode(picked);
   }
 
-  Future<void> _pickAppLanguage(BuildContext context, WidgetRef ref, Locale? current) async {
+  /// No "как в системе" option (§ interface localization, 2026-09-03) — the
+  /// picker always shows exactly the supported locales, and picking one
+  /// always sets a concrete, explicit choice. `current` is resolved to the
+  /// locale actually on screen right now (the saved choice, or the device
+  /// locale on first launch before any explicit choice exists) purely so
+  /// the sheet highlights the right option — it is never itself a value the
+  /// user can pick.
+  Future<void> _pickAppLanguage(BuildContext context, WidgetRef ref, Locale? saved) async {
     final l10n = AppLocalizations.of(context);
-    final systemLocale = Localizations.localeOf(context);
-    final picked = await _showOptionSheet<Locale?>(
+    final current = saved ?? Localizations.localeOf(context);
+    final picked = await _showOptionSheet<Locale>(
       context,
       title: l10n.appLanguage,
-      options: [
-        (value: null, label: '${l10n.themeSystem} (${localeDisplayName(systemLocale)})'),
-        for (final locale in AppLocalizations.supportedLocales) (value: locale, label: localeDisplayName(locale)),
-      ],
+      options: [for (final locale in AppLocalizations.supportedLocales) (value: locale, label: localeDisplayName(locale))],
       current: current,
     );
-    if (picked != current) await ref.read(localeProvider.notifier).setLocale(picked);
+    if (picked != null && picked != current) await ref.read(localeProvider.notifier).setLocale(picked);
   }
 
   Future<T?> _showOptionSheet<T>(

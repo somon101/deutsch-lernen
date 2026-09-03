@@ -1,4 +1,8 @@
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/locale/locale_provider.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// MOCK DATA LAYER.
 ///
@@ -92,29 +96,35 @@ class ProfileGamificationOverview {
 class ProfileGamificationRepository {
   const ProfileGamificationRepository();
 
-  ProfileGamificationOverview fetchOverview() => const ProfileGamificationOverview(
-        social: SocialStats(followers: 128, mutual: 42, following: 67),
+  // Takes AppLocalizations rather than being a `const` literal (as this used
+  // to be) because the mock achievement/level text is still real,
+  // user-visible profile-screen text (§ interface localization, 2026-09-03)
+  // — "it's mock data" describes where the NUMBERS come from, not an excuse
+  // for the STRINGS next to them to ignore the chosen language.
+  ProfileGamificationOverview fetchOverview(AppLocalizations l10n) => ProfileGamificationOverview(
+        social: const SocialStats(followers: 128, mutual: 42, following: 67),
         streakDays: 17,
         studyMinutes: 24 * 60 + 30,
-        level: LevelProgress(code: 'B1', name: 'Intermediate', percent: 78, hint: 'Вы близки к следующему уровню!', score: 4.2),
+        level: LevelProgress(code: 'B1', name: l10n.gamificationLevelNameIntermediate, percent: 78, hint: l10n.gamificationLevelHint, score: 4.2),
         achievements: [
-          Achievement(icon: 'mic', title: 'Первый урок', subtitle: 'Пройден', state: AchievementState.earned),
-          Achievement(icon: 'week', title: 'Неделя 7 дней', subtitle: 'Пройден', state: AchievementState.earned),
-          Achievement(icon: 'target', title: 'Цель 10 уроков', subtitle: '7/10', state: AchievementState.inProgress),
-          Achievement(icon: 'trophy', title: 'Активный ученик', subtitle: '10 уроков', state: AchievementState.earned),
-          Achievement(icon: 'lock', title: 'Мастер слов', subtitle: 'Заблокировано', state: AchievementState.locked),
+          Achievement(icon: 'mic', title: l10n.gamificationAchievementFirstLessonTitle, subtitle: l10n.gamificationAchievementDone, state: AchievementState.earned),
+          Achievement(icon: 'week', title: l10n.gamificationAchievementWeekTitle, subtitle: l10n.gamificationAchievementDone, state: AchievementState.earned),
+          Achievement(icon: 'target', title: l10n.gamificationAchievementGoalTitle, subtitle: '7/10', state: AchievementState.inProgress),
+          Achievement(icon: 'trophy', title: l10n.gamificationAchievementActiveTitle, subtitle: l10n.gamificationAchievementLessons10, state: AchievementState.earned),
+          Achievement(icon: 'lock', title: l10n.gamificationAchievementWordMasterTitle, subtitle: l10n.gamificationAchievementLocked, state: AchievementState.locked),
         ],
-        rank: RankInfo(place: 48, topPercent: 12, periodLabel: 'По неделе', totalStudents: 8452),
-        weeklyActivity: WeeklyActivity(
+        rank: RankInfo(place: 48, topPercent: 12, periodLabel: l10n.gamificationRankPeriodWeek, totalStudents: 8452),
+        weeklyActivity: const WeeklyActivity(
           days: [true, true, true, true, true, true, null],
           avgHoursPerDay: 4.2,
           trendPercent: 12,
         ),
         // TODO: подключить API — учебный язык пользователя не хранится на бэкенде.
-        learningLanguage: 'английский',
+        learningLanguage: l10n.gamificationLearningLanguageEnglish,
       );
 }
 
-final profileGamificationProvider = Provider<ProfileGamificationOverview>(
-  (ref) => const ProfileGamificationRepository().fetchOverview(),
-);
+final profileGamificationProvider = Provider<ProfileGamificationOverview>((ref) {
+  final locale = ref.watch(localeProvider) ?? const Locale('ru');
+  return const ProfileGamificationRepository().fetchOverview(lookupAppLocalizations(locale));
+});

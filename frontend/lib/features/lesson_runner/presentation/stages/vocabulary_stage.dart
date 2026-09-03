@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../lesson_runner_controller.dart';
 import '../widgets/word_card_deck.dart';
 
@@ -83,7 +84,7 @@ class _VocabularyStageState extends ConsumerState<VocabularyStage> {
 
     if (words.isEmpty) {
       return _EmptyStage(
-        message: 'В этом уроке нет новых слов — все они уже встречались раньше.',
+        message: AppLocalizations.of(context).vocabularyStageEmpty,
         onContinue: widget.onComplete,
       );
     }
@@ -123,7 +124,7 @@ class _EmptyStage extends StatelessWidget {
           children: [
             Text(message, textAlign: TextAlign.center),
             const SizedBox(height: 16),
-            ElevatedButton(onPressed: onContinue, child: const Text('Далее')),
+            ElevatedButton(onPressed: onContinue, child: Text(AppLocalizations.of(context).commonNext)),
           ],
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 
 import '../../../../core/api/api_client.dart';
+import '../../../../l10n/app_localizations.dart';
 import '../lesson_runner_controller.dart';
 import '../widgets/playback_time_tracker.dart';
 
@@ -74,7 +75,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
         if (v && mounted) setState(() => _finished = true);
       }),
       player.stream.error.listen((e) {
-        if (mounted) setState(() => _error = 'Не удалось загрузить аудиофайл. Проверьте, что файл существует и доступен, и попробуйте ещё раз.');
+        if (mounted) setState(() => _error = AppLocalizations.of(context).audioStageLoadError);
       }),
     ]);
     return player;
@@ -99,7 +100,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
         await _player?.play();
       }
     } catch (_) {
-      setState(() => _error = 'Не удалось запустить воспроизведение аудио. Проверьте, не отключён звук, и попробуйте ещё раз.');
+      if (mounted) setState(() => _error = AppLocalizations.of(context).audioStagePlaybackError);
     }
   }
 
@@ -110,6 +111,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
     final rawUrl = widget.graphNodeMediaUrl ? widget.mediaUrlOverride : data.content.audioUrl;
 
@@ -119,11 +121,11 @@ class _AudioStageState extends ConsumerState<AudioStage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text('Аудио не найдено', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(l10n.audioStageNotFound, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            const Text('Для этого урока не загружена аудиозапись.', textAlign: TextAlign.center),
+            Text(l10n.audioStageNotUploaded, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: widget.onComplete, child: const Text('Пропустить и продолжить')),
+            ElevatedButton(onPressed: widget.onComplete, child: Text(l10n.lessonStageSkip)),
           ],
         ),
       );
@@ -144,9 +146,9 @@ class _AudioStageState extends ConsumerState<AudioStage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text('Прослушайте аудио', style: Theme.of(context).textTheme.headlineSmall),
+          Text(l10n.audioStageListen, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
-          const Text('Послушайте запись и закрепите произношение фраз из урока.', textAlign: TextAlign.center),
+          Text(l10n.audioStageListenHint, textAlign: TextAlign.center),
           const SizedBox(height: 24),
           Card(
             child: Padding(
@@ -192,7 +194,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
           ),
           const SizedBox(height: 20),
           Text(
-            _finished ? '✓ Запись прослушана' : 'Прослушайте запись до конца, чтобы продолжить',
+            _finished ? l10n.audioStageFinished : l10n.audioStageListenToContinue,
             style: TextStyle(
               color: _finished ? Colors.green : Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
@@ -201,7 +203,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _finished ? widget.onComplete : null,
-            child: Text(widget.nextLabel ?? 'Перейти к практике →'),
+            child: Text(widget.nextLabel ?? l10n.audioStageDefaultNextPractice),
           ),
         ],
       ),

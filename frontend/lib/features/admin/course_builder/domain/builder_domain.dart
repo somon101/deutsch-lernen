@@ -15,6 +15,7 @@ class AdminVocabWord {
     required this.pronunciation,
     this.audioUrl,
     this.imageUrl,
+    this.translations = const {},
   });
 
   factory AdminVocabWord.fromJson(Map<String, dynamic> json) => AdminVocabWord(
@@ -24,6 +25,13 @@ class AdminVocabWord {
     pronunciation: json['pronunciation'] as String? ?? '',
     audioUrl: json['audioUrl'] as String?,
     imageUrl: json['imageUrl'] as String?,
+    // {locale: translation} for every locale beyond the base `translation`
+    // field above, which IS the "ru" text (§ course content language,
+    // 2026-09-04) — see VocabularyTranslation's backend docstring.
+    translations: (json['translations'] as Map<String, dynamic>?)?.map(
+          (locale, v) => MapEntry(locale, (v as Map<String, dynamic>)['translation'] as String),
+        ) ??
+        const {},
   );
 
   final String id;
@@ -32,6 +40,7 @@ class AdminVocabWord {
   final String pronunciation;
   final String? audioUrl;
   final String? imageUrl;
+  final Map<String, String> translations;
 }
 
 class AdminBlock {
@@ -149,6 +158,20 @@ class AdminLessonGraph {
   final List<AdminGraphEdge> edges;
 }
 
+class AdminLessonTranslation {
+  const AdminLessonTranslation({required this.title, required this.description, required this.materialText});
+
+  factory AdminLessonTranslation.fromJson(Map<String, dynamic> json) => AdminLessonTranslation(
+    title: json['title'] as String,
+    description: json['description'] as String? ?? '',
+    materialText: json['materialText'] as String? ?? '',
+  );
+
+  final String title;
+  final String description;
+  final String materialText;
+}
+
 class AdminLesson {
   const AdminLesson({
     required this.id,
@@ -161,6 +184,7 @@ class AdminLesson {
     required this.vocabulary,
     required this.blocks,
     this.graph,
+    this.translations = const {},
   });
 
   factory AdminLesson.fromJson(Map<String, dynamic> json) => AdminLesson(
@@ -182,6 +206,12 @@ class AdminLesson {
     // 2026-09-03). The legacy file-based course never has this key at all,
     // which json['graph'] as Map?-cast handles the same as an explicit null.
     graph: json['graph'] != null ? AdminLessonGraph.fromJson(json['graph'] as Map<String, dynamic>) : null,
+    // Same shape/rationale as AdminCourse.translations (§ course content
+    // language, 2026-09-04).
+    translations: (json['translations'] as Map<String, dynamic>?)?.map(
+          (locale, v) => MapEntry(locale, AdminLessonTranslation.fromJson(v as Map<String, dynamic>)),
+        ) ??
+        const {},
   );
 
   /// GET/PUT /api/admin/content/:lessonId's shape — keyed by `lessonId`
@@ -218,10 +248,21 @@ class AdminLesson {
   final List<AdminVocabWord> vocabulary;
   final List<AdminBlock> blocks;
   final AdminLessonGraph? graph;
+  final Map<String, AdminLessonTranslation> translations;
 
   List<AdminBlock> blocksFor(String stage) =>
       blocks.where((b) => b.stage == stage).toList()
         ..sort((a, b) => a.position.compareTo(b.position));
+}
+
+class AdminCourseTranslation {
+  const AdminCourseTranslation({required this.title, required this.description});
+
+  factory AdminCourseTranslation.fromJson(Map<String, dynamic> json) =>
+      AdminCourseTranslation(title: json['title'] as String, description: json['description'] as String? ?? '');
+
+  final String title;
+  final String description;
 }
 
 class AdminCourse {
@@ -234,6 +275,7 @@ class AdminCourse {
     required this.position,
     required this.levelId,
     required this.lessons,
+    this.translations = const {},
   });
 
   factory AdminCourse.fromJson(Map<String, dynamic> json) => AdminCourse(
@@ -247,6 +289,13 @@ class AdminCourse {
     lessons: (json['lessons'] as List<dynamic>)
         .map((l) => AdminLesson.fromJson(l as Map<String, dynamic>))
         .toList(),
+    // Every locale this course already has a saved translation for (§
+    // course content language, 2026-09-04) — absent for a callers that
+    // predate this feature would just mean an empty map, never an error.
+    translations: (json['translations'] as Map<String, dynamic>?)?.map(
+          (locale, v) => MapEntry(locale, AdminCourseTranslation.fromJson(v as Map<String, dynamic>)),
+        ) ??
+        const {},
   );
 
   final String id;
@@ -257,6 +306,7 @@ class AdminCourse {
   final int position;
   final String? levelId;
   final List<AdminLesson> lessons;
+  final Map<String, AdminCourseTranslation> translations;
 }
 
 class AdminCourseSummary {

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +6,7 @@ import 'core/api/api_client.dart';
 import 'core/api/router_refresh.dart';
 import 'core/auth/auth_state.dart';
 import 'core/auth/user.dart';
+import 'core/locale/framework_locale_fallback.dart';
 import 'core/locale/locale_provider.dart';
 import 'core/push/push_service.dart';
 import 'core/theme/app_theme.dart';
@@ -220,9 +220,7 @@ class _DeutschLernenAppState extends ConsumerState<DeutschLernenApp> {
       locale: locale,
       localizationsDelegates: const [
         AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+        ...FrameworkLocaleFallback.delegates,
       ],
       supportedLocales: AppLocalizations.supportedLocales,
       builder: (context, child) => AppLifecycleHeartbeat(child: child!),

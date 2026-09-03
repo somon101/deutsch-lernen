@@ -86,3 +86,19 @@ class VocabularyImportWordInput(BaseModel):
 
 class VocabularyImportPayload(BaseModel):
     words: list[VocabularyImportWordInput] = Field(min_length=1)
+
+
+class VocabularyTranslationInput(BaseModel):
+    """One locale's variant of a word's translation (§ course content
+    language, 2026-09-04) — `german`/`pronunciation` never appear here, see
+    VocabularyTranslation's docstring for why."""
+
+    translation: str = Field(min_length=1)
+
+    @field_validator("translation")
+    @classmethod
+    def _translation(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Перевод не может быть пустым")
+        return v

@@ -6,10 +6,20 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
 from app.schemas.block import BlockInput, BlockQuestionsPayload, BlockUpdateInput
-from app.schemas.course import CourseInput, CourseUpdateInput, LessonInput, LessonUpdateInput, MediaReuseInput, ReorderInput
-from app.schemas.vocabulary import VocabularyImportPayload, VocabularyWordInput, VocabularyWordUpdateInput
+from app.schemas.course import (
+    CourseInput,
+    CourseLessonTranslationInput,
+    CourseTranslationInput,
+    CourseUpdateInput,
+    LessonInput,
+    LessonUpdateInput,
+    MediaReuseInput,
+    ReorderInput,
+)
+from app.schemas.vocabulary import VocabularyImportPayload, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
 from app.services import courses as svc
 from app.services.content import DuplicateWordError
+from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
 from app.services.vocabulary import list_categories
 from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, WORD_IMAGES_DIR, delete_file, save_course_media, save_word_audio, save_word_image
 
@@ -49,6 +59,16 @@ async def get_course(course_id: str, db: AsyncSession = Depends(get_db)):
 @router.patch("/courses/{course_id}")
 async def update_course(course_id: str, body: CourseUpdateInput, db: AsyncSession = Depends(get_db)):
     course = await svc.update_course(db, course_id, body.model_dump(exclude_unset=True))
+    if not course:
+        raise ApiError(404, "Курс не найден")
+    return {"course": course}
+
+
+@router.put("/courses/{course_id}/translations/{locale}")
+async def put_course_translation(course_id: str, locale: str, body: CourseTranslationInput, db: AsyncSession = Depends(get_db)):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    course = await svc.set_course_translation(db, course_id, locale, body.title, body.description)
     if not course:
         raise ApiError(404, "Курс не найден")
     return {"course": course}
@@ -111,6 +131,18 @@ async def reorder_lessons(course_id: str, body: ReorderInput, db: AsyncSession =
 @router.patch("/courses/{course_id}/lessons/{lesson_id}")
 async def update_lesson(course_id: str, lesson_id: str, body: LessonUpdateInput, db: AsyncSession = Depends(get_db)):
     course = await svc.update_lesson(db, course_id, lesson_id, body.model_dump(exclude_unset=True))
+    if not course:
+        raise ApiError(404, "Урок не найден")
+    return {"course": course}
+
+
+@router.put("/courses/{course_id}/lessons/{lesson_id}/translations/{locale}")
+async def put_lesson_translation(
+    course_id: str, lesson_id: str, locale: str, body: CourseLessonTranslationInput, db: AsyncSession = Depends(get_db)
+):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    course = await svc.set_lesson_translation(db, course_id, lesson_id, locale, body.title, body.description, body.materialText)
     if not course:
         raise ApiError(404, "Урок не найден")
     return {"course": course}
@@ -186,6 +218,63 @@ async def delete_lesson_media(course_id: str, lesson_id: str, kind: str = Query(
     course = await svc.set_lesson_media(db, course_id, lesson_id, kind, None)
     if previous_url and not await svc.media_url_still_in_use(db, previous_url, course_lesson_id=lesson_id):
         delete_file(COURSE_MEDIA_DIR, previous_url)
+    return {"course": course}
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/media/{locale}")
+async def upload_lesson_media_translation(
+    course_id: str,
+    lesson_id: str,
+    locale: str,
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    if kind not in ("video", "audio"):
+        raise ApiError(400, "Укажите тип файла: video или audio")
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    stored_url = await save_course_media(file)
+    course = await svc.set_lesson_media_translation(db, course_id, lesson_id, kind, locale, stored_url)
+    if not course:
+        raise ApiError(404, "Урок не найден")
+    return {"course": course}
+
+
+@router.delete("/courses/{course_id}/lessons/{lesson_id}/media/{locale}")
+async def delete_lesson_media_translation(
+    course_id: str, lesson_id: str, locale: str, kind: str = Query(...), db: AsyncSession = Depends(get_db)
+):
+    if kind not in ("video", "audio"):
+        raise ApiError(400, "Укажите тип файла: video или audio")
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    course = await svc.set_lesson_media_translation(db, course_id, lesson_id, kind, locale, None)
+    if not course:
+        raise ApiError(404, "Урок не найден")
+    return {"course": course}
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/media/{locale}/clone-from-default")
+async def clone_lesson_media_translation(
+    course_id: str, lesson_id: str, locale: str, kind: str = Query(...), db: AsyncSession = Depends(get_db)
+):
+    """See LessonNodeMedia's identical clone endpoint — the explicit,
+    intentional placeholder path when no real localized file exists yet."""
+    if kind not in ("video", "audio"):
+        raise ApiError(400, "Укажите тип файла: video или audio")
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    existing = await svc.get_course(db, course_id)
+    if not existing:
+        raise ApiError(404, "Урок не найден")
+    lesson = next((l for l in existing["lessons"] if l["id"] == lesson_id), None)
+    if not lesson:
+        raise ApiError(404, "Урок не найден")
+    default_url = lesson["videoUrl"] if kind == "video" else lesson["audioUrl"]
+    if not default_url:
+        raise ApiError(400, "У этого урока ещё нет файла для клонирования")
+    course = await svc.set_lesson_media_translation(db, course_id, lesson_id, kind, locale, default_url)
     return {"course": course}
 
 
@@ -268,6 +357,18 @@ async def update_vocabulary(course_id: str, lesson_id: str, word_id: str, body: 
 @router.delete("/courses/{course_id}/lessons/{lesson_id}/vocabulary/{word_id}")
 async def delete_vocabulary(course_id: str, lesson_id: str, word_id: str, db: AsyncSession = Depends(get_db)):
     result = await svc.delete_vocabulary_word(db, course_id, lesson_id, word_id)
+    if not result:
+        raise ApiError(404, "Слово не найдено")
+    return result
+
+
+@router.put("/courses/{course_id}/lessons/{lesson_id}/vocabulary/{word_id}/translations/{locale}")
+async def put_vocabulary_translation(
+    course_id: str, lesson_id: str, word_id: str, locale: str, body: VocabularyTranslationInput, db: AsyncSession = Depends(get_db)
+):
+    if locale not in SUPPORTED_CONTENT_LOCALES:
+        raise ApiError(400, "Неизвестный язык курса")
+    result = await svc.set_vocabulary_translation(db, course_id, lesson_id, word_id, locale, body.translation)
     if not result:
         raise ApiError(404, "Слово не найдено")
     return result

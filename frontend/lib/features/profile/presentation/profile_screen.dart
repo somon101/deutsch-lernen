@@ -9,6 +9,7 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/back_guard.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../leaderboard/data/leaderboard_repository.dart';
 import '../../social/data/social_repository.dart';
 import '../data/profile_gamification_repository.dart';
@@ -92,6 +93,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     if (user == null) return const SizedBox.shrink();
 
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final overallProgress = ref.watch(overallProgressProvider);
     final totalTime = ref.watch(totalTimeSecondsProvider);
     final streakDays = ref.watch(streakDaysProvider);
@@ -137,11 +139,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 20),
                   myFollowStats.when(
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-                    error: (err, st) => Text('Не удалось загрузить подписки: $err', style: ProfileTypography.body(context)),
+                    error: (err, st) => Text(l10n.profileFollowStatsLoadError(err), style: ProfileTypography.body(context)),
                     data: (stats) => StatRow(items: [
-                      StatRowItem(value: '${stats.followersCount}', label: 'Подписчики', onTap: () => context.push('/users/${user.id}/followers')),
-                      StatRowItem(value: '${stats.mutualCount}', label: 'Взаимные', onTap: () => context.push('/users/${user.id}/mutual')),
-                      StatRowItem(value: '${stats.followingCount}', label: 'Подписки', onTap: () => context.push('/users/${user.id}/following')),
+                      StatRowItem(value: '${stats.followersCount}', label: l10n.socialFollowers, onTap: () => context.push('/users/${user.id}/followers')),
+                      StatRowItem(value: '${stats.mutualCount}', label: l10n.socialMutual, onTap: () => context.push('/users/${user.id}/mutual')),
+                      StatRowItem(value: '${stats.followingCount}', label: l10n.socialFollowing, onTap: () => context.push('/users/${user.id}/following')),
                     ]),
                   ),
                   const SizedBox(height: 20),
@@ -149,7 +151,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()))
                   else if (overallProgress.hasError || totalTime.hasError || streakDays.hasError || myRank.hasError)
                     Text(
-                      'Не удалось загрузить прогресс: ${overallProgress.error ?? totalTime.error ?? streakDays.error ?? myRank.error}',
+                      l10n.profileProgressLoadError(overallProgress.error ?? totalTime.error ?? streakDays.error ?? myRank.error!),
                       style: ProfileTypography.body(context),
                     )
                   else
@@ -164,7 +166,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: ProfileMetrics.cardGap),
                   _MyWordsEntry(onTap: () => context.push('/my-words')),
                   const SizedBox(height: 24),
-                  _SectionHeader(title: 'Достижения', onSeeAll: () {}),
+                  _SectionHeader(title: l10n.profileAchievementsTitle, onSeeAll: () {}),
                   const SizedBox(height: 12),
                   SizedBox(
                     height: 140,
@@ -178,13 +180,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const SizedBox(height: 24),
                   myRank.when(
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-                    error: (err, st) => Text('Не удалось загрузить рейтинг: $err', style: ProfileTypography.body(context)),
+                    error: (err, st) => Text(l10n.profileRankLoadError(err), style: ProfileTypography.body(context)),
                     data: (summary) => RankCard(summary: summary),
                   ),
                   const SizedBox(height: ProfileMetrics.cardGap),
                   weekActivity.when(
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
-                    error: (err, st) => Text('Не удалось загрузить активность: $err', style: ProfileTypography.body(context)),
+                    error: (err, st) => Text(l10n.profileActivityLoadError(err), style: ProfileTypography.body(context)),
                     data: (summary) => WeekActivityCard(activity: summary),
                   ),
                   const SizedBox(height: 24),
@@ -206,6 +208,7 @@ class _Header extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.profileColors;
+    final l10n = AppLocalizations.of(context);
     final themeMode = ref.watch(themeModeProvider);
     final canPop = Navigator.of(context).canPop();
 
@@ -220,7 +223,7 @@ class _Header extends ConsumerWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Text('Профиль', style: ProfileTypography.sectionTitle(context)),
+          Text(l10n.socialProfileTitle, style: ProfileTypography.sectionTitle(context)),
           if (canPop)
             Align(
               alignment: Alignment.centerLeft,
@@ -232,12 +235,12 @@ class _Header extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: themeMode == ThemeMode.dark ? 'Светлая тема' : 'Тёмная тема',
+                  tooltip: themeMode == ThemeMode.dark ? l10n.homeThemeLight : l10n.homeThemeDark,
                   icon: Icon(themeMode == ThemeMode.dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined, color: c.text),
                   onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
                 ),
                 IconButton(
-                  tooltip: 'Поделиться профилем',
+                  tooltip: l10n.profileShareTooltip,
                   icon: Icon(Icons.qr_code_2, color: c.text),
                   onPressed: () => context.push('/profile/qr'),
                 ),
@@ -268,7 +271,7 @@ class _MyWordsEntry extends StatelessWidget {
           children: [
             Icon(Icons.style_outlined, color: c.accent),
             const SizedBox(width: 12),
-            Expanded(child: Text('Мои слова', style: ProfileTypography.body(context).copyWith(fontWeight: FontWeight.w600))),
+            Expanded(child: Text(AppLocalizations.of(context).myWordsTitle, style: ProfileTypography.body(context).copyWith(fontWeight: FontWeight.w600))),
             Icon(Icons.chevron_right, color: c.textMuted),
           ],
         ),
@@ -294,7 +297,7 @@ class _SectionHeader extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Все', style: ProfileTypography.body(context).copyWith(color: c.accent)),
+              Text(AppLocalizations.of(context).profileSeeAll, style: ProfileTypography.body(context).copyWith(color: c.accent)),
               Icon(Icons.chevron_right, size: 18, color: c.accent),
             ],
           ),

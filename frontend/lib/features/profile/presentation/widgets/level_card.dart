@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../l10n/app_localizations.dart';
 import '../../data/profile_gamification_repository.dart';
 import '../profile_tokens.dart';
 import 'profile_card.dart';
@@ -20,7 +21,7 @@ class LevelCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Ваш уровень', style: ProfileTypography.caption(context)),
+                Text(AppLocalizations.of(context).levelCardTitle, style: ProfileTypography.caption(context)),
                 const SizedBox(height: 4),
                 Text('${level.code} — ${level.name}', style: ProfileTypography.sectionTitle(context)),
                 const SizedBox(height: 12),
