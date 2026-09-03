@@ -39,6 +39,17 @@ async def update_me(
     if not user.canEditProfile:
         raise ApiError(403, "Редактирование профиля отключено администратором")
 
+    # Captured while `user` is still a fresh, non-expired ORM instance — the
+    # only use of this id is in the IntegrityError branch below, AFTER
+    # db.rollback(), and SQLAlchemy expires every attribute on a rolled-back
+    # object. Reading `user.id` there (as this used to) triggers an implicit
+    # lazy-reload outside of any awaited context, which fails outright
+    # (surfaced in production as a bare 500 on every "email already taken"
+    # attempt — found by testing that exact path, not by inspection: it
+    # can't be triggered by an integration test that never provokes a real
+    # conflict). A plain str captured up front sidesteps the ORM entirely.
+    user_id = user.id
+
     changes = body.model_dump(exclude_unset=True)
     if changes.get("selectedLanguageId") is not None and not await db.get(Language, changes["selectedLanguageId"]):
         raise ApiError(404, "Язык не найден")
@@ -54,7 +65,7 @@ async def update_me(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise ApiError(409, await conflict_message(db, changes.get("email"), username_lower, user.id))
+        raise ApiError(409, await conflict_message(db, changes.get("email"), username_lower, user_id))
     await db.refresh(user)
     return {"user": public_user(user)}
 
