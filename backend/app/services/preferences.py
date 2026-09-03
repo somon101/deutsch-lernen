@@ -12,6 +12,7 @@ another device.
 """
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.daily_goal import UserPreference
@@ -52,6 +53,7 @@ async def update_preferences(db: AsyncSession, user_id: str, changes: dict) -> d
     are booleans, and the goal is one of the five allowed numbers.
     """
     row = (await db.execute(select(UserPreference).where(UserPreference.userId == user_id))).scalar_one_or_none()
+    creating = row is None
     if row is None:
         row = UserPreference(userId=user_id, **DEFAULTS)
         db.add(row)
@@ -60,6 +62,28 @@ async def update_preferences(db: AsyncSession, user_id: str, changes: dict) -> d
         if field in changes:
             setattr(row, field, changes[field])
 
-    await db.commit()
+    if not creating:
+        await db.commit()
+        await db.refresh(row)
+        return _serialize(row)
+
+    # Only a first-ever preferences write for this user can race: two
+    # requests both see "no row yet" and both try to INSERT one, but
+    # UserPreference_userId_key allows exactly one to succeed. Found by the
+    # sound-preferences concurrency test — two tabs each flipping a
+    # different switch for the very first time hit this. Same shape as
+    # daily_goal.evaluate's own award-insert race: the loser rolls back and
+    # re-applies its own change on top of the row the winner just created,
+    # rather than losing the change or surfacing a raw 500.
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        row = (await db.execute(select(UserPreference).where(UserPreference.userId == user_id))).scalar_one()
+        for field in ("dailyGoalMinutes", "lessonSoundEnabled", "wordAudioEnabled"):
+            if field in changes:
+                setattr(row, field, changes[field])
+        await db.commit()
+
     await db.refresh(row)
     return _serialize(row)
