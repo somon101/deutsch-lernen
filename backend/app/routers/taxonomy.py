@@ -61,8 +61,18 @@ def _material_dto(material) -> dict:
     }
 
 
-def _material_block_dto(block) -> dict:
-    return {"id": block.id, "materialId": block.materialId, "title": block.title, "content": block.content, "position": block.position}
+def _material_block_dto(block, translations: dict[str, dict] | None = None) -> dict:
+    return {
+        "id": block.id,
+        "materialId": block.materialId,
+        "title": block.title,
+        "content": block.content,
+        "position": block.position,
+        # {locale: {title, content}} (§ course content language, 2026-09-04) —
+        # empty for every caller that doesn't pass it in, same additive shape
+        # as Course/CourseLesson's own "translations" field.
+        "translations": translations or {},
+    }
 
 
 def _placement_dto(placement) -> dict:
@@ -164,7 +174,8 @@ async def delete_material(material_id: str, admin: User = Depends(require_staff)
 @router.get("/materials/{material_id}/blocks")
 async def list_material_blocks(material_id: str, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     blocks = await svc.list_material_blocks(db, material_id)
-    return {"blocks": [_material_block_dto(b) for b in blocks]}
+    translations = await svc.get_material_block_translations(db, [b.id for b in blocks])
+    return {"blocks": [_material_block_dto(b, translations.get(b.id)) for b in blocks]}
 
 
 @router.post("/materials/{material_id}/blocks", status_code=201)
@@ -192,7 +203,8 @@ async def put_material_block_translation(
     block = await svc.set_material_block_translation(db, block_id, locale, body.title, body.content)
     if not block:
         raise ApiError(404, "Блок не найден")
-    return {"block": _material_block_dto(block)}
+    translations = await svc.get_material_block_translations(db, [block_id])
+    return {"block": _material_block_dto(block, translations.get(block_id))}
 
 
 @router.delete("/materials/blocks/{block_id}")
@@ -275,6 +287,11 @@ async def course_connections_map(course_id: str, user: User = Depends(require_au
     return await svc.get_course_connections_map(db, course_id)
 
 
+@router.get("/questions/{question_id}/translations")
+async def get_question_translations_route(question_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    return {"translations": await svc.get_question_translations(db, question_id)}
+
+
 @router.get("/questions/{question_id}/placements")
 async def list_question_placements(question_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
     """Full "where is this question actually shown" chain (§5/§6/§7 of the
@@ -347,7 +364,7 @@ async def put_question_translation(
     question = await svc.set_question_translation(db, question_id, locale, body.prompt, body.options, body.correctAnswer, body.data)
     if not question:
         raise ApiError(404, "Вопрос не найден")
-    return {"question": svc.question_dto(question)}
+    return {"question": svc.question_dto(question), "translations": await svc.get_question_translations(db, question_id)}
 
 
 @router.post("/questions/reuse", status_code=201)

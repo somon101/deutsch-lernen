@@ -211,6 +211,21 @@ async def update_material_block(db: AsyncSession, block_id: str, body) -> Materi
     return block
 
 
+async def get_material_block_translations(db: AsyncSession, block_ids: list[str]) -> dict[str, dict[str, dict]]:
+    """{blockId: {locale: {title, content}}} for a batch of blocks in one
+    query (§ course content language, 2026-09-04) — the admin block list
+    needs every locale for every block at once, not one lookup per block."""
+    if not block_ids:
+        return {}
+    rows = (
+        await db.execute(select(MaterialBlockTranslation).where(MaterialBlockTranslation.materialBlockId.in_(block_ids)))
+    ).scalars().all()
+    result: dict[str, dict[str, dict]] = {}
+    for row in rows:
+        result.setdefault(row.materialBlockId, {})[row.locale] = {"title": row.title, "content": row.content}
+    return result
+
+
 async def set_material_block_translation(db: AsyncSession, block_id: str, locale: str, title: str, content: str) -> MaterialBlock | None:
     """Upsert (§ course content language, 2026-09-04), same pattern as
     services/courses.py's set_course_translation."""
@@ -345,6 +360,14 @@ async def create_question(db: AsyncSession, body) -> tuple[Question, list[dict]]
     await db.commit()
     await db.refresh(question)
     return question, [{"question": to_question_dto(s["question"].kind, s["question"].prompt, s["question"].options, s["question"].correctAnswer, s["question"].data), "questionId": s["question"].id, "score": s["score"]} for s in similar]
+
+
+async def get_question_translations(db: AsyncSession, question_id: str) -> dict[str, dict]:
+    """{locale: {prompt, options, correctAnswer, data}} for one question (§
+    course content language, 2026-09-04) — the admin question tile fetches
+    this lazily on first expand, same as it already does for usages."""
+    rows = (await db.execute(select(QuestionTranslation).where(QuestionTranslation.questionId == question_id))).scalars().all()
+    return {r.locale: {"prompt": r.prompt, "options": r.options, "correctAnswer": r.correctAnswer, "data": r.data} for r in rows}
 
 
 async def set_question_translation(

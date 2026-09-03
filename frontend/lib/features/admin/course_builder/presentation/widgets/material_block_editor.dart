@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../../core/locale/content_locale.dart';
+import '../../../../../core/locale/locale_provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
@@ -422,12 +424,108 @@ class _MaterialBlockCardState extends ConsumerState<_MaterialBlockCard> {
                 child: FilledButton(onPressed: _busy ? null : _save, style: AdminButtonStyles.primary(), child: Text(_busy ? 'Сохраняем…' : 'Сохранить')),
               ),
               const SizedBox(height: AdminMetrics.cardGap),
+              _MaterialBlockTranslationsSection(block: widget.block, onSaved: widget.onSaved),
+              const SizedBox(height: AdminMetrics.cardGap),
               PoolQuestionsSection(materialBlockId: widget.block.id, topicId: widget.topicId, languageId: widget.languageId),
               const SizedBox(height: AdminMetrics.cardGap),
               _VerifyingQuestionsSection(materialBlockId: widget.block.id),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Locale-toggle counterpart of _CourseTranslationsSection in
+/// builder_course_edit_screen.dart (§ course content language, 2026-09-04,
+/// spec §5) for a MaterialBlock's title/content.
+class _MaterialBlockTranslationsSection extends ConsumerStatefulWidget {
+  const _MaterialBlockTranslationsSection({required this.block, required this.onSaved});
+  final AdminMaterialBlock block;
+  final ValueChanged<AdminMaterialBlock> onSaved;
+
+  @override
+  ConsumerState<_MaterialBlockTranslationsSection> createState() => _MaterialBlockTranslationsSectionState();
+}
+
+class _MaterialBlockTranslationsSectionState extends ConsumerState<_MaterialBlockTranslationsSection> {
+  String _locale = supportedContentLocales.first;
+  late final _title = TextEditingController(text: widget.block.translations[_locale]?.title ?? '');
+  late final _content = TextEditingController(text: widget.block.translations[_locale]?.content ?? '');
+  bool _busy = false;
+
+  void _switchLocale(String locale) {
+    final t = widget.block.translations[locale];
+    setState(() {
+      _locale = locale;
+      _title.text = t?.title ?? '';
+      _content.text = t?.content ?? '';
+    });
+  }
+
+  Future<void> _save() async {
+    if (_title.text.trim().isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final updated = await ref
+          .read(builderRepositoryProvider)
+          .setMaterialBlockTranslation(widget.block.id, _locale, title: _title.text.trim(), content: _content.text);
+      widget.onSaved(updated);
+      if (mounted) showSuccessSnack(context);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить перевод');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _content.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AdminColors.blockBg, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Языковые версии блока', style: AdminTypography.cardTitle),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              for (final locale in supportedContentLocales)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(
+                      '${localeDisplayName(Locale(locale))}${widget.block.translations.containsKey(locale) ? '' : ' — нет перевода'}',
+                    ),
+                    selected: _locale == locale,
+                    onSelected: (_) => _switchLocale(locale),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _title, decoration: adminInputDecoration(label: 'Название блока')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _content, maxLines: 6, decoration: adminInputDecoration(label: 'Содержимое')),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              style: AdminButtonStyles.primary(),
+              child: Text('Сохранить перевод (${localeDisplayName(Locale(_locale))})'),
+            ),
+          ),
+        ],
       ),
     );
   }

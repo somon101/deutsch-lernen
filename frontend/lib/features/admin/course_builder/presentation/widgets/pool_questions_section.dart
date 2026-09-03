@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../../core/locale/content_locale.dart';
+import '../../../../../core/locale/locale_provider.dart';
 import '../../../../../core/theme/app_theme.dart';
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
@@ -632,7 +634,167 @@ class _AttachedQuestionTileState extends ConsumerState<_AttachedQuestionTile> {
               const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator())
             else
               for (final u in _usages!) Text('• ${_usageLine(u)}', style: AdminTypography.caption),
+            const SizedBox(height: 8),
+            _QuestionTranslationsSection(questionId: q.id, draft: q.draft),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Which text fields are worth translating for a given question kind (§
+/// course content language, 2026-09-04) — auto_blank/auto_translate/
+/// auto_match generate their content from vocabulary at serve time (see
+/// backend material.py's to_question_dtos comment) and have nothing
+/// authored here to translate; match's pairs aren't supported by this
+/// generic editor yet (scope note in _QuestionTranslationsSection).
+enum _TranslatableFields { promptOptionsAnswer, promptOnly, none }
+
+_TranslatableFields _translatableFieldsFor(QuestionDraft d) => switch (d) {
+      ChoiceDraft() || ClozeDraft() || ScrambleDraft() => _TranslatableFields.promptOptionsAnswer,
+      TrueFalseDraft() || MatchDraft() => _TranslatableFields.promptOnly,
+      AutoBlankDraft() || AutoTranslateDraft() || AutoMatchDraft() => _TranslatableFields.none,
+    };
+
+/// Locale-toggle translation editor for one pool Question (§ course content
+/// language, 2026-09-04, spec §5) — same pattern as
+/// _CourseTranslationsSection/_MaterialBlockTranslationsSection, but the
+/// fields shown depend on the question's own kind (see
+/// _translatableFieldsFor), and match's pairs / auto-generated kinds are
+/// out of scope for this generic editor (not enough shared shape to justify
+/// one more structured per-kind form on top of the 8 the question authoring
+/// UI already has).
+class _QuestionTranslationsSection extends ConsumerStatefulWidget {
+  const _QuestionTranslationsSection({required this.questionId, required this.draft});
+  final String questionId;
+  final QuestionDraft draft;
+
+  @override
+  ConsumerState<_QuestionTranslationsSection> createState() => _QuestionTranslationsSectionState();
+}
+
+class _QuestionTranslationsSectionState extends ConsumerState<_QuestionTranslationsSection> {
+  Map<String, QuestionTranslationFields>? _translations;
+  String _locale = supportedContentLocales.first;
+  final _prompt = TextEditingController();
+  final _options = TextEditingController();
+  final _correctAnswer = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final translations = await ref.read(builderRepositoryProvider).getQuestionTranslations(widget.questionId);
+      if (!mounted) return;
+      setState(() {
+        _translations = translations;
+        _fillFrom(translations[_locale]);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _translations = {});
+    }
+  }
+
+  void _fillFrom(QuestionTranslationFields? t) {
+    _prompt.text = t?.prompt ?? '';
+    _options.text = (t?.options ?? const []).join('\n');
+    _correctAnswer.text = t?.correctAnswer ?? '';
+  }
+
+  void _switchLocale(String locale) {
+    setState(() {
+      _locale = locale;
+      _fillFrom(_translations?[locale]);
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    try {
+      final fields = _translatableFieldsFor(widget.draft);
+      final translations = await ref.read(builderRepositoryProvider).setQuestionTranslation(
+            widget.questionId,
+            _locale,
+            prompt: _prompt.text.trim().isEmpty ? null : _prompt.text.trim(),
+            options: fields == _TranslatableFields.promptOptionsAnswer
+                ? _options.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList()
+                : null,
+            correctAnswer: _correctAnswer.text.trim().isEmpty ? null : _correctAnswer.text.trim(),
+          );
+      if (mounted) setState(() => _translations = translations);
+      if (mounted) showSuccessSnack(context);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить перевод');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _prompt.dispose();
+    _options.dispose();
+    _correctAnswer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = _translatableFieldsFor(widget.draft);
+    if (fields == _TranslatableFields.none) {
+      return Text(
+        'Для этого типа задания перевод не нужен — содержимое подбирается автоматически по словарю.',
+        style: AdminTypography.caption,
+      );
+    }
+    if (_translations == null) {
+      return const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: LinearProgressIndicator());
+    }
+    final translations = _translations!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: AdminColors.card, borderRadius: BorderRadius.circular(AdminMetrics.blockRadius), border: Border.all(color: AdminColors.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Языковые версии задания', style: AdminTypography.fieldLabel),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              for (final locale in supportedContentLocales)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text('${localeDisplayName(Locale(locale))}${translations.containsKey(locale) ? '' : ' — нет перевода'}'),
+                    selected: _locale == locale,
+                    onSelected: (_) => _switchLocale(locale),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _prompt, decoration: adminInputDecoration(label: 'Текст вопроса / условие')),
+          if (fields == _TranslatableFields.promptOptionsAnswer) ...[
+            const SizedBox(height: AdminMetrics.fieldGap),
+            TextField(controller: _options, maxLines: 4, decoration: adminInputDecoration(label: 'Варианты (по одному на строку)')),
+            const SizedBox(height: AdminMetrics.fieldGap),
+            TextField(controller: _correctAnswer, decoration: adminInputDecoration(label: 'Правильный ответ')),
+          ],
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _busy ? null : _save,
+              style: AdminButtonStyles.primary(),
+              child: Text('Сохранить перевод (${localeDisplayName(Locale(_locale))})'),
+            ),
+          ),
         ],
       ),
     );

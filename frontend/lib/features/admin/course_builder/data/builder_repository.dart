@@ -544,6 +544,16 @@ class BuilderRepository {
     await _api.delete('/api/materials/blocks/${Uri.encodeComponent(blockId)}');
   }
 
+  /// One locale's variant of a MaterialBlock's title/content (§ course
+  /// content language, 2026-09-04).
+  Future<AdminMaterialBlock> setMaterialBlockTranslation(String blockId, String locale, {required String title, required String content}) async {
+    final res = await _api.put(
+      '/api/materials/blocks/${Uri.encodeComponent(blockId)}/translations/${Uri.encodeComponent(locale)}',
+      body: {'title': title, 'content': content},
+    );
+    return AdminMaterialBlock.fromJson(res['block'] as Map<String, dynamic>);
+  }
+
   Future<void> reorderMaterialBlocks(String materialId, List<String> blockIds) async {
     await _api.put('/api/materials/${Uri.encodeComponent(materialId)}/blocks/reorder', body: {'blockIds': blockIds});
   }
@@ -690,6 +700,31 @@ class BuilderRepository {
   Future<List<QuestionUsage>> listQuestionPlacements(String questionId) async {
     final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/placements');
     return (res['placements'] as List<dynamic>).map((p) => QuestionUsage.fromJson(p as Map<String, dynamic>)).toList();
+  }
+
+  /// {locale: {prompt, options, correctAnswer}} (§ course content language,
+  /// 2026-09-04) — fetched lazily, same as listQuestionPlacements above.
+  Future<Map<String, QuestionTranslationFields>> getQuestionTranslations(String questionId) async {
+    final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/translations');
+    return (res['translations'] as Map<String, dynamic>).map(
+      (locale, v) => MapEntry(locale, QuestionTranslationFields.fromJson(v as Map<String, dynamic>)),
+    );
+  }
+
+  Future<Map<String, QuestionTranslationFields>> setQuestionTranslation(
+    String questionId,
+    String locale, {
+    String? prompt,
+    List<String>? options,
+    String? correctAnswer,
+  }) async {
+    final res = await _api.put(
+      '/api/questions/${Uri.encodeComponent(questionId)}/translations/${Uri.encodeComponent(locale)}',
+      body: {'prompt': ?prompt, 'options': ?options, 'correctAnswer': ?correctAnswer},
+    );
+    return (res['translations'] as Map<String, dynamic>).map(
+      (loc, v) => MapEntry(loc, QuestionTranslationFields.fromJson(v as Map<String, dynamic>)),
+    );
   }
 
   // ---------------------------------------------------------------------

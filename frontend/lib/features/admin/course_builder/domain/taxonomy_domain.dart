@@ -67,8 +67,25 @@ class AdminMaterial {
   final int position;
 }
 
+class AdminMaterialBlockTranslation {
+  const AdminMaterialBlockTranslation({required this.title, required this.content});
+
+  factory AdminMaterialBlockTranslation.fromJson(Map<String, dynamic> json) =>
+      AdminMaterialBlockTranslation(title: json['title'] as String, content: json['content'] as String? ?? '');
+
+  final String title;
+  final String content;
+}
+
 class AdminMaterialBlock {
-  const AdminMaterialBlock({required this.id, required this.materialId, required this.title, required this.content, required this.position});
+  const AdminMaterialBlock({
+    required this.id,
+    required this.materialId,
+    required this.title,
+    required this.content,
+    required this.position,
+    this.translations = const {},
+  });
 
   factory AdminMaterialBlock.fromJson(Map<String, dynamic> json) => AdminMaterialBlock(
         id: json['id'] as String,
@@ -76,6 +93,12 @@ class AdminMaterialBlock {
         title: json['title'] as String,
         content: json['content'] as String,
         position: json['position'] as int,
+        // Same shape/rationale as AdminCourse.translations (§ course content
+        // language, 2026-09-04).
+        translations: (json['translations'] as Map<String, dynamic>?)?.map(
+              (locale, v) => MapEntry(locale, AdminMaterialBlockTranslation.fromJson(v as Map<String, dynamic>)),
+            ) ??
+            const {},
       );
 
   final String id;
@@ -83,11 +106,31 @@ class AdminMaterialBlock {
   final String title;
   final String content;
   final int position;
+  final Map<String, AdminMaterialBlockTranslation> translations;
 }
 
 /// One question in the reusable pool — unlike QuestionDraft (a local, unsaved
 /// edit), this always has a stable `id` (the real question_id), since it's
 /// only ever constructed from something the server already has.
+/// One locale's variant of a pool Question's text (§ course content
+/// language, 2026-09-04) — every field optional, since a given `kind` only
+/// ever fills in the subset it actually uses. Mirrors backend's
+/// QuestionTranslation; `data` (match pairs) isn't exposed here yet — see
+/// the admin question tile's own translation section for why.
+class QuestionTranslationFields {
+  const QuestionTranslationFields({this.prompt, this.options, this.correctAnswer});
+
+  factory QuestionTranslationFields.fromJson(Map<String, dynamic> json) => QuestionTranslationFields(
+        prompt: json['prompt'] as String?,
+        options: (json['options'] as List<dynamic>?)?.cast<String>(),
+        correctAnswer: json['correctAnswer'] as String?,
+      );
+
+  final String? prompt;
+  final List<String>? options;
+  final String? correctAnswer;
+}
+
 class PoolQuestion {
   const PoolQuestion({
     required this.id,
