@@ -114,41 +114,13 @@ class BuilderLessonEditScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: AdminMetrics.fieldGap),
                     Expanded(
-                      child: graph != null
-                        ? LessonGraphEditor(courseId: courseId, lesson: lesson, languageId: languageId, onReload: reload)
-                        : LessonEditorPanel(
-                      courseId: courseId,
-                      lesson: lesson,
-                      languageId: languageId,
-                      scrollBottomInset: bottomBarClearance(context),
-                      libraryLoader: (kind) => ref.read(builderRepositoryProvider).listMediaLibrary(kind),
-                      onUploadMedia: (kind, bytes, filename) async {
-                        try {
-                          await ref.read(builderRepositoryProvider).uploadLessonMedia(courseId, lesson.id, kind: kind, bytes: bytes, filename: filename);
-                          reload();
-                          if (context.mounted) showSuccessSnack(context);
-                        } catch (e) {
-                          if (context.mounted) showErrorSnack(context, e, 'Не удалось загрузить файл');
-                        }
-                      },
-                      onRemoveMedia: (kind) async {
-                        try {
-                          await ref.read(builderRepositoryProvider).removeLessonMedia(courseId, lesson.id, kind);
-                          reload();
-                        } catch (e) {
-                          if (context.mounted) showErrorSnack(context, e, 'Не удалось удалить файл');
-                        }
-                      },
-                      onReuseMedia: (kind, url) async {
-                        try {
-                          await ref.read(builderRepositoryProvider).reuseLessonMedia(courseId, lesson.id, kind, url);
-                          reload();
-                        } catch (e) {
-                          if (context.mounted) showErrorSnack(context, e, 'Не удалось выбрать файл');
-                        }
-                      },
-                      onReload: reload,
-                    ),
+                      child: _LessonContentView(
+                        key: ValueKey(lesson.id),
+                        courseId: courseId,
+                        lesson: lesson,
+                        languageId: languageId,
+                        onReload: reload,
+                      ),
                     ),
                   ],
                   ),
@@ -158,6 +130,141 @@ class BuilderLessonEditScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+/// Chooses between the graph and the old rail for one lesson, and — for a
+/// converted lesson — owns which of the two is currently shown
+/// (§ graph/rail toggle, 2026-09-03).
+///
+/// An unconverted lesson (`lesson.graph == null`) has only ever had the
+/// rail, so it renders unchanged: no toggle, no wrapping, full editing,
+/// exactly as before this widget existed.
+///
+/// A converted lesson gets both views, but NOT as two equally-live editors.
+/// Video/audio/material content forks the moment a graph node's own file
+/// diverges from the pre-conversion lesson (LessonNode.mediaUrl is a
+/// separate field from CourseLesson.videoUrl/audioUrl by design — see
+/// LessonNode's own docstring — and a graph can hold more Material rows
+/// than the rail's single "Материал" tab can show). Editing through the
+/// rail after that would silently widen that fork rather than reveal it, so
+/// the rail is READ-ONLY once a graph exists: wrapped in [IgnorePointer]
+/// rather than trusting every add/edit/delete button across
+/// LessonEditorPanel and its children (VocabularyEditor/
+/// MaterialBlockEditor/MediaEditor/BlockEditor) to individually respect a
+/// read-only flag none of them were built with. The graph stays the one
+/// place that writes.
+class _LessonContentView extends ConsumerStatefulWidget {
+  const _LessonContentView({super.key, required this.courseId, required this.lesson, required this.languageId, required this.onReload});
+
+  final String courseId;
+  final AdminLesson lesson;
+  final String? languageId;
+  final VoidCallback onReload;
+
+  @override
+  ConsumerState<_LessonContentView> createState() => _LessonContentViewState();
+}
+
+class _LessonContentViewState extends ConsumerState<_LessonContentView> {
+  bool _showLinearView = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final graph = widget.lesson.graph;
+
+    final panel = LessonEditorPanel(
+      courseId: widget.courseId,
+      lesson: widget.lesson,
+      languageId: widget.languageId,
+      scrollBottomInset: bottomBarClearance(context),
+      libraryLoader: (kind) => ref.read(builderRepositoryProvider).listMediaLibrary(kind),
+      onUploadMedia: (kind, bytes, filename) async {
+        try {
+          await ref.read(builderRepositoryProvider).uploadLessonMedia(widget.courseId, widget.lesson.id, kind: kind, bytes: bytes, filename: filename);
+          widget.onReload();
+          if (context.mounted) showSuccessSnack(context);
+        } catch (e) {
+          if (context.mounted) showErrorSnack(context, e, 'Не удалось загрузить файл');
+        }
+      },
+      onRemoveMedia: (kind) async {
+        try {
+          await ref.read(builderRepositoryProvider).removeLessonMedia(widget.courseId, widget.lesson.id, kind);
+          widget.onReload();
+        } catch (e) {
+          if (context.mounted) showErrorSnack(context, e, 'Не удалось удалить файл');
+        }
+      },
+      onReuseMedia: (kind, url) async {
+        try {
+          await ref.read(builderRepositoryProvider).reuseLessonMedia(widget.courseId, widget.lesson.id, kind, url);
+          widget.onReload();
+        } catch (e) {
+          if (context.mounted) showErrorSnack(context, e, 'Не удалось выбрать файл');
+        }
+      },
+      onReload: widget.onReload,
+    );
+
+    if (graph == null) return panel;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            _ViewTab(label: 'Граф', selected: !_showLinearView, onTap: () => setState(() => _showLinearView = false)),
+            const SizedBox(width: 8),
+            _ViewTab(label: 'Линейный (просмотр)', selected: _showLinearView, onTap: () => setState(() => _showLinearView = true)),
+          ],
+        ),
+        if (_showLinearView) ...[
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.info_outline, size: 16, color: AdminColors.warn),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Только просмотр. Урок переведён в граф — редактируется там. '
+                  'Видео, аудио и лишние блоки материала могут отличаться от графа: '
+                  'у графа для них своё, отдельное хранилище.',
+                  style: AdminTypography.caption.copyWith(color: AdminColors.warn),
+                ),
+              ),
+            ],
+          ),
+        ],
+        const SizedBox(height: AdminMetrics.fieldGap),
+        Expanded(
+          child: _showLinearView
+              ? IgnorePointer(child: panel)
+              : LessonGraphEditor(courseId: widget.courseId, lesson: widget.lesson, languageId: widget.languageId, onReload: widget.onReload),
+        ),
+      ],
+    );
+  }
+}
+
+class _ViewTab extends StatelessWidget {
+  const _ViewTab({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // `onPressed: onTap` even while selected, deliberately not null: a
+    // FilledButton with a null onPressed renders in its DISABLED colors
+    // (AdminButtonStyles.primary()'s 40%-alpha accent), which would make
+    // the active tab look the faded one — backwards for a selector. Tapping
+    // the already-selected tab just re-sets the same value, harmless.
+    return selected
+        ? FilledButton(style: AdminButtonStyles.primary(), onPressed: onTap, child: Text(label))
+        : OutlinedButton(style: AdminButtonStyles.secondary(), onPressed: onTap, child: Text(label));
   }
 }
 
