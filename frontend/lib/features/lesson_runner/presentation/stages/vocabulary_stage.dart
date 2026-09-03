@@ -27,13 +27,27 @@ class VocabularyStage extends ConsumerStatefulWidget {
 class _VocabularyStageState extends ConsumerState<VocabularyStage> {
   DateTime _wordShownAt = DateTime.now();
 
+  /// Held as a field so `dispose()` can still report the time for a stage
+  /// the learner walked out of. Reading `ref` during dispose is not merely
+  /// discouraged — flutter_riverpod throws, and because the throw landed
+  /// before `super.dispose()`, the time was lost AND the dispose contract
+  /// was broken (§ daily goal, 2026-09-03; same fix already applied to
+  /// exercise_stage).
+  LessonRunnerController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller = ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier);
+  }
+
   /// Flushes the word being LEFT before moving to another word or leaving
   /// the stage entirely.
   void _flushWord() {
     final elapsed = DateTime.now().difference(_wordShownAt).inSeconds.clamp(0, _wordCapSeconds);
     _wordShownAt = DateTime.now();
     if (elapsed > 0) {
-      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime('vocabulary', elapsed);
+      _controller?.recordActivityTime('vocabulary', elapsed);
     }
   }
 

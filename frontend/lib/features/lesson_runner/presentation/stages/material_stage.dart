@@ -62,13 +62,27 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
   int _page = 0;
   DateTime _sectionShownAt = DateTime.now();
 
+  /// Held as a field so `dispose()` can still report the time for a stage
+  /// the learner walked out of. Reading `ref` during dispose is not merely
+  /// discouraged — flutter_riverpod throws, and because the throw landed
+  /// before `super.dispose()`, the time was lost AND the dispose contract
+  /// was broken (§ daily goal, 2026-09-03; same fix already applied to
+  /// exercise_stage).
+  LessonRunnerController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _controller = ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier);
+  }
+
   /// Flushes the section being LEFT (still the current `_page` at call
   /// time) before switching pages or leaving the stage entirely.
   void _flushSection() {
     final elapsed = DateTime.now().difference(_sectionShownAt).inSeconds.clamp(0, _materialSectionCapSeconds);
     _sectionShownAt = DateTime.now();
     if (elapsed > 0) {
-      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).recordActivityTime('material', elapsed);
+      _controller?.recordActivityTime('material', elapsed);
     }
   }
 

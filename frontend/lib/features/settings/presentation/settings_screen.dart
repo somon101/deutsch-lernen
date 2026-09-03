@@ -13,6 +13,7 @@ import '../../../core/widgets/back_guard.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
+import '../data/daily_goal_repository.dart';
 import '../data/settings_repository.dart';
 import 'widgets/avatar_picker_sheet.dart';
 import 'widgets/profile_header.dart';
@@ -25,7 +26,6 @@ import 'widgets/settings_switch_tile.dart';
 /// появится в проекте, вместо строкового литерала.
 const _appVersion = '1.0.0';
 
-const _dailyGoalOptions = [10, 20, 30, 60];
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -179,12 +179,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   SettingsSection(
                     title: l10n.sectionLearning,
                     children: [
-                      SettingsNavTile(
-                        icon: Icons.flag_outlined,
-                        label: l10n.dailyGoal,
-                        value: l10n.dailyGoalMinutes(settings.dailyGoalMinutes),
-                        onTap: () => _pickDailyGoal(context, settings.dailyGoalMinutes),
-                      ),
+                      // Reads the goal from the server rather than from the
+                      // device (§ daily goal, 2026-09-03): this one setting
+                      // follows the account, and the same value has to be in
+                      // force everywhere for "rewarded once a day" to mean
+                      // anything. `value` doubles as today's progress, so the
+                      // row shows the real figure, not just the chosen number.
+                      ref.watch(dailyGoalProvider).maybeWhen(
+                            data: (goal) => SettingsNavTile(
+                              icon: Icons.flag_outlined,
+                              label: l10n.dailyGoal,
+                              value: '${goal.minutesToday} / ${goal.goalMinutes} мин'
+                                  '${goal.completed ? ' · выполнено' : ''}',
+                              onTap: () => _pickDailyGoal(context, goal.goalMinutes),
+                            ),
+                            orElse: () => SettingsNavTile(
+                              icon: Icons.flag_outlined,
+                              label: l10n.dailyGoal,
+                              value: '…',
+                              onTap: () {},
+                            ),
+                          ),
                       SettingsNavTile(
                         icon: Icons.trending_up,
                         label: l10n.languageLevel,
@@ -300,10 +315,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final picked = await _showOptionSheet<int>(
       context,
       title: l10n.dailyGoal,
-      options: [for (final m in _dailyGoalOptions) (value: m, label: l10n.dailyGoalMinutes(m))],
+      options: [
+        for (final m in dailyGoalOptions)
+          (value: m, label: '${l10n.dailyGoalMinutes(m)}  ·  +${dailyGoalPoints[m]} очков'),
+      ],
       current: current,
     );
-    if (picked != null) await ref.read(settingsProvider.notifier).setDailyGoal(picked);
+    if (picked == null) return;
+    try {
+      await ref.read(dailyGoalRepositoryProvider).setGoal(picked);
+    } catch (_) {
+      // The goal lives on the server; a failed save must not leave the screen
+      // showing a value that was never stored, so nothing local is updated
+      // and the refresh below puts the real value back.
+    }
+    ref.invalidate(dailyGoalProvider);
   }
 
   Future<void> _pickLanguageLevel(BuildContext context, LanguageLevel current) async {

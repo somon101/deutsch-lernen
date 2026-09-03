@@ -32,6 +32,7 @@ from app.models.answer_log import AnswerLog
 from app.models.lesson_state import LessonState
 from app.models.question import Question
 from app.models.user import User
+from app.services import daily_goal
 from app.utils import utcnow
 
 _POINTS_PER_CORRECT_ANSWER = 10
@@ -76,10 +77,22 @@ async def _points_by_user(db: AsyncSession, as_of: datetime | None = None) -> di
     completed_query = completed_query.group_by(LessonState.userId)
     completed_by_user = dict((await db.execute(completed_query)).all())
 
+    # Daily-goal bonuses are the one part of the score that IS stored rather
+    # than derived (§ daily goal, 2026-09-03): "reward paid once" is a fact
+    # about a moment, and cannot be recomputed from the answer log. Folded in
+    # here so the app still has a single points number rather than a second,
+    # parallel one. Deliberately not filtered by `as_of` — DailyGoalAward
+    # carries a date, not the timestamp granularity the rest of this function
+    # compares against, so a historical rank ignores bonuses rather than
+    # dating them wrongly.
+    award_points = await daily_goal.total_award_points(db) if as_of is None else {}
+
     points: dict[str, int] = {}
-    for user_id in set(correct_counts) | set(completed_by_user):
+    for user_id in set(correct_counts) | set(completed_by_user) | set(award_points):
         points[user_id] = (
-            correct_counts.get(user_id, 0) * _POINTS_PER_CORRECT_ANSWER + completed_by_user.get(user_id, 0) * _POINTS_PER_COMPLETED_LESSON
+            correct_counts.get(user_id, 0) * _POINTS_PER_CORRECT_ANSWER
+            + completed_by_user.get(user_id, 0) * _POINTS_PER_COMPLETED_LESSON
+            + award_points.get(user_id, 0)
         )
     return points
 

@@ -4,6 +4,7 @@ from app.models.category import Category
 from app.models.course import Course
 from app.models.course_lesson import CourseLesson
 from app.models.daily_activity import DailyActivity
+from app.models.daily_goal import DailyGoalAward, UserPreference
 from app.models.enums import CourseStatus, Role, UserStatus
 from app.models.follow import Follow
 from app.models.language import Language
@@ -35,6 +36,8 @@ __all__ = [
     "Course",
     "CourseLesson",
     "DailyActivity",
+    "DailyGoalAward",
+    "UserPreference",
     "Follow",
     "Language",
     "LessonAttempt",

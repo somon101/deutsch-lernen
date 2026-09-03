@@ -6,6 +6,7 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
 from app.schemas.lesson_state import ActivityTimeInput, DailyActivityInput
+from app.services import daily_goal as daily_goal_svc
 from app.schemas.taxonomy import (
     AnswerSubmitInput,
     LanguageInput,
@@ -371,7 +372,12 @@ async def overall_progress_route(
 @router.post("/me/activity-time", status_code=201)
 async def add_activity_time_route(body: ActivityTimeInput, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     await add_activity_time(db, user.id, body.courseId, body.lessonId, body.activityType, body.seconds)
-    return {"ok": True}
+    # Settling the daily goal here is what makes the reward arrive at the
+    # moment the goal is actually met, rather than the next time some screen
+    # happens to ask (§ daily goal, 2026-09-03). evaluate() is idempotent, so
+    # reporting time a hundred more times after the goal is met pays nothing
+    # further.
+    return {"ok": True, "dailyGoal": await daily_goal_svc.evaluate(db, user.id)}
 
 
 @router.get("/me/time/overall")
