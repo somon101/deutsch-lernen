@@ -29,7 +29,7 @@ import 'widgets/week_activity.dart';
 /// weekly-activity sections. None of the latter has a backing system yet —
 /// see profile_gamification_repository.dart, which isolates every mock
 /// value to one file so it's a single spot to swap once real endpoints
-/// exist. Editing name/email/phone/username/bio/birth date and logout both
+/// exist. Editing name/email/username/bio/birth date and logout both
 /// live in features/settings/presentation — this screen is read-only plus
 /// the avatar.
 ///

@@ -158,7 +158,6 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _email = TextEditingController();
-  final _phone = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
   UserRole _role = UserRole.user;
@@ -171,7 +170,6 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
     _firstName.dispose();
     _lastName.dispose();
     _email.dispose();
-    _phone.dispose();
     _username.dispose();
     _password.dispose();
     super.dispose();
@@ -189,7 +187,6 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
             email: _email.text.trim(),
-            phone: _phone.text.trim().isEmpty ? null : _phone.text.trim(),
             username: _username.text.trim(),
             password: _password.text,
             role: _role,
@@ -198,7 +195,6 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
       _firstName.clear();
       _lastName.clear();
       _email.clear();
-      _phone.clear();
       _username.clear();
       _password.clear();
       setState(() {
@@ -249,7 +245,7 @@ class _CreateUserCardState extends ConsumerState<_CreateUserCard> {
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                 ),
-                _Field(label: 'Телефон', controller: _phone),
+                const SizedBox.shrink(),
               ],
             ),
             const SizedBox(height: 14),

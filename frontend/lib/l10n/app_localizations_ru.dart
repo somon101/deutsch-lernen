@@ -120,6 +120,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get cancel => 'Отмена';
 
   @override
+  String get change => 'Изменить';
+
+  @override
   String get comingSoon => 'Скоро';
 
   @override
@@ -199,7 +202,14 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityPasswordsDontMatch => 'Пароли не совпадают';
 
   @override
+  String get securityPasswordTooShort =>
+      'Пароль должен содержать не менее 6 символов';
+
+  @override
   String get securityPasswordChanged => 'Пароль изменён';
+
+  @override
+  String get securityEmailLabel => 'Email';
 
   @override
   String get securityChangeEmail => 'Изменить email';
@@ -208,13 +218,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get securityNewEmail => 'Новый email';
 
   @override
+  String get securityEmailInvalid => 'Некорректный формат email';
+
+  @override
   String get securityVerificationCode => 'Код подтверждения';
-
-  @override
-  String get securityChangePhone => 'Изменить номер телефона';
-
-  @override
-  String get securityNewPhone => 'Новый номер';
 
   @override
   String get securityLinkedAccounts => 'Привязанные аккаунты';

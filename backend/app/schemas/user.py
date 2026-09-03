@@ -8,7 +8,6 @@ class CreateUserRequest(BaseModel):
     firstName: str = Field(min_length=1)
     lastName: str = Field(min_length=1)
     email: EmailStr
-    phone: str | None = None
     username: str
     password: str = Field(min_length=6)
     role: Role = Role.USER
@@ -24,7 +23,6 @@ class UpdateUserRequest(BaseModel):
     firstName: str | None = Field(default=None, min_length=1)
     lastName: str | None = Field(default=None, min_length=1)
     email: EmailStr | None = None
-    phone: str | None = None
     username: str | None = None
     role: Role | None = None
     status: UserStatus | None = None
@@ -70,7 +68,6 @@ class UpdateProfileRequest(BaseModel):
     firstName: str | None = Field(default=None, min_length=1)
     lastName: str | None = Field(default=None, min_length=1)
     email: EmailStr | None = None
-    phone: str | None = None
     username: str | None = None
     bio: str | None = Field(default=None, max_length=150)
     # Raw ISO string, not Pydantic's `datetime` — the latter parses "...Z"

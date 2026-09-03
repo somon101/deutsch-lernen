@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -12,26 +11,23 @@ import '../data/security_repository.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/settings_tile.dart';
 
-/// Best-effort "+D (DDD) DDD-DD-DD" grouping — not validated per-country,
-/// just digit grouping so the field doesn't feel like a bare number input.
-class _PhoneMaskFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    var digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    if (digits.length > 11) digits = digits.substring(0, 11);
-
-    final buffer = StringBuffer();
-    if (digits.isNotEmpty) {
-      buffer.write('+${digits[0]}');
-      if (digits.length > 1) buffer.write(' (${digits.substring(1, digits.length < 4 ? digits.length : 4)}');
-      if (digits.length >= 4) buffer.write(')');
-      if (digits.length > 4) buffer.write(' ${digits.substring(4, digits.length < 7 ? digits.length : 7)}');
-      if (digits.length > 7) buffer.write('-${digits.substring(7, digits.length < 9 ? digits.length : 9)}');
-      if (digits.length > 9) buffer.write('-${digits.substring(9)}');
-    }
-    final text = buffer.toString();
-    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length));
-  }
+/// A reasonably strict, syntax-only email check for immediate UX feedback
+/// (§ security & privacy rework, 2026-09-03). Deliberately not the source of
+/// truth: the backend's own EmailStr (the email-validator package) re-checks
+/// every request server-side and is the actual authority — confirmed
+/// separately to correctly reject missing "@", a missing/malformed domain,
+/// stray spaces, and doubled separators, all without a network/DNS lookup
+/// (syntax only, never checks whether the mailbox exists). This regex only
+/// has to catch the obvious mistakes before a round trip even starts.
+bool looksLikeValidEmail(String value) {
+  final email = value.trim();
+  if (email.isEmpty) return false;
+  final pattern = RegExp(
+    r'^(?!.*\.\.)[A-Za-z0-9](?:[A-Za-z0-9._%+-]*[A-Za-z0-9])?'
+    r'@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?'
+    r'(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$',
+  );
+  return pattern.hasMatch(email);
 }
 
 class SecurityPrivacyScreen extends ConsumerStatefulWidget {
@@ -42,101 +38,17 @@ class SecurityPrivacyScreen extends ConsumerStatefulWidget {
 }
 
 class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
-  final _currentPassword = TextEditingController();
-  final _newPassword = TextEditingController();
-  final _repeatPassword = TextEditingController();
-  bool _showCurrentPassword = false;
-  bool _showNewPassword = false;
-  bool _showRepeatPassword = false;
-  bool _passwordSaving = false;
-
-  final _newEmail = TextEditingController();
-  bool _emailSaving = false;
-
-  final _newPhone = TextEditingController();
-  bool _phoneSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _newEmail.addListener(() => setState(() {}));
-    _newPhone.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _currentPassword.dispose();
-    _newPassword.dispose();
-    _repeatPassword.dispose();
-    _newEmail.dispose();
-    _newPhone.dispose();
-    super.dispose();
-  }
-
-  void _snack(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-
-  Future<void> _changePassword() async {
-    final l10n = AppLocalizations.of(context);
-    if (_newPassword.text != _repeatPassword.text) {
-      _snack(l10n.securityPasswordsDontMatch);
-      return;
-    }
-    setState(() => _passwordSaving = true);
-    try {
-      await ref.read(profileRepositoryProvider).changePassword(currentPassword: _currentPassword.text, newPassword: _newPassword.text);
-      if (!mounted) return;
-      _currentPassword.clear();
-      _newPassword.clear();
-      _repeatPassword.clear();
-      _snack(l10n.securityPasswordChanged);
-    } catch (e) {
-      if (mounted) _snack(e.toString());
-    } finally {
-      if (mounted) setState(() => _passwordSaving = false);
+  Future<void> _openEmailDialog() async {
+    final changed = await showDialog<bool>(context: context, builder: (_) => const _EmailChangeDialog());
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).saved)));
     }
   }
 
-  Future<void> _changeEmail() async {
-    final user = ref.read(authProvider).value;
-    if (user == null) return;
-    setState(() => _emailSaving = true);
-    try {
-      final updated = await ref.read(profileRepositoryProvider).updateProfile(
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: _newEmail.text.trim(),
-            phone: user.phone,
-          );
-      await ref.read(authProvider.notifier).updateLocalUser(updated);
-      if (!mounted) return;
-      _newEmail.clear();
-      _snack(AppLocalizations.of(context).saved);
-    } catch (e) {
-      if (mounted) _snack(e.toString());
-    } finally {
-      if (mounted) setState(() => _emailSaving = false);
-    }
-  }
-
-  Future<void> _changePhone() async {
-    final user = ref.read(authProvider).value;
-    if (user == null) return;
-    setState(() => _phoneSaving = true);
-    try {
-      final updated = await ref.read(profileRepositoryProvider).updateProfile(
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            phone: _newPhone.text.trim(),
-          );
-      await ref.read(authProvider.notifier).updateLocalUser(updated);
-      if (!mounted) return;
-      _newPhone.clear();
-      _snack(AppLocalizations.of(context).saved);
-    } catch (e) {
-      if (mounted) _snack(e.toString());
-    } finally {
-      if (mounted) setState(() => _phoneSaving = false);
+  Future<void> _openPasswordDialog() async {
+    final changed = await showDialog<bool>(context: context, builder: (_) => const _PasswordChangeDialog());
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context).securityPasswordChanged)));
     }
   }
 
@@ -219,95 +131,31 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
+                  // Email and password each show their CURRENT state first —
+                  // the value for email, nothing shown for password — and
+                  // editing happens in a floating modal, never inline on this
+                  // page (§ security & privacy rework, 2026-09-03). Phone is
+                  // gone entirely: no field, no row, no way to add one.
+                  SettingsSection(
+                    title: l10n.securityEmailLabel,
+                    children: [
+                      SettingsTile(
+                        icon: Icons.email_outlined,
+                        label: l10n.securityEmailLabel,
+                        subtitle: user.email,
+                        trailing: TextButton(onPressed: _openEmailDialog, child: Text(l10n.change)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: ProfileMetrics.cardGap),
                   SettingsSection(
                     title: l10n.securityChangePassword,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: Column(
-                          children: [
-                            _PasswordField(
-                              controller: _currentPassword,
-                              label: l10n.securityCurrentPassword,
-                              obscure: !_showCurrentPassword,
-                              onToggle: () => setState(() => _showCurrentPassword = !_showCurrentPassword),
-                            ),
-                            const SizedBox(height: 12),
-                            _PasswordField(
-                              controller: _newPassword,
-                              label: l10n.securityNewPassword,
-                              obscure: !_showNewPassword,
-                              onToggle: () => setState(() => _showNewPassword = !_showNewPassword),
-                            ),
-                            const SizedBox(height: 12),
-                            _PasswordField(
-                              controller: _repeatPassword,
-                              label: l10n.securityRepeatPassword,
-                              obscure: !_showRepeatPassword,
-                              onToggle: () => setState(() => _showRepeatPassword = !_showRepeatPassword),
-                            ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
-                                onPressed: _passwordSaving ? null : _changePassword,
-                                child: Text(l10n.save),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: ProfileMetrics.cardGap),
-                  SettingsSection(
-                    title: l10n.securityChangeEmail,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: Column(
-                          children: [
-                            TextField(controller: _newEmail, keyboardType: TextInputType.emailAddress, decoration: InputDecoration(labelText: l10n.securityNewEmail)),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
-                                onPressed: (_emailSaving || _newEmail.text.trim().isEmpty) ? null : _changeEmail,
-                                child: Text(l10n.save),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: ProfileMetrics.cardGap),
-                  SettingsSection(
-                    title: l10n.securityChangePhone,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                        child: Column(
-                          children: [
-                            TextField(
-                              controller: _newPhone,
-                              keyboardType: TextInputType.phone,
-                              inputFormatters: [_PhoneMaskFormatter()],
-                              decoration: InputDecoration(labelText: l10n.securityNewPhone),
-                            ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
-                                onPressed: (_phoneSaving || _newPhone.text.trim().isEmpty) ? null : _changePhone,
-                                child: Text(l10n.save),
-                              ),
-                            ),
-                          ],
-                        ),
+                      SettingsTile(
+                        icon: Icons.lock_outline,
+                        label: l10n.securityChangePassword,
+                        onTap: _openPasswordDialog,
+                        trailing: Icon(Icons.chevron_right, color: c.textMuted),
                       ),
                     ],
                   ),
@@ -349,24 +197,274 @@ class _SecurityPrivacyScreenState extends ConsumerState<SecurityPrivacyScreen> {
   }
 }
 
+/// Floating modal for changing the account email
+/// (§ security & privacy rework, 2026-09-03).
+///
+/// Owns its own text field and error/loading state, entirely separate from
+/// the page behind it — closing without saving (Cancel, the barrier, the
+/// back button) simply discards this widget, so the account's email is
+/// untouched unless [_save] actually completes. Returns `true` via
+/// [Navigator.pop] only after the backend confirms the change, never on the
+/// strength of a local edit.
+class _EmailChangeDialog extends ConsumerStatefulWidget {
+  const _EmailChangeDialog();
+
+  @override
+  ConsumerState<_EmailChangeDialog> createState() => _EmailChangeDialogState();
+}
+
+class _EmailChangeDialogState extends ConsumerState<_EmailChangeDialog> {
+  final _email = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keeps the Save button's enabled state in sync with the field as the
+    // user types — the same reactive pattern the old inline form used.
+    _email.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
+    final value = _email.text.trim();
+
+    // Format is checked here, client-side, before any request is sent — an
+    // obviously malformed address never reaches the network
+    // (§3 of the request: "запрос на сохранение не должен выполняться").
+    // The backend re-validates the same field independently on arrival;
+    // this check is for immediate feedback, not the security boundary.
+    if (!looksLikeValidEmail(value)) {
+      setState(() => _error = l10n.securityEmailInvalid);
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final updated = await ref.read(profileRepositoryProvider).updateEmail(value);
+      // The backend response — not the locally-typed value — is what gets
+      // written into app state, so a stale email can never linger on screen
+      // if the server normalized or rejected something unexpectedly.
+      await ref.read(authProvider.notifier).updateLocalUser(updated);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      // Covers a taken email (409 from the backend's own uniqueness check),
+      // a network failure, and anything else the server reports — surfaced
+      // right here in the modal, never silently swallowed.
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final c = context.profileColors;
+    final canSubmit = !_saving && _email.text.trim().isNotEmpty;
+
+    return AlertDialog(
+      title: Text(l10n.securityChangeEmail),
+      content: SizedBox(
+        width: 360,
+        child: TextField(
+          controller: _email,
+          autofocus: true,
+          enabled: !_saving,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(labelText: l10n.securityNewEmail, errorText: _error),
+          onSubmitted: (_) {
+            if (canSubmit) _save();
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(false), child: Text(l10n.cancel)),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
+          onPressed: canSubmit ? _save : null,
+          child: _saving
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(l10n.save),
+        ),
+      ],
+    );
+  }
+}
+
+/// Floating modal for changing the account password
+/// (§ security & privacy rework, 2026-09-03).
+///
+/// The password itself is never shown on the settings page — only this
+/// modal exists, with three fields. Every check (current password correct,
+/// new password meets the project's existing minimum, confirmation matches)
+/// happens before the request fires; the backend re-verifies the current
+/// password and re-applies the same minimum independently, since a client
+/// cannot be trusted to enforce either on its own.
+class _PasswordChangeDialog extends ConsumerStatefulWidget {
+  const _PasswordChangeDialog();
+
+  @override
+  ConsumerState<_PasswordChangeDialog> createState() => _PasswordChangeDialogState();
+}
+
+class _PasswordChangeDialogState extends ConsumerState<_PasswordChangeDialog> {
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+  final _repeat = TextEditingController();
+  bool _showCurrent = false;
+  bool _showNext = false;
+  bool _showRepeat = false;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final controller in [_current, _next, _repeat]) {
+      controller.addListener(() => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    _repeat.dispose();
+    super.dispose();
+  }
+
+  bool get _canSubmit => !_saving && _current.text.isNotEmpty && _next.text.isNotEmpty && _repeat.text.isNotEmpty;
+
+  Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
+
+    // Same minimum the backend's ChangePasswordRequest already enforces
+    // (Field(min_length=6)) — matched here, not invented fresh, per the
+    // request's "по существующим требованиям безопасности проекта".
+    if (_next.text.length < 6) {
+      setState(() => _error = l10n.securityPasswordTooShort);
+      return;
+    }
+    if (_next.text != _repeat.text) {
+      setState(() => _error = l10n.securityPasswordsDontMatch);
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      // The current-password check happens server-side
+      // (backend/app/routers/me.py's verify_password against the stored
+      // hash) — this call either succeeds because it was right, or throws
+      // with the backend's own "Неверный текущий пароль", surfaced below.
+      await ref.read(profileRepositoryProvider).changePassword(currentPassword: _current.text, newPassword: _next.text);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = e.toString();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final c = context.profileColors;
+
+    return AlertDialog(
+      title: Text(l10n.securityChangePassword),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PasswordField(
+              controller: _current,
+              label: l10n.securityCurrentPassword,
+              obscure: !_showCurrent,
+              enabled: !_saving,
+              onToggle: () => setState(() => _showCurrent = !_showCurrent),
+            ),
+            const SizedBox(height: 12),
+            _PasswordField(
+              controller: _next,
+              label: l10n.securityNewPassword,
+              obscure: !_showNext,
+              enabled: !_saving,
+              onToggle: () => setState(() => _showNext = !_showNext),
+            ),
+            const SizedBox(height: 12),
+            _PasswordField(
+              controller: _repeat,
+              label: l10n.securityRepeatPassword,
+              obscure: !_showRepeat,
+              enabled: !_saving,
+              onToggle: () => setState(() => _showRepeat = !_showRepeat),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(_error!, style: TextStyle(color: c.danger, fontSize: 13)),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(false), child: Text(l10n.cancel)),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: c.accent, foregroundColor: Colors.white),
+          onPressed: _canSubmit ? _save : null,
+          child: _saving
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : Text(l10n.save),
+        ),
+      ],
+    );
+  }
+}
+
 class _PasswordField extends StatelessWidget {
-  const _PasswordField({required this.controller, required this.label, required this.obscure, required this.onToggle});
+  const _PasswordField({required this.controller, required this.label, required this.obscure, required this.onToggle, this.enabled = true});
 
   final TextEditingController controller;
   final String label;
   final bool obscure;
   final VoidCallback onToggle;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       obscureText: obscure,
+      enabled: enabled,
       decoration: InputDecoration(
         labelText: label,
         suffixIcon: IconButton(
           icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-          onPressed: onToggle,
+          onPressed: enabled ? onToggle : null,
         ),
       ),
     );

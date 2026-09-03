@@ -21,8 +21,8 @@ _SEARCH_LIMIT = 20
 
 def _public_user_dto(user: User) -> dict:
     """Safe-to-show-to-anyone fields — deliberately NOT serialize.public_user
-    (that one includes email/phone/birthDate, fine for a user reading their
-    own account, never appropriate to hand back about a different user).
+    (that one includes email/birthDate, fine for a user reading their own
+    account, never appropriate to hand back about a different user).
     `selectedLanguageId` is included on purpose (like `publicId`) — it's
     which language someone studies, not private data, and the profile screen
     needs it to scope their progress/time the same way it scopes its own."""

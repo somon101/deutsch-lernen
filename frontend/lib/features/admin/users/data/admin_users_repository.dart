@@ -10,7 +10,6 @@ class AdminUser {
     required this.firstName,
     required this.lastName,
     required this.email,
-    required this.phone,
     required this.username,
     required this.role,
     required this.status,
@@ -26,7 +25,6 @@ class AdminUser {
     firstName: json['firstName'] as String,
     lastName: json['lastName'] as String,
     email: json['email'] as String,
-    phone: json['phone'] as String?,
     username: json['username'] as String,
     role: json['role'] as String,
     status: json['status'] as String,
@@ -41,7 +39,6 @@ class AdminUser {
   final String firstName;
   final String lastName;
   final String email;
-  final String? phone;
   final String username;
   final String role;
   final String status;
@@ -112,7 +109,6 @@ class AdminUsersRepository {
     required String firstName,
     required String lastName,
     required String email,
-    String? phone,
     required String username,
     required String password,
     required UserRole role,
@@ -124,7 +120,6 @@ class AdminUsersRepository {
         'firstName': firstName,
         'lastName': lastName,
         'email': email,
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
         'username': username,
         'password': password,
         'role': _roleWire(role),
@@ -139,7 +134,6 @@ class AdminUsersRepository {
     String? firstName,
     String? lastName,
     String? email,
-    String? phone,
     String? username,
     UserRole? role,
     bool? canEditProfile,
@@ -151,7 +145,6 @@ class AdminUsersRepository {
         'firstName': ?firstName,
         'lastName': ?lastName,
         'email': ?email,
-        'phone': ?phone,
         'username': ?username,
         if (role != null) 'role': _roleWire(role),
         'canEditProfile': ?canEditProfile,

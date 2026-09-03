@@ -127,3 +127,25 @@ async def ensure_lesson_graph_tables(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_lesson_graph_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# Kept byte-for-byte in step with
+# server/prisma/migrations/20260903180000_remove_phone/migration.sql.
+#
+# Phone is gone from the platform entirely (§ security & privacy rework,
+# 2026-09-03) — confirmed via a full grep of both frontend and backend before
+# removing it, so this DROP is not a guess. DROP COLUMN discards the stored
+# values along with the column, so there is no separate step to wipe them.
+# IF EXISTS makes re-running this at every startup harmless once the column
+# is already gone.
+_REMOVE_PHONE_STATEMENTS = ('ALTER TABLE "User" DROP COLUMN IF EXISTS "phone"',)
+
+
+async def ensure_phone_removed(db: AsyncSession) -> None:
+    for statement in _REMOVE_PHONE_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_phone_removed: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

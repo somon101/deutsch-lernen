@@ -22,7 +22,6 @@ class AppUser {
     required this.firstName,
     required this.lastName,
     required this.email,
-    required this.phone,
     required this.username,
     required this.role,
     required this.status,
@@ -44,7 +43,6 @@ class AppUser {
         firstName: json['firstName'] as String,
         lastName: json['lastName'] as String,
         email: json['email'] as String,
-        phone: json['phone'] as String?,
         username: json['username'] as String,
         role: _roleFromJson(json['role'] as String),
         status: (json['status'] as String) == 'BLOCKED' ? UserStatus.blocked : UserStatus.active,
@@ -62,7 +60,6 @@ class AppUser {
   final String firstName;
   final String lastName;
   final String email;
-  final String? phone;
   final String username;
   final UserRole role;
   final UserStatus status;
@@ -83,7 +80,6 @@ class AppUser {
         'firstName': firstName,
         'lastName': lastName,
         'email': email,
-        'phone': phone,
         'username': username,
         'role': _roleToJson(role),
         'status': status == UserStatus.blocked ? 'BLOCKED' : 'ACTIVE',

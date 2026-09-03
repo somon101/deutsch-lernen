@@ -26,7 +26,6 @@ class User(Base):
     firstName: Mapped[str] = mapped_column(String, nullable=False)
     lastName: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    phone: Mapped[str | None] = mapped_column(String, nullable=True)
     username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     # Lower-cased copy of `username`, kept in sync on every write — same
     # split as the Prisma schema, so case-insensitive uniqueness/login stays

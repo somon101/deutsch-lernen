@@ -18,7 +18,6 @@ def public_user(user: User) -> dict:
         "firstName": user.firstName,
         "lastName": user.lastName,
         "email": user.email,
-        "phone": user.phone,
         "username": user.username,
         "role": user.role.value,
         "status": user.status.value,

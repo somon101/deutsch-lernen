@@ -43,7 +43,6 @@ async def create_user(
         firstName=body.firstName,
         lastName=body.lastName,
         email=body.email,
-        phone=body.phone,
         username=body.username,
         usernameLower=username_lower,
         passwordHash=hash_password(body.password),

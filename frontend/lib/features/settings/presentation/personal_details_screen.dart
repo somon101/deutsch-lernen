@@ -105,7 +105,6 @@ class _PersonalDetailsScreenState extends ConsumerState<PersonalDetailsScreen> {
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
             email: user.email,
-            phone: user.phone,
             username: _username.text.trim(),
             bio: _bio.text.trim(),
             birthDate: _birthDate,

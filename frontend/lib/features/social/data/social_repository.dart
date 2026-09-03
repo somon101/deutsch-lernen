@@ -5,8 +5,8 @@ import '../../leaderboard/data/leaderboard_repository.dart';
 import '../../profile/data/profile_repository.dart';
 
 /// A public-safe view of one user (§ subscriptions, 2026-08-30) — never
-/// includes email/phone/birthDate, unlike AppUser's own full shape, since
-/// this is what gets shown about OTHER people. `isFollowing`/`isSelf` are
+/// includes email/birthDate, unlike AppUser's own full shape, since this is
+/// what gets shown about OTHER people. `isFollowing`/`isSelf` are
 /// always relative to whoever is asking (the signed-in caller).
 class UserProfile {
   const UserProfile({

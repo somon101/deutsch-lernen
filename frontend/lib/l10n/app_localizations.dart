@@ -308,6 +308,12 @@ abstract class AppLocalizations {
   /// **'Отмена'**
   String get cancel;
 
+  /// No description provided for @change.
+  ///
+  /// In ru, this message translates to:
+  /// **'Изменить'**
+  String get change;
+
   /// No description provided for @comingSoon.
   ///
   /// In ru, this message translates to:
@@ -458,11 +464,23 @@ abstract class AppLocalizations {
   /// **'Пароли не совпадают'**
   String get securityPasswordsDontMatch;
 
+  /// No description provided for @securityPasswordTooShort.
+  ///
+  /// In ru, this message translates to:
+  /// **'Пароль должен содержать не менее 6 символов'**
+  String get securityPasswordTooShort;
+
   /// No description provided for @securityPasswordChanged.
   ///
   /// In ru, this message translates to:
   /// **'Пароль изменён'**
   String get securityPasswordChanged;
+
+  /// No description provided for @securityEmailLabel.
+  ///
+  /// In ru, this message translates to:
+  /// **'Email'**
+  String get securityEmailLabel;
 
   /// No description provided for @securityChangeEmail.
   ///
@@ -476,23 +494,17 @@ abstract class AppLocalizations {
   /// **'Новый email'**
   String get securityNewEmail;
 
+  /// No description provided for @securityEmailInvalid.
+  ///
+  /// In ru, this message translates to:
+  /// **'Некорректный формат email'**
+  String get securityEmailInvalid;
+
   /// No description provided for @securityVerificationCode.
   ///
   /// In ru, this message translates to:
   /// **'Код подтверждения'**
   String get securityVerificationCode;
-
-  /// No description provided for @securityChangePhone.
-  ///
-  /// In ru, this message translates to:
-  /// **'Изменить номер телефона'**
-  String get securityChangePhone;
-
-  /// No description provided for @securityNewPhone.
-  ///
-  /// In ru, this message translates to:
-  /// **'Новый номер'**
-  String get securityNewPhone;
 
   /// No description provided for @securityLinkedAccounts.
   ///

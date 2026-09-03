@@ -323,7 +323,6 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
   late final _firstName = TextEditingController(text: widget.user.firstName);
   late final _lastName = TextEditingController(text: widget.user.lastName);
   late final _email = TextEditingController(text: widget.user.email);
-  late final _phone = TextEditingController(text: widget.user.phone ?? '');
   late final _username = TextEditingController(text: widget.user.username);
   late UserRole _role = _roleFromWire(widget.user.role);
   late bool _canEditProfile = widget.user.canEditProfile;
@@ -342,7 +341,6 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
     _firstName.dispose();
     _lastName.dispose();
     _email.dispose();
-    _phone.dispose();
     _username.dispose();
     super.dispose();
   }
@@ -360,7 +358,6 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
             firstName: _firstName.text.trim(),
             lastName: _lastName.text.trim(),
             email: _email.text.trim(),
-            phone: _phone.text.trim(),
             username: _username.text.trim(),
             role: _role,
             canEditProfile: _canEditProfile,
@@ -545,7 +542,7 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
             _FieldRow(
               children: [
                 _Field(label: 'Email', controller: _email),
-                _Field(label: 'Телефон', controller: _phone),
+                const SizedBox.shrink(),
               ],
             ),
             const SizedBox(height: 14),

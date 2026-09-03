@@ -37,7 +37,6 @@ final _testUser = AppUser(
   firstName: 'Иван',
   lastName: 'Иванов',
   email: 'a@b.com',
-  phone: null,
   username: 'ivan',
   role: UserRole.user,
   status: UserStatus.active,

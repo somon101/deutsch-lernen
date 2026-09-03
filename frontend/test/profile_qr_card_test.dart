@@ -24,7 +24,6 @@ AppUser _userWithName(String firstName, String lastName) => AppUser(
       firstName: firstName,
       lastName: lastName,
       email: 'a@b.com',
-      phone: null,
       username: 'mansur',
       role: UserRole.user,
       status: UserStatus.active,

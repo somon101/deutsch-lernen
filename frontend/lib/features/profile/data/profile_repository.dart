@@ -84,7 +84,6 @@ class ProfileRepository {
     required String firstName,
     required String lastName,
     required String email,
-    String? phone,
     String? username,
     String? bio,
     DateTime? birthDate,
@@ -93,11 +92,19 @@ class ProfileRepository {
       'firstName': firstName,
       'lastName': lastName,
       'email': email,
-      'phone': phone,
       'username': ?username,
       'bio': ?bio,
       if (birthDate != null) 'birthDate': birthDate.toUtc().toIso8601String(),
     });
+    return AppUser.fromJson(res['user'] as Map<String, dynamic>);
+  }
+
+  /// A minimal, single-field PATCH for the security screen's email modal
+  /// (§ security & privacy rework, 2026-09-03) — sends only `email`, so
+  /// changing it can never touch name/username/bio as a side effect. The
+  /// backend applies exactly the fields present in the request body.
+  Future<AppUser> updateEmail(String email) async {
+    final res = await _api.patch('/api/me/', body: {'email': email});
     return AppUser.fromJson(res['user'] as Map<String, dynamic>);
   }
 
