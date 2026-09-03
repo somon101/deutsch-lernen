@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../admin_tokens.dart';
 import '../../../widgets/admin_feedback.dart';
@@ -177,7 +178,23 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
       connecting: _connectFromId != null,
       onAdd: _addNode,
       onToggleConnect: () => setState(() => _connectFromId = _connectFromId == null ? (_selectedNodeId ?? '') : null),
-      onExit: () => Navigator.of(context).maybePop(),
+      // Mirrors the AppBar's own back button on BuilderLessonEditScreen
+      // exactly (§ graph exit navigation, 2026-09-03) — canPop() first,
+      // else an explicit context.go to the course editor. The graph is a
+      // widget swapped in by lesson.graph != null, not a pushed route, so a
+      // bare Navigator.maybePop() had nothing reliable of its own to pop:
+      // inside this app's ShellRoute this either did nothing or left the
+      // builder on a screen the admin didn't ask for, instead of the
+      // "back to the regular course editor" behaviour the exit button is
+      // supposed to have.
+      onExit: () {
+        final nav = Navigator.of(context);
+        if (nav.canPop()) {
+          nav.pop();
+        } else {
+          context.go('/admin/builder/${widget.courseId}');
+        }
+      },
     );
 
     final body = Column(
