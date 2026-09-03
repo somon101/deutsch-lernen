@@ -33,5 +33,14 @@ async def get_preferences_route(user: User = Depends(require_auth), db: AsyncSes
 @router.patch("")
 async def patch_preferences_route(body: PreferencesPatch, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     """`exclude_unset` is what makes this a partial update: a field the
-    client did not send is absent from `changes`, not present as None."""
-    return await svc.update_preferences(db, user.id, body.model_dump(exclude_unset=True))
+    client did not send is absent from `changes`, not present as None.
+
+    `exclude_none` is a real bug fix, not belt-and-suspenders: a client that
+    sends an explicit `null` for one of these fields (distinct from omitting
+    it) previously passed pydantic's `X | None` validation, then hit
+    `setattr(row, field, None)` on a NOT NULL column and crashed with a raw
+    HTTP 500 instead of either being honoured or cleanly rejected. There is
+    no meaningful "set this switch to null", so an explicit null is treated
+    the same as not sending the field at all.
+    """
+    return await svc.update_preferences(db, user.id, body.model_dump(exclude_unset=True, exclude_none=True))
