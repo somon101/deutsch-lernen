@@ -19,6 +19,8 @@ from app.models.course_lesson import CourseLesson
 from app.models.language import Language
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
+from app.models.lesson_edge import LessonEdge
+from app.models.lesson_node import LessonNode
 from app.models.lesson_question import LessonQuestion
 from app.models.level import Level
 from app.models.material import Material
@@ -27,6 +29,7 @@ from app.models.question import Question
 from app.models.question_placement import QuestionPlacement
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
+from app.services.lesson_graph import bulk_graphs_for_lessons
 from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
 from app.services.vocabulary import get_or_create_category
 from app.utils import to_iso_z, utcnow
@@ -137,6 +140,7 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
 
     new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids)
     pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks])
+    graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids)
 
     def lesson_dto(lesson: CourseLesson) -> dict:
         lesson_words = [w for w in words if w.lessonId == lesson.id]
@@ -165,6 +169,12 @@ async def get_course(db: AsyncSession, course_id: str) -> dict | None:
             "videoUrl": lesson.videoUrl,
             "audioUrl": lesson.audioUrl,
             "position": lesson.position,
+            # None means this lesson is still on the old fixed 8-stage chain
+            # (never converted) — the client's existing Stage-enum runner and
+            # rail builder read every other field above exactly as before and
+            # never look at this one. Present only once a teacher has
+            # explicitly converted the lesson (§ lesson graph, 2026-09-03).
+            "graph": graphs_by_lesson.get(lesson.id),
             "vocabulary": vocabulary_dtos,
             "newVocabulary": filter_new_vocabulary(vocabulary_dtos, new_vocab_keys_by_lesson[lesson.id]),
             "questions": [
@@ -255,6 +265,15 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
     )
     pool_question_max_updated, pool_question_count = (await db.execute(pool_question_query)).one()
 
+    # Lesson graph (§ lesson graph, 2026-09-03) — a converted lesson's node
+    # positions/refs and edges have their own updatedAt/createdAt, untracked
+    # by anything above, so a graph edit (move a node, add/remove a
+    # connection) would otherwise never bust the client's cache.
+    node_max_updated = await db.scalar(select(func.max(LessonNode.updatedAt)).where(LessonNode.courseId == course_id))
+    node_count = await db.scalar(select(func.count()).select_from(LessonNode).where(LessonNode.courseId == course_id))
+    edge_query = select(func.max(LessonEdge.createdAt), func.count()).select_from(LessonEdge).join(LessonNode, LessonNode.id == LessonEdge.fromNodeId).where(LessonNode.courseId == course_id)
+    edge_max_created, edge_count = (await db.execute(edge_query)).one()
+
     fingerprint = "|".join(
         str(v)
         for v in (
@@ -267,6 +286,10 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
             material_block_count,
             pool_question_max_updated,
             pool_question_count,
+            node_max_updated,
+            node_count,
+            edge_max_created,
+            edge_count,
         )
     )
     return hashlib.sha256(fingerprint.encode()).hexdigest()

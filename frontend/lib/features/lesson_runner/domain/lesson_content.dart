@@ -1,6 +1,7 @@
 import 'exercise.dart';
+import 'lesson_graph.dart';
 
-List<Exercise> _blockQuestions(dynamic json) => ((json as List<dynamic>?) ?? const [])
+List<Exercise> blockQuestionsFromJson(dynamic json) => ((json as List<dynamic>?) ?? const [])
     .cast<Map<String, dynamic>>()
     .map((q) => QuestionDto.fromJson(q))
     .map((q) => toExercise(q, q.id!))
@@ -56,7 +57,7 @@ sealed class MaterialBlock {
           id: json['id'] as String,
           title: json['title'] as String,
           content: json['content'] as String,
-          questions: _blockQuestions(json['questions']),
+          questions: blockQuestionsFromJson(json['questions']),
         );
       case 'line':
       default:
@@ -139,6 +140,7 @@ class LessonContentData {
     required this.videoUrl,
     required this.audioUrl,
     required this.blocks,
+    this.graph,
   });
 
   final String lessonId;
@@ -150,6 +152,11 @@ class LessonContentData {
   final String? videoUrl;
   final String? audioUrl;
   final List<QuestionBlock> blocks;
+  // Null for a legacy (unconverted) lesson, or the always-legacy file-based
+  // course, which never has this key at all (§ lesson graph, 2026-09-03) —
+  // see services/courses.py's lesson_dto. Present only once a teacher has
+  // explicitly converted the lesson.
+  final LessonGraph? graph;
 
   List<Exercise> exercisesFor(String stage) => exercisesForStage(blocks, stage);
 
@@ -193,6 +200,7 @@ class LessonContentData {
         videoUrl: json['videoUrl'] as String?,
         audioUrl: json['audioUrl'] as String?,
         blocks: _blockList(json['blocks'] ?? []),
+        graph: json['graph'] != null ? LessonGraph.fromJson(json['graph'] as Map<String, dynamic>) : null,
       );
 
   static String? _titleFromMaterial(List<MaterialBlock> blocks) {

@@ -117,19 +117,30 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
       GoRoute(
+        // "start" is not a real stage name or node id on either side (§
+        // lesson graph, 2026-09-03) — both LessonRunnerScreen and
+        // GraphLessonRunnerScreen already redirect any unrecognized :stage
+        // value to their own real first entry, so one shared sentinel works
+        // for a legacy lesson and a graph lesson alike, without this route
+        // needing to know which kind it's opening.
         path: '/lesson/:lessonId',
-        redirect: (context, state) => '/lesson/${state.pathParameters['lessonId']}/vocabulary',
+        redirect: (context, state) => '/lesson/${state.pathParameters['lessonId']}/start',
       ),
       GoRoute(
         path: '/lesson/:lessonId/:stage',
-        builder: (context, state) => LessonRunnerScreen(
+        builder: (context, state) => LessonRunnerEntryScreen(
           lessonId: state.pathParameters['lessonId']!,
           stage: state.pathParameters['stage']!,
         ),
       ),
       GoRoute(
+        path: '/courses/:courseId/lesson/:lessonId',
+        redirect: (context, state) =>
+            '/courses/${state.pathParameters['courseId']}/lesson/${state.pathParameters['lessonId']}/start',
+      ),
+      GoRoute(
         path: '/courses/:courseId/lesson/:lessonId/:stage',
-        builder: (context, state) => LessonRunnerScreen(
+        builder: (context, state) => LessonRunnerEntryScreen(
           courseId: state.pathParameters['courseId'],
           lessonId: state.pathParameters['lessonId']!,
           stage: state.pathParameters['stage']!,

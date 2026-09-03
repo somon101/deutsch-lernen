@@ -12,6 +12,7 @@ import '../domain/builder_domain.dart';
 import '../domain/taxonomy_domain.dart';
 import 'builder_course_edit_screen.dart';
 import 'widgets/lesson_editor_panel.dart';
+import 'widgets/lesson_graph_editor.dart';
 
 final _levelsForLanguageProvider = FutureProvider.autoDispose<List<AdminLevel>>(
   (ref) => ref.watch(builderRepositoryProvider).listLevels(),
@@ -88,15 +89,34 @@ class BuilderLessonEditScreen extends ConsumerWidget {
               // list never carries the lesson header and the step rail off
               // screen with it (§ pinned header + independent scroll,
               // 2026-09-02).
+              // A lesson with a real graph (§ lesson graph, 2026-09-03 —
+              // `lesson.graph != null`, set once a teacher explicitly
+              // converts it) gets the new free-form canvas; every other
+              // lesson keeps today's exact fixed 8-step rail, byte-for-byte
+              // unchanged, with just a "Перевести в граф" entry point added.
+              final graph = lesson.graph;
               return Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                   child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    AdminCard(child: LessonNameCard(courseId: courseId, lesson: lesson)),
+                    AdminCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          LessonNameCard(courseId: courseId, lesson: lesson),
+                          if (graph == null) ...[
+                            const SizedBox(height: AdminMetrics.fieldGap),
+                            _ConvertToGraphRow(courseId: courseId, lesson: lesson, onDone: reload),
+                          ],
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: AdminMetrics.fieldGap),
                     Expanded(
-                      child: LessonEditorPanel(
+                      child: graph != null
+                        ? LessonGraphEditor(courseId: courseId, lesson: lesson, languageId: languageId, onReload: reload)
+                        : LessonEditorPanel(
                       courseId: courseId,
                       lesson: lesson,
                       languageId: languageId,
@@ -224,6 +244,72 @@ class _LessonNameCardState extends ConsumerState<LessonNameCard> {
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// One-time "Перевести в граф" entry point (§ lesson graph, 2026-09-03) —
+/// shown only for a lesson still on the old fixed 8-stage chain. Fetches the
+/// computed preview first (what the conversion would produce, from the
+/// lesson's CURRENT content) so the teacher confirms an actual plan rather
+/// than a blind action; the conversion itself references existing
+/// Material/LessonBlock/vocabulary rows, it never duplicates content.
+class _ConvertToGraphRow extends ConsumerStatefulWidget {
+  const _ConvertToGraphRow({required this.courseId, required this.lesson, required this.onDone});
+  final String courseId;
+  final AdminLesson lesson;
+  final VoidCallback onDone;
+
+  @override
+  ConsumerState<_ConvertToGraphRow> createState() => _ConvertToGraphRowState();
+}
+
+class _ConvertToGraphRowState extends ConsumerState<_ConvertToGraphRow> {
+  bool _busy = false;
+
+  Future<void> _convert() async {
+    setState(() => _busy = true);
+    try {
+      final repo = ref.read(builderRepositoryProvider);
+      final preview = await repo.getLessonGraph(widget.courseId, widget.lesson.id);
+      if (!mounted) return;
+      final chain = preview.nodes.map((n) => n.title).join(' → ');
+      final ok = await confirmDialog(
+        context,
+        title: 'Перевести урок в граф?',
+        message: preview.nodes.isEmpty
+            ? 'В уроке пока нет содержимого — граф начнётся пустым, добавляйте блоки сами.'
+            : 'Текущий порядок станет графом:\n$chain\n\nСодержимое (материалы, вопросы, слова) не удаляется и не копируется — блоки графа будут ссылаться на него. Это действие необратимо.',
+        confirmLabel: 'Перевести в граф',
+      );
+      if (!ok) return;
+      await repo.materializeLessonGraph(widget.courseId, widget.lesson.id);
+      widget.onDone();
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось перевести урок в граф');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            'Свободный граф блоков вместо фиксированной цепочки этапов.',
+            style: AdminTypography.caption,
+          ),
+        ),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _convert,
+          style: AdminButtonStyles.secondary(),
+          icon: const Icon(Icons.hub_outlined, size: 16),
+          label: const Text('Перевести в граф'),
+        ),
       ],
     );
   }

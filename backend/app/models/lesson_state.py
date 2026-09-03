@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import ARRAY, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -35,6 +36,14 @@ class LessonState(Base):
     reviewCorrect: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reviewTotal: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reviewAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
+
+    # Per-node quiz results for a graph lesson (§ lesson graph, 2026-09-03):
+    # { [nodeId]: { correct, total } }. Null for a legacy lesson, which keeps
+    # using the three fixed columns above unchanged — see LessonNode's
+    # docstring for why one lesson can now have several minitest/practice/
+    # review nodes. Read by no other backend logic; the client sums these by
+    # node type and posts the totals to the existing attempts endpoint.
+    nodeResults: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     startedAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow)
     completedAt: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)

@@ -19,10 +19,18 @@ String _basename(String url) {
 /// watches to the end or reaches 90% of the duration (same threshold as the
 /// React version's onTimeUpdate check).
 class VideoStage extends ConsumerStatefulWidget {
-  const VideoStage({super.key, required this.runnerKey, required this.onComplete});
+  const VideoStage({super.key, required this.runnerKey, required this.onComplete, this.graphNodeMediaUrl = false, this.mediaUrlOverride, this.nextLabel});
 
   final LessonRunnerKey runnerKey;
   final VoidCallback onComplete;
+  // A graph "video" node's own mediaUrl (§ lesson graph, 2026-09-03), which
+  // can legitimately be null (no file uploaded to THIS node yet) — so the
+  // override is only actually used when this flag says the caller IS a
+  // graph node, distinguishing that from "not graph mode, read the
+  // lesson-wide videoUrl instead" (the original, still-default behavior).
+  final bool graphNodeMediaUrl;
+  final String? mediaUrlOverride;
+  final String? nextLabel;
 
   @override
   ConsumerState<VideoStage> createState() => _VideoStageState();
@@ -54,7 +62,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
-    final rawUrl = data.content.videoUrl;
+    final rawUrl = widget.graphNodeMediaUrl ? widget.mediaUrlOverride : data.content.videoUrl;
 
     if (rawUrl == null || rawUrl.isEmpty) {
       return Padding(
@@ -120,7 +128,7 @@ class _VideoStageState extends ConsumerState<VideoStage> {
             alignment: Alignment.centerRight,
             child: ElevatedButton(
               onPressed: _watched ? widget.onComplete : null,
-              child: const Text('Перейти к мини-тесту →'),
+              child: Text(widget.nextLabel ?? 'Перейти к мини-тесту →'),
             ),
           ),
         ],

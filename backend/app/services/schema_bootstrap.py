@@ -78,3 +78,52 @@ async def ensure_daily_goal_tables(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_daily_goal_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# Kept byte-for-byte in step with
+# server/prisma/migrations/20260903150000_lesson_graph/migration.sql.
+_LESSON_GRAPH_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "LessonNode" (
+        "id" TEXT NOT NULL,
+        "courseId" TEXT NOT NULL,
+        "lessonId" TEXT NOT NULL,
+        "type" TEXT NOT NULL,
+        "refId" TEXT,
+        "mediaUrl" TEXT,
+        "title" TEXT,
+        "posX" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "posY" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "LessonNode_pkey" PRIMARY KEY ("id")
+    )
+    """,
+    'CREATE INDEX IF NOT EXISTS "LessonNode_lessonId_idx" ON "LessonNode"("lessonId")',
+    """
+    CREATE TABLE IF NOT EXISTS "LessonEdge" (
+        "id" TEXT NOT NULL,
+        "lessonId" TEXT NOT NULL,
+        "fromNodeId" TEXT NOT NULL,
+        "toNodeId" TEXT NOT NULL,
+        "position" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LessonEdge_pkey" PRIMARY KEY ("id")
+    )
+    """,
+    'CREATE UNIQUE INDEX IF NOT EXISTS "LessonEdge_fromNodeId_toNodeId_key" ON "LessonEdge"("fromNodeId", "toNodeId")',
+    'CREATE INDEX IF NOT EXISTS "LessonEdge_lessonId_idx" ON "LessonEdge"("lessonId")',
+    'CREATE INDEX IF NOT EXISTS "LessonEdge_fromNodeId_idx" ON "LessonEdge"("fromNodeId")',
+    'CREATE INDEX IF NOT EXISTS "LessonEdge_toNodeId_idx" ON "LessonEdge"("toNodeId")',
+    'ALTER TABLE "LessonState" ADD COLUMN IF NOT EXISTS "nodeResults" JSONB',
+)
+
+
+async def ensure_lesson_graph_tables(db: AsyncSession) -> None:
+    for statement in _LESSON_GRAPH_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_lesson_graph_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

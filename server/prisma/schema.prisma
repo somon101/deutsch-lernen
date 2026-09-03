@@ -107,6 +107,18 @@ model LessonState {
   reviewTotal     Int?
   reviewAt        DateTime?
 
+  // Per-node quiz results for a graph lesson (§ lesson graph, 2026-09-03):
+  // { [nodeId]: { correct, total } }. Null for a legacy (non-graph) lesson,
+  // which keeps using the three fixed columns above exactly as before — this
+  // is what lets a graph lesson have several minitest/practice/review nodes
+  // (the fixed columns only ever hold one result per stage). Re-doing a node
+  // just overwrites its own entry, so this stays correct across retries
+  // without double-counting. At lesson completion the client sums these by
+  // each node's type and posts the three totals to the existing
+  // /me/progress/{lessonId}/attempts endpoint unchanged — this column is
+  // read by no other backend logic.
+  nodeResults Json?
+
   startedAt   DateTime  @default(now())
   completedAt DateTime?
   updatedAt   DateTime  @updatedAt
@@ -551,6 +563,74 @@ model AnswerLog {
 
   @@index([userId, questionId])
   @@index([questionId])
+}
+
+// ---------------------------------------------------------------------------
+// Lesson graph (§ lesson graph, 2026-09-03) — replaces the fixed 8-stage
+// Words->Material->Video->Minitest->Audio->Practice->Review->Complete
+// sequence with a free-form graph the teacher builds. A lesson with zero
+// LessonNode rows is unconverted ("legacy") and keeps running the old fixed
+// chain exactly as before, in both the builder and the student runner —
+// nothing here is read unless a teacher has explicitly converted that lesson.
+//
+// A LessonNode wraps one existing piece of content by reference — Material.id
+// for a "material" node, LessonBlock.id for minitest/practice/review — no
+// content is duplicated. "vocabulary" nodes have no refId (there is still
+// only one vocabulary list per lesson; multiple Words nodes, if a teacher
+// adds more than one, all show that same list — the existing vocabulary
+// mechanism is unchanged). "video"/"audio" nodes own their file directly via
+// mediaUrl, independent of the legacy CourseLesson.videoUrl/audioUrl (kept
+// untouched), since making video/audio genuinely repeatable needed a place
+// for more than one file per lesson to live.
+//
+// LessonEdge is the FLOW connection — it alone defines the student's route
+// (a topological flatten of the graph, see get_lesson_graph). The other
+// connection type the spec calls out, Material-block-to-Question ("theory"
+// connections), needs no new table at all: QuestionPlacement.materialBlockId
+// already IS that link, added long before this feature — the graph canvas
+// only visualizes it.
+// ---------------------------------------------------------------------------
+
+model LessonNode {
+  id        String   @id @default(uuid())
+  // Loose references, same convention as Material/LessonBlock above.
+  courseId  String
+  lessonId  String
+  // "vocabulary" | "material" | "video" | "audio" | "minitest" | "practice" | "review"
+  type      String
+  // Material.id ("material") or LessonBlock.id (minitest/practice/review).
+  // Null for vocabulary/video/audio.
+  refId     String?
+  // Only for type video/audio — this node's own uploaded file.
+  mediaUrl  String?
+  // Optional display-name override; falls back to a type-based default label.
+  title     String?
+  // Canvas position, teacher-controlled by dragging.
+  posX      Float    @default(0)
+  posY      Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lessonId])
+}
+
+model LessonEdge {
+  id         String   @id @default(uuid())
+  lessonId   String
+  // Loose references to LessonNode.id (no FK/cascade — deleting a node
+  // cleans up its edges in application code, same manual-cascade convention
+  // LessonBlock/Material already use for their own loose refs).
+  fromNodeId String
+  toNodeId   String
+  // Tie-breaker when a node has more than one outgoing edge, so the
+  // student-facing topological flatten is deterministic.
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([fromNodeId, toNodeId])
+  @@index([lessonId])
+  @@index([fromNodeId])
+  @@index([toNodeId])
 }
 
 // ---------------------------------------------------------------------------

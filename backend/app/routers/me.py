@@ -136,6 +136,7 @@ async def put_lesson_state(
         reviewCorrect=body.reviewResult.correct if body.reviewResult else None,
         reviewTotal=body.reviewResult.total if body.reviewResult else None,
         reviewAt=from_iso(body.reviewResult.completedAt) if body.reviewResult else None,
+        nodeResults={k: v.model_dump() for k, v in body.nodeResults.items()} if body.nodeResults else None,
         completedAt=from_iso(body.completedAt),
     )
 

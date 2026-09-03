@@ -44,10 +44,17 @@ List<_Group> _groupBlocks(List<MaterialBlock> blocks) {
 /// Mirrors MaterialStage.tsx: the lesson's text material, split into
 /// step-grouped pages the learner flips through with Назад/Далее.
 class MaterialStage extends ConsumerStatefulWidget {
-  const MaterialStage({super.key, required this.runnerKey, required this.onComplete});
+  const MaterialStage({super.key, required this.runnerKey, required this.onComplete, this.materialOverride, this.nextLabel});
 
   final LessonRunnerKey runnerKey;
   final VoidCallback onComplete;
+  // A graph "material" node's OWN blocks (§ lesson graph, 2026-09-03) —
+  // fetched by the caller via LessonRepository.fetchMaterialBlocksForNode,
+  // since the shared content's flat `material` field loses which Material
+  // row a block came from once a lesson has more than one. Null keeps the
+  // original lesson-wide `data.content.material` behavior.
+  final List<MaterialBlock>? materialOverride;
+  final String? nextLabel;
 
   @override
   ConsumerState<MaterialStage> createState() => _MaterialStageState();
@@ -100,7 +107,7 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
-    final groups = _groupBlocks(data.content.material);
+    final groups = _groupBlocks(widget.materialOverride ?? data.content.material);
 
     if (groups.isEmpty) {
       return Padding(
@@ -161,7 +168,7 @@ class _MaterialStageState extends ConsumerState<MaterialStage> {
                     _goToPage(page + 1);
                   }
                 },
-                child: Text(isLast ? 'Перейти к видео' : 'Далее →'),
+                child: Text(isLast ? (widget.nextLabel ?? 'Перейти к видео') : 'Далее →'),
               ),
             ],
           ),

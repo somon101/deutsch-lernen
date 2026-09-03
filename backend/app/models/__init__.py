@@ -10,6 +10,8 @@ from app.models.follow import Follow
 from app.models.language import Language
 from app.models.lesson_block import LessonBlock
 from app.models.lesson_content import LessonContent
+from app.models.lesson_edge import LessonEdge
+from app.models.lesson_node import LessonNode
 from app.models.lesson_question import LessonQuestion
 from app.models.lesson_state import LessonAttempt, LessonState
 from app.models.level import Level
@@ -43,6 +45,8 @@ __all__ = [
     "LessonAttempt",
     "LessonBlock",
     "LessonContent",
+    "LessonEdge",
+    "LessonNode",
     "LessonQuestion",
     "LessonState",
     "Level",

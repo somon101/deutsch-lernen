@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/back_guard.dart';
 import '../domain/stage.dart';
+import 'graph_lesson_runner_screen.dart';
 import 'lesson_runner_controller.dart';
 import 'stages/audio_stage.dart';
 import 'stages/complete_stage.dart';
@@ -12,10 +13,42 @@ import 'stages/material_stage.dart';
 import 'stages/video_stage.dart';
 import 'stages/vocabulary_stage.dart';
 
+/// Entry point every lesson route builds (§ lesson graph, 2026-09-03) —
+/// loads the lesson's content once and dispatches on `content.graph`: a
+/// converted lesson goes to [GraphLessonRunnerScreen], everything else (the
+/// overwhelming majority today) goes to the exact same [LessonRunnerScreen]
+/// as before, byte-for-byte unchanged. `stage` is either one of the 8 fixed
+/// stage names (legacy) or a LessonNode id (graph) — each screen validates
+/// it against its own model and redirects if it's neither.
+class LessonRunnerEntryScreen extends ConsumerWidget {
+  const LessonRunnerEntryScreen({super.key, required this.lessonId, required this.stage, this.courseId});
+
+  final String lessonId;
+  final String stage;
+  final String? courseId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final key = (courseId: courseId, lessonId: lessonId);
+    final async = ref.watch(lessonRunnerControllerProvider(key));
+    return async.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, st) => Scaffold(
+        appBar: AppBar(title: const Text('Урок')),
+        body: Center(child: Text('Не удалось загрузить урок: $err')),
+      ),
+      data: (data) => data.content.graph != null
+          ? GraphLessonRunnerScreen(courseId: courseId, lessonId: lessonId, nodeId: stage)
+          : LessonRunnerScreen(courseId: courseId, lessonId: lessonId, stage: stage),
+    );
+  }
+}
+
 /// Mirrors LessonPage.tsx/BuilderLessonPage.tsx: validates the :stage URL
 /// param, redirects to the correct incomplete stage if it's invalid or
 /// locked, and renders the matching stage widget inside a shared shell
-/// (top progress rail + stage content).
+/// (top progress rail + stage content). Reached only for a lesson still on
+/// the old fixed chain — see [LessonRunnerEntryScreen].
 class LessonRunnerScreen extends ConsumerWidget {
   const LessonRunnerScreen({super.key, required this.lessonId, required this.stage, this.courseId});
 
@@ -153,7 +186,15 @@ class _StageBody extends ConsumerWidget {
         // the move. Review then opened already-finished, showing practice's
         // questions, and recorded practice's score as its own. Keying by
         // stage forces a fresh State per stage.
-        return ExerciseStage(key: ValueKey(stage), runnerKey: key, stage: stage, onComplete: completeAndAdvance);
+        final exercises = ref.read(lessonRunnerControllerProvider(key)).value!.content.exercisesFor(stage.name);
+        return ExerciseStage(
+          key: ValueKey(stage),
+          runnerKey: key,
+          exercises: exercises,
+          activityType: stage.name,
+          onResult: (result) => controller.recordQuizResult(stage, result),
+          onComplete: completeAndAdvance,
+        );
       case Stage.complete:
         return CompleteStage(runnerKey: key);
     }

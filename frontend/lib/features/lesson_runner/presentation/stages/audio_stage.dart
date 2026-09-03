@@ -26,10 +26,14 @@ const _rates = [0.75, 1.0, 1.25];
 /// Mirrors AudioStage.tsx: play/pause, seek, playback rate, "Далее" gated
 /// on reaching the end of the recording.
 class AudioStage extends ConsumerStatefulWidget {
-  const AudioStage({super.key, required this.runnerKey, required this.onComplete});
+  const AudioStage({super.key, required this.runnerKey, required this.onComplete, this.graphNodeMediaUrl = false, this.mediaUrlOverride, this.nextLabel});
 
   final LessonRunnerKey runnerKey;
   final VoidCallback onComplete;
+  // See VideoStage's identical fields (§ lesson graph, 2026-09-03).
+  final bool graphNodeMediaUrl;
+  final String? mediaUrlOverride;
+  final String? nextLabel;
 
   @override
   ConsumerState<AudioStage> createState() => _AudioStageState();
@@ -107,7 +111,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(lessonRunnerControllerProvider(widget.runnerKey)).value!;
-    final rawUrl = data.content.audioUrl;
+    final rawUrl = widget.graphNodeMediaUrl ? widget.mediaUrlOverride : data.content.audioUrl;
 
     if (rawUrl == null || rawUrl.isEmpty) {
       return Padding(
@@ -197,7 +201,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: _finished ? widget.onComplete : null,
-            child: const Text('Перейти к практике →'),
+            child: Text(widget.nextLabel ?? 'Перейти к практике →'),
           ),
         ],
       ),

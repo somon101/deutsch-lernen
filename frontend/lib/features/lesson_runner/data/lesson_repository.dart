@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api/api_client.dart';
 import '../domain/exercise.dart';
 import '../domain/lesson_content.dart';
+import '../domain/lesson_graph.dart';
 import '../domain/progress.dart';
 
 /// Fetches lesson content (legacy or builder-course, same resulting shape)
@@ -62,6 +63,39 @@ class LessonRepository {
   Future<LessonProgress> saveProgress(LessonProgress progress) async {
     final res = await _api.put('/api/me/lesson-state/${Uri.encodeComponent(progress.lessonId)}', body: progress.toJson());
     return LessonProgress.fromJson(res['state'] as Map<String, dynamic>);
+  }
+
+  /// Same endpoint/row as [saveProgress], for a graph lesson (§ lesson
+  /// graph, 2026-09-03) — see GraphLessonProgress's own docstring for why it
+  /// can't just reuse LessonProgress.
+  Future<GraphLessonProgress> saveGraphProgress(GraphLessonProgress progress) async {
+    final res = await _api.put('/api/me/lesson-state/${Uri.encodeComponent(progress.lessonId)}', body: progress.toJson());
+    return GraphLessonProgress.fromJson(res['state'] as Map<String, dynamic>);
+  }
+
+  /// A graph "material" node's own blocks + their attached reusable
+  /// questions (§ lesson graph, 2026-09-03) — the shared course fetch's flat
+  /// `material`/`blocks` fields lose which Material row each block came
+  /// from once a lesson has more than one, so a graph material node fetches
+  /// its own by id instead, through the same student-readable endpoints
+  /// (`require_auth`, not `require_staff`) the admin builder already uses.
+  Future<List<MaterialBlock>> fetchMaterialBlocksForNode(String materialId) async {
+    final blocksRes = await _api.get('/api/materials/${Uri.encodeComponent(materialId)}/blocks');
+    final rawBlocks = (blocksRes['blocks'] as List<dynamic>).cast<Map<String, dynamic>>();
+    final result = <MaterialBlock>[];
+    for (final b in rawBlocks) {
+      final blockId = b['id'] as String;
+      final questionsRes = await _api.get('/api/materials/blocks/${Uri.encodeComponent(blockId)}/questions');
+      result.add(
+        MaterialGenericBlock(
+          id: blockId,
+          title: b['title'] as String,
+          content: b['content'] as String,
+          questions: blockQuestionsFromJson(questionsRes['questions']),
+        ),
+      );
+    }
+    return result;
   }
 
   /// Records one full completed pass (mini-test+practice+review score

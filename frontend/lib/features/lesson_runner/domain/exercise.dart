@@ -344,3 +344,14 @@ List<Exercise> exercisesForStage(List<QuestionBlock> blocks, String stage) {
         toExercise(block.questions[i], block.questions[i].id ?? '${block.id}-$i'),
   ];
 }
+
+/// Same flattening as [exercisesForStage], scoped to exactly ONE block by id
+/// instead of every block sharing a stage name (§ lesson graph, 2026-09-03)
+/// — a graph lesson can have several minitest/practice/review nodes, each
+/// wrapping its own LessonBlock, and the student must see only that one
+/// node's questions, not every block of that type in the whole lesson.
+List<Exercise> exercisesForBlock(List<QuestionBlock> blocks, String blockId) {
+  final block = blocks.cast<QuestionBlock?>().firstWhere((b) => b!.id == blockId, orElse: () => null);
+  if (block == null) return const [];
+  return [for (var i = 0; i < block.questions.length; i++) toExercise(block.questions[i], block.questions[i].id ?? '${block.id}-$i')];
+}

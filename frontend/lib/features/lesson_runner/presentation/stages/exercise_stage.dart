@@ -6,7 +6,6 @@ import '../../../../core/utils/sound_effects.dart';
 import '../../data/lesson_repository.dart';
 import '../../domain/exercise.dart';
 import '../../domain/progress.dart';
-import '../../domain/stage.dart';
 import '../lesson_runner_controller.dart';
 import '../widgets/auto_blank_question.dart';
 import '../widgets/auto_match_question.dart';
@@ -68,16 +67,26 @@ String _correctAnswerLabel(Exercise e) => switch (e) {
       AutoMatchSlot() => 'Подробности — в истории ответов',
     };
 
-/// Mirrors ExerciseRunner.tsx: runs one stage's flat exercise list
-/// (minitest/practice/review, per exercisesForStage), tracks score, plays a
-/// correct/incorrect chime per question, shows a final results screen with
-/// missed questions, then reports the score up through
-/// LessonRunnerController.recordQuizResult before advancing.
+/// Mirrors ExerciseRunner.tsx: runs one flat exercise list, tracks score,
+/// plays a correct/incorrect chime per question, shows a final results
+/// screen with missed questions, then reports the score via [onResult]
+/// before advancing. Generalized (§ lesson graph, 2026-09-03) to take its
+/// exercise list and activity-type label directly rather than deriving them
+/// from a fixed Stage — a graph lesson can have several minitest/practice/
+/// review nodes, each scoped to its own LessonBlock (exercisesForBlock)
+/// rather than "every block sharing a stage name" (exercisesForStage). The
+/// one existing call site (lesson_runner_screen.dart, legacy chain) passes
+/// the exact same values it used to compute internally, so behavior there
+/// is unchanged.
 class ExerciseStage extends ConsumerStatefulWidget {
-  const ExerciseStage({super.key, required this.runnerKey, required this.stage, required this.onComplete});
+  const ExerciseStage({super.key, required this.runnerKey, required this.exercises, required this.activityType, required this.onResult, required this.onComplete});
 
   final LessonRunnerKey runnerKey;
-  final Stage stage;
+  final List<Exercise> exercises;
+  // "minitest" | "practice" | "review" — used only as the activity-time
+  // label reported to recordActivityTime, and shown nowhere.
+  final String activityType;
+  final Future<void> Function(QuizResult) onResult;
   final VoidCallback onComplete;
 
   @override
@@ -85,8 +94,7 @@ class ExerciseStage extends ConsumerStatefulWidget {
 }
 
 class _ExerciseStageState extends ConsumerState<ExerciseStage> {
-  late final List<Exercise> _exercises =
-      ref.read(lessonRunnerControllerProvider(widget.runnerKey)).value!.content.exercisesFor(widget.stage.name);
+  List<Exercise> get _exercises => widget.exercises;
   final List<bool> _results = [];
   int _index = 0;
   bool _answered = false;
@@ -145,14 +153,14 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   /// Flushes the exercise being LEFT (still `_exercises[_index]` at call
   /// time) before advancing to the next one or leaving the stage —
   /// minitest/practice/review each keep their own time bucket via
-  /// `widget.stage.name`, per exercise, capped per §5 of the time spec.
+  /// `widget.activityType`, per exercise, capped per §5 of the time spec.
   void _flushExercise() {
     if (_index >= _exercises.length) return;
     final cap = _exerciseCapSeconds(_exercises[_index]);
     final elapsed = DateTime.now().difference(_exerciseShownAt).inSeconds.clamp(0, cap);
     _exerciseShownAt = DateTime.now();
     if (elapsed > 0) {
-      _controller?.recordActivityTime(widget.stage.name, elapsed);
+      _controller?.recordActivityTime(widget.activityType, elapsed);
     }
   }
 
@@ -201,11 +209,7 @@ class _ExerciseStageState extends ConsumerState<ExerciseStage> {
   }
 
   Future<void> _finish() async {
-    final controller = ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier);
-    await controller.recordQuizResult(
-      widget.stage,
-      QuizResult(total: _exercises.length, correct: _correct, completedAt: DateTime.now().toUtc().toIso8601String()),
-    );
+    await widget.onResult(QuizResult(total: _exercises.length, correct: _correct, completedAt: DateTime.now().toUtc().toIso8601String()));
     widget.onComplete();
   }
 

@@ -15,10 +15,19 @@ const _wordCapSeconds = 10;
 /// reusable WordCardDeck widget; this stage only wires it to this lesson's
 /// data and progress persistence.
 class VocabularyStage extends ConsumerStatefulWidget {
-  const VocabularyStage({super.key, required this.runnerKey, required this.onComplete});
+  const VocabularyStage({super.key, required this.runnerKey, required this.onComplete, this.initialIndexOverride, this.onIndexChanged});
 
   final LessonRunnerKey runnerKey;
   final VoidCallback onComplete;
+  // A graph lesson (§ lesson graph, 2026-09-03) persists vocabIndex through
+  // its own controller instead of the legacy one below — writing through
+  // the legacy controller would blindly overwrite the graph's own
+  // completedStages (node ids) back to empty on every save, since
+  // LessonRunnerController's LessonProgress never learns about them (see
+  // GraphLessonProgress's docstring). Both null keep the original,
+  // single-shared-vocabulary-list behavior unchanged.
+  final int? initialIndexOverride;
+  final ValueChanged<int>? onIndexChanged;
 
   @override
   ConsumerState<VocabularyStage> createState() => _VocabularyStageState();
@@ -53,7 +62,12 @@ class _VocabularyStageState extends ConsumerState<VocabularyStage> {
 
   void _onCardChanged(int index) {
     _flushWord();
-    ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).setVocabIndex(index);
+    final onIndexChanged = widget.onIndexChanged;
+    if (onIndexChanged != null) {
+      onIndexChanged(index);
+    } else {
+      ref.read(lessonRunnerControllerProvider(widget.runnerKey).notifier).setVocabIndex(index);
+    }
   }
 
   @override
@@ -74,7 +88,7 @@ class _VocabularyStageState extends ConsumerState<VocabularyStage> {
       );
     }
 
-    final initialIndex = data.progress.vocabIndex.clamp(0, words.length - 1);
+    final initialIndex = (widget.initialIndexOverride ?? data.progress.vocabIndex).clamp(0, words.length - 1);
 
     return Center(
       child: Padding(

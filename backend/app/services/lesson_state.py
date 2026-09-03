@@ -32,4 +32,6 @@ def to_dto(state: LessonState) -> dict:
             "total": state.reviewTotal,
             "completedAt": to_iso_z(state.reviewAt or state.updatedAt),
         }
+    if state.nodeResults is not None:
+        dto["nodeResults"] = state.nodeResults
     return dto

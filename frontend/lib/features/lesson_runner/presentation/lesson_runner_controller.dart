@@ -7,6 +7,7 @@ import '../../../core/cache/cached_json.dart';
 import '../../courses/data/courses_repository.dart';
 import '../data/lesson_repository.dart';
 import '../domain/lesson_content.dart';
+import '../domain/lesson_graph.dart';
 import '../domain/progress.dart';
 import '../domain/stage.dart';
 
@@ -208,3 +209,125 @@ class LessonRunnerController extends FamilyAsyncNotifier<LessonRunnerData, Lesso
 
 final lessonRunnerControllerProvider =
     AsyncNotifierProviderFamily<LessonRunnerController, LessonRunnerData, LessonRunnerKey>(LessonRunnerController.new);
+
+class GraphLessonRunnerData {
+  const GraphLessonRunnerData({required this.content, required this.progress});
+  final LessonContentData content;
+  final GraphLessonProgress progress;
+}
+
+/// Progress controller for a converted lesson (§ lesson graph, 2026-09-03).
+/// Content is fetched through the EXACT SAME [LessonRunnerController]/
+/// provider (via `.future`, so it's the one shared instance/cache, not a
+/// second fetch) — this controller only owns GraphLessonProgress, which
+/// can't reuse LessonProgress's enum-typed completedStages (see
+/// GraphLessonProgress's own docstring for why a graph lesson's node ids
+/// would otherwise be silently dropped, or — worse — a write through the
+/// LEGACY controller would overwrite them back to empty, since its own
+/// LessonProgress never learns about them).
+class GraphLessonRunnerController extends FamilyAsyncNotifier<GraphLessonRunnerData, LessonRunnerKey> {
+  late LessonRunnerKey _key;
+
+  @override
+  Future<GraphLessonRunnerData> build(LessonRunnerKey key) async {
+    _key = key;
+    final legacy = await ref.watch(lessonRunnerControllerProvider(key).future);
+    final rows = await ref.read(lessonRepositoryProvider).fetchAllProgressRaw();
+    final row = rows.cast<Map<String, dynamic>?>().firstWhere((r) => r!['lessonId'] == key.lessonId, orElse: () => null);
+    final progress = row != null ? GraphLessonProgress.fromJson(row) : GraphLessonProgress.empty(key.lessonId);
+    return GraphLessonRunnerData(content: legacy.content, progress: progress);
+  }
+
+  Future<void> _persist(GraphLessonProgress updated) async {
+    final current = state.value;
+    if (current == null) return;
+    final saved = await ref.read(lessonRepositoryProvider).saveGraphProgress(updated);
+    state = AsyncData(GraphLessonRunnerData(content: current.content, progress: saved));
+  }
+
+  Future<void> setVocabIndex(int index) async {
+    final current = state.value;
+    if (current == null) return;
+    await _persist(current.progress.copyWith(vocabIndex: index));
+  }
+
+  Future<void> markNodeComplete(String nodeId) async {
+    final current = state.value;
+    if (current == null || current.progress.completedNodeIds.contains(nodeId)) return;
+    await _persist(current.progress.copyWith(completedNodeIds: {...current.progress.completedNodeIds, nodeId}));
+  }
+
+  Future<void> recordNodeQuizResult(String nodeId, QuizResult result) async {
+    final current = state.value;
+    if (current == null) return;
+    await _persist(current.progress.copyWith(nodeResults: {...current.progress.nodeResults, nodeId: result}));
+  }
+
+  /// Marks every node walked (the flattened route, so a disconnected/
+  /// unreachable node is still counted — see flattenGraph) as complete in
+  /// one write, sums each minitest/practice/review node's own result into
+  /// the existing 3-field LessonAttempt shape by TYPE (§ lesson graph,
+  /// 2026-09-03 — that endpoint and its scoring are otherwise completely
+  /// unmodified), and records the streak day — mirrors
+  /// LessonRunnerController.completeLesson one-for-one.
+  Future<void> completeGraphLesson(List<GraphNode> flat) async {
+    final current = state.value;
+    if (current == null || current.progress.completedAt != null) return;
+
+    var miniCorrect = 0, miniTotal = 0, pracCorrect = 0, pracTotal = 0, revCorrect = 0, revTotal = 0;
+    for (final node in flat) {
+      final r = current.progress.nodeResults[node.id];
+      if (r == null) continue;
+      switch (node.type) {
+        case 'minitest':
+          miniCorrect += r.correct;
+          miniTotal += r.total;
+        case 'practice':
+          pracCorrect += r.correct;
+          pracTotal += r.total;
+        case 'review':
+          revCorrect += r.correct;
+          revTotal += r.total;
+      }
+    }
+
+    await _persist(
+      current.progress.copyWith(
+        completedNodeIds: {...current.progress.completedNodeIds, for (final n in flat) n.id},
+        completedAt: DateTime.now().toUtc().toIso8601String(),
+      ),
+    );
+    try {
+      await ref.read(lessonRepositoryProvider).recordAttempt(
+            current.content.lessonId,
+            miniTestCorrect: miniCorrect,
+            miniTestTotal: miniTotal,
+            practiceCorrect: pracCorrect,
+            practiceTotal: pracTotal,
+            reviewCorrect: revCorrect,
+            reviewTotal: revTotal,
+          );
+    } catch (_) {
+      // Best-effort, same tolerance completeLesson's own attempt log has.
+    }
+    try {
+      await ref.read(lessonRepositoryProvider).recordDailyActivity('lesson_completed');
+    } catch (_) {}
+  }
+
+  /// Delegates to the shared legacy controller — recordActivityTime is a
+  /// stateless side effect (POST /api/me/activity-time) with no dependency
+  /// on either progress shape, so there is nothing graph-specific to do
+  /// here beyond reusing it.
+  Future<void> recordActivityTime(String activityType, int seconds) =>
+      ref.read(lessonRunnerControllerProvider(_key).notifier).recordActivityTime(activityType, seconds);
+
+  Future<void> restartLesson() async {
+    final current = state.value;
+    if (current == null) return;
+    await _persist(GraphLessonProgress.empty(current.content.lessonId));
+  }
+}
+
+final graphLessonRunnerControllerProvider =
+    AsyncNotifierProviderFamily<GraphLessonRunnerController, GraphLessonRunnerData, LessonRunnerKey>(GraphLessonRunnerController.new);

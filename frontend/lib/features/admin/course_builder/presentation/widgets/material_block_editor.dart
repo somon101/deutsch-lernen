@@ -14,15 +14,23 @@ import 'question_kind_editors.dart';
 /// Replaces the old single-textarea material editor with real, addressable
 /// blocks (§6-9 of the content-taxonomy plan): each block has its own
 /// title+content, can be added/removed/reordered by drag-and-drop, and can
-/// carry its own reusable questions. One lesson currently gets one "text"
-/// Material (auto-created on first open) — the schema supports several, but
-/// the UI only needs one for now.
+/// carry its own reusable questions. Without a [materialId] (the old fixed
+/// rail's "Материал" step), a lesson gets one "text" Material,
+/// auto-created on first open. A graph "material" node (§ lesson graph,
+/// 2026-09-03) passes its own materialId instead, so a lesson can have
+/// several of these editors open on several distinct Material rows.
 class MaterialBlockEditor extends ConsumerStatefulWidget {
-  const MaterialBlockEditor({super.key, required this.courseId, required this.lessonId, required this.lessonTitle, required this.languageId});
+  const MaterialBlockEditor({super.key, required this.courseId, required this.lessonId, required this.lessonTitle, required this.languageId, this.materialId});
 
   final String courseId;
   final String lessonId;
   final String lessonTitle;
+  // When set (§ lesson graph, 2026-09-03 — a graph "material" node), loads
+  // this EXACT Material row directly instead of the old "the lesson's one
+  // text Material, auto-created on first open" lookup below — a lesson can
+  // now have several Material nodes, each its own row. Null keeps the
+  // original single-material behavior used by the old fixed-chain rail.
+  final String? materialId;
   // The course's real Language.id (resolved from Course.levelId → Level.
   // languageId by the caller) — topics are scoped per-language, and Topic
   // creation needs an actual Language row to attach to. Null when the
@@ -54,7 +62,16 @@ class _MaterialBlockEditorState extends ConsumerState<MaterialBlockEditor> {
     setState(() => _loading = true);
     final repo = ref.read(builderRepositoryProvider);
     final materials = await repo.listMaterials(widget.lessonId);
-    var material = materials.where((m) => m.materialType == 'text').cast<AdminMaterial?>().firstWhere((m) => m != null, orElse: () => null);
+    AdminMaterial? material;
+    final materialId = widget.materialId;
+    if (materialId != null) {
+      material = materials.cast<AdminMaterial?>().firstWhere((m) => m!.id == materialId, orElse: () => null);
+    } else {
+      material = materials.where((m) => m.materialType == 'text').cast<AdminMaterial?>().firstWhere((m) => m != null, orElse: () => null);
+    }
+    // Defensive fallback only — a graph node's materialId is expected to
+    // always resolve; this mirrors the old single-material auto-create path
+    // rather than crashing if it somehow doesn't.
     material ??= await repo.createMaterial(courseId: widget.courseId, lessonId: widget.lessonId, materialType: 'text', title: widget.lessonTitle);
     final blocks = await repo.listMaterialBlocks(material.id);
     final languageId = widget.languageId;

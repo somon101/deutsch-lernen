@@ -9,9 +9,9 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db import async_session
 from app.errors import ApiError
-from app.routers import admin, auth, auto_blank, auto_match, auto_translate, builder, content, daily_goal, leaderboard, learner_courses, me, notifications, preferences, social, taxonomy, words
+from app.routers import admin, auth, auto_blank, auto_match, auto_translate, builder, content, daily_goal, leaderboard, learner_courses, lesson_graph, me, notifications, preferences, social, taxonomy, words
 from app.services.bootstrap import ensure_admin_exists
-from app.services.schema_bootstrap import ensure_daily_goal_tables
+from app.services.schema_bootstrap import ensure_daily_goal_tables, ensure_lesson_graph_tables
 from app.uploads.storage import UPLOADS_ROOT, ensure_storage_bucket
 
 
@@ -20,6 +20,7 @@ async def lifespan(app: FastAPI):
     await ensure_storage_bucket()
     async with async_session() as session:
         await ensure_daily_goal_tables(session)
+        await ensure_lesson_graph_tables(session)
         await ensure_admin_exists(session)
     yield
 
@@ -81,6 +82,7 @@ app.include_router(me.router)
 app.include_router(admin.router)
 app.include_router(content.router)
 app.include_router(builder.router)
+app.include_router(lesson_graph.router)
 app.include_router(learner_courses.router)
 app.include_router(taxonomy.router)
 app.include_router(notifications.router)

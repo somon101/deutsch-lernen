@@ -654,6 +654,101 @@ class BuilderRepository {
     final res = await _api.get('/api/questions/${Uri.encodeComponent(questionId)}/placements');
     return (res['placements'] as List<dynamic>).map((p) => QuestionUsage.fromJson(p as Map<String, dynamic>)).toList();
   }
+
+  // ---------------------------------------------------------------------
+  // Lesson graph (§ lesson graph, 2026-09-03)
+  // ---------------------------------------------------------------------
+
+  String _graphBase(String courseId, String lessonId) =>
+      '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/graph';
+
+  /// Real graph for a converted lesson, or a computed PREVIEW
+  /// (`isLegacy: true`) of what converting it would look like — never
+  /// writes anything.
+  Future<AdminLessonGraph> getLessonGraph(String courseId, String lessonId) async {
+    final res = await _api.get(_graphBase(courseId, lessonId));
+    return AdminLessonGraph.fromJson(res);
+  }
+
+  /// One-time "Перевести в граф" conversion — persists the preview
+  /// [getLessonGraph] already showed as real LessonNode/LessonEdge rows.
+  /// Throws if the lesson already has a real graph.
+  Future<AdminLessonGraph> materializeLessonGraph(String courseId, String lessonId) async {
+    final res = await _api.post('${_graphBase(courseId, lessonId)}/materialize');
+    return AdminLessonGraph.fromJson(res);
+  }
+
+  Future<AdminGraphNode> addGraphNode(
+    String courseId,
+    String lessonId, {
+    required String type,
+    String? title,
+    required double posX,
+    required double posY,
+  }) async {
+    final res = await _api.post(
+      '${_graphBase(courseId, lessonId)}/nodes',
+      body: {'type': type, 'title': ?title, 'posX': posX, 'posY': posY},
+    );
+    return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
+  }
+
+  Future<AdminGraphNode> updateGraphNode(
+    String courseId,
+    String lessonId,
+    String nodeId, {
+    double? posX,
+    double? posY,
+    String? title,
+  }) async {
+    final res = await _api.patch(
+      '${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}',
+      body: {'posX': ?posX, 'posY': ?posY, 'title': ?title},
+    );
+    return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
+  }
+
+  Future<AdminGraphNode> uploadGraphNodeMedia(
+    String courseId,
+    String lessonId,
+    String nodeId, {
+    required List<int> bytes,
+    required String filename,
+  }) async {
+    final res = await _api.postMultipart(
+      '${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}/media',
+      fieldName: 'file',
+      bytes: bytes,
+      filename: filename,
+    );
+    return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
+  }
+
+  Future<AdminGraphNode> removeGraphNodeMedia(String courseId, String lessonId, String nodeId) async {
+    final res = await _api.deleteExpectingBody('${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}/media');
+    return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
+  }
+
+  Future<AdminGraphNode> reuseGraphNodeMedia(String courseId, String lessonId, String nodeId, String url) async {
+    final res = await _api.put('${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}/media/reuse', body: {'url': url});
+    return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteGraphNode(String courseId, String lessonId, String nodeId) async {
+    await _api.delete('${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}');
+  }
+
+  Future<AdminGraphEdge> addGraphEdge(String courseId, String lessonId, String fromNodeId, String toNodeId) async {
+    final res = await _api.post(
+      '${_graphBase(courseId, lessonId)}/edges',
+      body: {'fromNodeId': fromNodeId, 'toNodeId': toNodeId},
+    );
+    return AdminGraphEdge.fromJson(res['edge'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteGraphEdge(String courseId, String lessonId, String edgeId) async {
+    await _api.delete('${_graphBase(courseId, lessonId)}/edges/${Uri.encodeComponent(edgeId)}');
+  }
 }
 
 final builderRepositoryProvider = Provider<BuilderRepository>(

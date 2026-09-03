@@ -75,6 +75,80 @@ class AdminBlock {
   final List<String> questionSources;
 }
 
+/// One block on a lesson's graph canvas (§ lesson graph, 2026-09-03) — wraps
+/// existing content by reference (`refId` is a Material.id for "material",
+/// a LessonBlock.id for minitest/practice/review; null for
+/// vocabulary/video/audio). `mediaUrl` is only meaningful for video/audio.
+class AdminGraphNode {
+  const AdminGraphNode({
+    required this.id,
+    required this.type,
+    required this.refId,
+    required this.mediaUrl,
+    required this.title,
+    required this.posX,
+    required this.posY,
+  });
+
+  factory AdminGraphNode.fromJson(Map<String, dynamic> json) => AdminGraphNode(
+    id: json['id'] as String,
+    type: json['type'] as String,
+    refId: json['refId'] as String?,
+    mediaUrl: json['mediaUrl'] as String?,
+    title: json['title'] as String,
+    posX: (json['posX'] as num).toDouble(),
+    posY: (json['posY'] as num).toDouble(),
+  );
+
+  final String id;
+  final String type;
+  final String? refId;
+  final String? mediaUrl;
+  final String title;
+  final double posX;
+  final double posY;
+
+  AdminGraphNode copyWith({double? posX, double? posY, String? title, String? mediaUrl}) => AdminGraphNode(
+    id: id,
+    type: type,
+    refId: refId,
+    mediaUrl: mediaUrl ?? this.mediaUrl,
+    title: title ?? this.title,
+    posX: posX ?? this.posX,
+    posY: posY ?? this.posY,
+  );
+}
+
+/// A flow connection between two nodes — the only thing that decides the
+/// student's route through a graph lesson.
+class AdminGraphEdge {
+  const AdminGraphEdge({required this.id, required this.fromNodeId, required this.toNodeId});
+
+  factory AdminGraphEdge.fromJson(Map<String, dynamic> json) =>
+      AdminGraphEdge(id: json['id'] as String, fromNodeId: json['fromNodeId'] as String, toNodeId: json['toNodeId'] as String);
+
+  final String id;
+  final String fromNodeId;
+  final String toNodeId;
+}
+
+class AdminLessonGraph {
+  const AdminLessonGraph({required this.nodes, required this.edges, this.isLegacy = false});
+
+  factory AdminLessonGraph.fromJson(Map<String, dynamic> json) => AdminLessonGraph(
+    isLegacy: json['isLegacy'] as bool? ?? false,
+    nodes: (json['nodes'] as List<dynamic>).map((n) => AdminGraphNode.fromJson(n as Map<String, dynamic>)).toList(),
+    edges: (json['edges'] as List<dynamic>).map((e) => AdminGraphEdge.fromJson(e as Map<String, dynamic>)).toList(),
+  );
+
+  // True only for a computed PREVIEW of an unconverted lesson (from the
+  // standalone GET .../graph endpoint) — never true for the graph embedded
+  // in AdminLesson.graph below, which is only ever present once real.
+  final bool isLegacy;
+  final List<AdminGraphNode> nodes;
+  final List<AdminGraphEdge> edges;
+}
+
 class AdminLesson {
   const AdminLesson({
     required this.id,
@@ -86,6 +160,7 @@ class AdminLesson {
     required this.position,
     required this.vocabulary,
     required this.blocks,
+    this.graph,
   });
 
   factory AdminLesson.fromJson(Map<String, dynamic> json) => AdminLesson(
@@ -102,6 +177,11 @@ class AdminLesson {
     blocks: (json['blocks'] as List<dynamic>)
         .map((b) => AdminBlock.fromJson(b as Map<String, dynamic>))
         .toList(),
+    // Null means this lesson is still on the old fixed 8-stage chain (never
+    // converted) — see services/courses.py's lesson_dto (§ lesson graph,
+    // 2026-09-03). The legacy file-based course never has this key at all,
+    // which json['graph'] as Map?-cast handles the same as an explicit null.
+    graph: json['graph'] != null ? AdminLessonGraph.fromJson(json['graph'] as Map<String, dynamic>) : null,
   );
 
   /// GET/PUT /api/admin/content/:lessonId's shape — keyed by `lessonId`
@@ -137,6 +217,7 @@ class AdminLesson {
   final int position;
   final List<AdminVocabWord> vocabulary;
   final List<AdminBlock> blocks;
+  final AdminLessonGraph? graph;
 
   List<AdminBlock> blocksFor(String stage) =>
       blocks.where((b) => b.stage == stage).toList()

@@ -249,7 +249,12 @@ async def notify_lesson_created(db: AsyncSession, *, course_id: str, course_titl
         type="lesson_created",
         title="Новый урок",
         body=f"«{lesson_title}» — курс «{course_title}»",
-        deep_link=f"/courses/{course_id}/lesson/{lesson_id}/vocabulary",
+        # "start" is not a real stage name or graph node id (§ lesson graph,
+        # 2026-09-03) — the client's LessonRunnerEntryScreen/GraphLessonRunnerScreen
+        # both redirect any unrecognized value to their own real first
+        # entry, so this deep link works whether the lesson is on the old
+        # fixed chain or has been converted to a graph.
+        deep_link=f"/courses/{course_id}/lesson/{lesson_id}/start",
         course_id=course_id,
         lesson_id=lesson_id,
         created_by_id=created_by_id,

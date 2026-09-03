@@ -2,7 +2,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-StageId = Literal["vocabulary", "material", "video", "minitest", "audio", "practice", "review", "complete"]
+# The 8 fixed names for a legacy (unconverted) lesson, OR a LessonNode.id
+# for a graph lesson (§ lesson graph, 2026-09-03) — widened from the
+# original 8-value Literal because completedStages now also carries
+# arbitrary node ids. No server logic ever branched on this being a Literal
+# (it was pure request-body validation), so widening it changes nothing for
+# existing legacy-lesson requests, which still send one of the 8 strings.
+StageId = str
 
 # Every StageId except "complete" — that one isn't an activity a learner
 # spends time doing, just the results screen.
@@ -45,6 +51,11 @@ class LessonStateRequest(BaseModel):
     miniTestResult: QuizResult | None = None
     practiceResult: QuizResult | None = None
     reviewResult: QuizResult | None = None
+    # Per-node quiz results for a graph lesson (§ lesson graph, 2026-09-03) —
+    # { [nodeId]: QuizResult } for however many minitest/practice/review
+    # nodes the lesson's graph actually has. Null/omitted for a legacy
+    # lesson, which keeps using the three fixed *Result fields above.
+    nodeResults: dict[str, QuizResult] | None = None
     startedAt: str | None = None
     completedAt: str | None = None
 
