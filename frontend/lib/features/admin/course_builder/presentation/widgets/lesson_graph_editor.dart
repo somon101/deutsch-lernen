@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../shell/presentation/graph_sidebar_controls.dart';
 import '../../../admin_tokens.dart';
 import '../../../widgets/admin_feedback.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
+import '../builder_lesson_edit_screen.dart' show LessonNameCard;
 import 'block_editor.dart';
 import 'material_block_editor.dart';
 import 'media_editor.dart';
@@ -124,6 +126,18 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
 
   Future<void> _onNodeTap(AdminGraphNode node) async {
     if (_connectFromId != null) {
+      // Pre-existing gap in this state machine, not something the sidebar
+      // move introduced (§ graph editor layout, 2026-09-04 verification
+      // finding): connect mode toggled with no node pre-selected sets
+      // `_connectFromId` to '' as a "waiting for the source" sentinel (see
+      // onToggleConnect and the two distinct hint strings below), but
+      // nothing ever actually captured a node tap INTO that sentinel — the
+      // very next tap fell straight into the "create the edge" branch
+      // below with an empty `from`, which the backend correctly rejected.
+      if (_connectFromId!.isEmpty) {
+        setState(() => _connectFromId = node.id);
+        return;
+      }
       final from = _connectFromId!;
       setState(() => _connectFromId = null);
       if (from == node.id) return;
@@ -150,6 +164,133 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
     await _run(() => _repo.deleteGraphEdge(widget.courseId, widget.lesson.id, edge.id));
   }
 
+  // Mirrors the AppBar's own back button on BuilderLessonEditScreen exactly
+  // (§ graph exit navigation, 2026-09-03) — canPop() first, else an explicit
+  // context.go to the course editor. The graph is a widget swapped in by
+  // lesson.graph != null, not a pushed route, so a bare Navigator.maybePop()
+  // had nothing reliable of its own to pop: inside this app's ShellRoute
+  // this either did nothing or left the builder on a screen the admin
+  // didn't ask for, instead of the "back to the regular course editor"
+  // behaviour the exit button is supposed to have.
+  void _exit() {
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    } else {
+      context.go('/admin/builder/${widget.courseId}');
+    }
+  }
+
+  void _toggleConnect() => setState(() => _connectFromId = _connectFromId == null ? (_selectedNodeId ?? '') : null);
+
+  // Same LessonNameCard the pre-graph/linear-view screen already shows
+  // inline, unmodified, just reached from the sidebar instead (§ graph
+  // editor layout, 2026-09-04, change 2) — closes on its own × here, on a
+  // tap outside, or on Esc (all three are the default showDialog/Dialog
+  // route behavior, nothing extra to wire up).
+  Future<void> _openLessonSettingsDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: AdminColors.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AdminMetrics.cardRadius)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(dialogContext).pop()),
+                ),
+                LessonNameCard(courseId: widget.courseId, lesson: widget.lesson),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Same _EdgeList this file already had inline at the bottom of the
+  // canvas, unmodified, just in a dialog now (§ graph editor layout,
+  // 2026-09-04, change 3).
+  Future<void> _openRouteDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480, maxHeight: 520),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+              ),
+              Flexible(child: SingleChildScrollView(child: _EdgeList(graph: _graph, onDelete: _deleteEdge))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Best-effort (§ graph editor layout, 2026-09-04 verification finding —
+  // a "Cannot use ref after the widget was disposed" console error was
+  // reproduced 3/3 times specifically on the Граф→Линейный transition,
+  // even though `mounted` is checked first below): whatever the exact
+  // Riverpod-internal race is, this write is pure cleanup with nothing
+  // downstream depending on it succeeding, so swallowing a disposal-timing
+  // exception here is the same "never let a non-critical side effect
+  // throw" convention already used elsewhere in this codebase (e.g.
+  // ExerciseStage's answer-logging catch blocks) rather than something
+  // requiring a user-visible error.
+  void _clearSidebar() {
+    try {
+      ref.read(graphSidebarActionsProvider.notifier).state = null;
+    } catch (_) {}
+  }
+
+  void _syncSidebar(bool isWide) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!isWide) {
+        _clearSidebar();
+        return;
+      }
+      try {
+        ref.read(graphSidebarActionsProvider.notifier).state = GraphSidebarActions(
+          blockTypes: [for (final entry in _nodeStyle.entries) GraphSidebarBlockType(type: entry.key, label: entry.value.label, icon: entry.value.icon)],
+          busy: _busy,
+          connecting: _connectFromId != null,
+          onAdd: _addNode,
+          onToggleConnect: _toggleConnect,
+          onExit: _exit,
+          onOpenLessonSettings: _openLessonSettingsDialog,
+          onOpenRoute: _openRouteDialog,
+        );
+      } catch (_) {}
+    });
+  }
+
+  @override
+  void dispose() {
+    // Synchronous, not scheduled — ref is still valid here, and this is the
+    // one moment that must not be missed: without it, the rail would keep
+    // showing this lesson's graph tools after navigating away from it.
+    _clearSidebar();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isWide = MediaQuery.sizeOf(context).width >= 900;
@@ -173,50 +314,28 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
       },
     );
 
-    final toolbar = _GraphToolbar(
-      busy: _busy,
-      connecting: _connectFromId != null,
-      onAdd: _addNode,
-      onToggleConnect: () => setState(() => _connectFromId = _connectFromId == null ? (_selectedNodeId ?? '') : null),
-      // Mirrors the AppBar's own back button on BuilderLessonEditScreen
-      // exactly (§ graph exit navigation, 2026-09-03) — canPop() first,
-      // else an explicit context.go to the course editor. The graph is a
-      // widget swapped in by lesson.graph != null, not a pushed route, so a
-      // bare Navigator.maybePop() had nothing reliable of its own to pop:
-      // inside this app's ShellRoute this either did nothing or left the
-      // builder on a screen the admin didn't ask for, instead of the
-      // "back to the regular course editor" behaviour the exit button is
-      // supposed to have.
-      onExit: () {
-        final nav = Navigator.of(context);
-        if (nav.canPop()) {
-          nav.pop();
-        } else {
-          context.go('/admin/builder/${widget.courseId}');
-        }
-      },
-    );
-
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        toolbar,
-        const SizedBox(height: AdminMetrics.cardGap),
-        if (_connectFromId != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              _connectFromId!.isEmpty ? 'Выберите блок-источник связи' : 'Выберите блок, к которому ведёт связь',
-              style: AdminTypography.caption.copyWith(color: AdminColors.accent),
-            ),
-          ),
-        Expanded(child: AdminCard(padding: EdgeInsets.zero, child: canvas)),
-        const SizedBox(height: AdminMetrics.cardGap),
-        _EdgeList(graph: _graph, onDelete: _deleteEdge),
-      ],
-    );
+    _syncSidebar(isWide);
 
     if (!isWide) {
+      final toolbar = _GraphToolbar(busy: _busy, connecting: _connectFromId != null, onAdd: _addNode, onToggleConnect: _toggleConnect, onExit: _exit);
+      final body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          toolbar,
+          const SizedBox(height: AdminMetrics.cardGap),
+          if (_connectFromId != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _connectFromId!.isEmpty ? 'Выберите блок-источник связи' : 'Выберите блок, к которому ведёт связь',
+                style: AdminTypography.caption.copyWith(color: AdminColors.accent),
+              ),
+            ),
+          Expanded(child: AdminCard(padding: EdgeInsets.zero, child: canvas)),
+          const SizedBox(height: AdminMetrics.cardGap),
+          _EdgeList(graph: _graph, onDelete: _deleteEdge),
+        ],
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -242,6 +361,25 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
       );
     }
 
+    // Wide layout (§ graph editor layout, 2026-09-04): the add-block/
+    // connect/lesson/route/exit tools all live in AppShell's rail now (see
+    // _syncSidebar above) — this body is just the connect-mode hint plus
+    // the canvas itself, free to take almost the whole screen.
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_connectFromId != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              _connectFromId!.isEmpty ? 'Выберите блок-источник связи' : 'Выберите блок, к которому ведёт связь',
+              style: AdminTypography.caption.copyWith(color: AdminColors.accent),
+            ),
+          ),
+        Expanded(child: AdminCard(padding: EdgeInsets.zero, child: canvas)),
+      ],
+    );
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -250,6 +388,7 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
           const SizedBox(width: AdminMetrics.cardGap),
           SizedBox(
             width: 380,
+            height: double.infinity,
             child: AdminCard(
               child: _NodeInspector(
                 courseId: widget.courseId,

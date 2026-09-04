@@ -39,7 +39,16 @@ class LessonCard {
   final List<String> imageUrls;
 
   double get ratio => courseProgressRatio(progress?.completedStages);
-  bool get completed => progress?.completedStages.contains(Stage.complete) ?? false;
+  // `completedStages.contains(Stage.complete)` alone misses a graph-
+  // converted lesson (§ lesson unlock bug, 2026-09-04): its completedStages
+  // holds LessonNode UUIDs, which stageFromId (LessonProgress.fromJson)
+  // can never match to a Stage, so the set parses as permanently empty even
+  // once the lesson is genuinely finished. `completedAt` is written by both
+  // the legacy and the graph completion path onto the very same
+  // LessonState row (see LessonRunnerController.completeLesson and
+  // GraphLessonRunnerController.completeGraphLesson), so it's the one
+  // signal that survives the parse for either kind of lesson.
+  bool get completed => (progress?.completedStages.contains(Stage.complete) ?? false) || progress?.completedAt != null;
   Stage get targetStage => progress != null ? nextIncompleteStage(progress!.completedStages) : Stage.vocabulary;
 }
 

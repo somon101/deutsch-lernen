@@ -6,6 +6,7 @@ import '../../../../core/locale/content_locale.dart';
 import '../../../../core/locale/locale_provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/back_guard.dart';
+import '../../../shell/presentation/graph_sidebar_controls.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
 import '../../widgets/admin_feedback.dart';
@@ -96,35 +97,14 @@ class BuilderLessonEditScreen extends ConsumerWidget {
               // converts it) gets the new free-form canvas; every other
               // lesson keeps today's exact fixed 8-step rail, byte-for-byte
               // unchanged, with just a "Перевести в граф" entry point added.
-              final graph = lesson.graph;
               return Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    AdminCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          LessonNameCard(courseId: courseId, lesson: lesson),
-                          if (graph == null) ...[
-                            const SizedBox(height: AdminMetrics.fieldGap),
-                            _ConvertToGraphRow(courseId: courseId, lesson: lesson, onDone: reload),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AdminMetrics.fieldGap),
-                    Expanded(
-                      child: _LessonContentView(
-                        key: ValueKey(lesson.id),
-                        courseId: courseId,
-                        lesson: lesson,
-                        languageId: languageId,
-                        onReload: reload,
-                      ),
-                    ),
-                  ],
+                  child: _LessonContentView(
+                    key: ValueKey(lesson.id),
+                    courseId: courseId,
+                    lesson: lesson,
+                    languageId: languageId,
+                    onReload: reload,
                   ),
                 );
             },
@@ -171,6 +151,21 @@ class _LessonContentView extends ConsumerStatefulWidget {
 class _LessonContentViewState extends ConsumerState<_LessonContentView> {
   bool _showLinearView = false;
 
+  // Belt-and-suspenders alongside LessonGraphEditor's own dispose() (§
+  // graph editor layout, 2026-09-04 verification finding: the sidebar's
+  // graph tools were observed still showing after switching to this exact
+  // tab) — this swap removes LessonGraphEditor from the tree via a plain
+  // setState, not a route change, so its dispose() SHOULD already clear
+  // this; clearing it here too costs nothing and closes the gap either way.
+  void _switchToLinear() {
+    // Best-effort — see LessonGraphEditor's own _clearSidebar for why a
+    // disposal-timing exception here is swallowed, not surfaced.
+    try {
+      ref.read(graphSidebarActionsProvider.notifier).state = null;
+    } catch (_) {}
+    setState(() => _showLinearView = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final graph = widget.lesson.graph;
@@ -209,16 +204,44 @@ class _LessonContentViewState extends ConsumerState<_LessonContentView> {
       onReload: widget.onReload,
     );
 
-    if (graph == null) return panel;
+    // The lesson-name card (+ "Перевести в граф" for an unconverted lesson)
+    // stays inline here exactly as before UNLESS the graph canvas itself is
+    // the active view (§ graph editor layout, 2026-09-04) — in that one
+    // case LessonGraphEditor shows the exact same LessonNameCard instead,
+    // in a sidebar-triggered dialog, to give the canvas the screen. Linear
+    // view and an unconverted lesson are both untouched, byte-for-byte.
+    final showNameCardInline = graph == null || _showLinearView;
+    final nameCard = showNameCardInline
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: AdminMetrics.fieldGap),
+            child: AdminCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  LessonNameCard(courseId: widget.courseId, lesson: widget.lesson),
+                  if (graph == null) ...[
+                    const SizedBox(height: AdminMetrics.fieldGap),
+                    _ConvertToGraphRow(courseId: widget.courseId, lesson: widget.lesson, onDone: widget.onReload),
+                  ],
+                ],
+              ),
+            ),
+          )
+        : null;
+
+    if (graph == null) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [nameCard!, Expanded(child: panel)]);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ?nameCard,
         Row(
           children: [
             _ViewTab(label: 'Граф', selected: !_showLinearView, onTap: () => setState(() => _showLinearView = false)),
             const SizedBox(width: 8),
-            _ViewTab(label: 'Линейный (просмотр)', selected: _showLinearView, onTap: () => setState(() => _showLinearView = true)),
+            _ViewTab(label: 'Линейный (просмотр)', selected: _showLinearView, onTap: _switchToLinear),
           ],
         ),
         if (_showLinearView) ...[

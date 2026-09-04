@@ -6,6 +6,7 @@ import '../../../core/auth/auth_state.dart';
 import '../../../core/auth/user.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../profile/presentation/profile_tokens.dart';
+import 'graph_sidebar_controls.dart';
 
 /// App chrome for the shell-routed top-level sections (home/courses/admin/
 /// profile): a persistent icon rail on the left on wide viewports — the
@@ -118,6 +119,14 @@ class _NavRail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final items = _navItems.where((item) => _visibleFor(item, user)).toList();
+    // Gated on the route too, not just the provider value (§ graph editor
+    // layout, 2026-09-04 verification finding) — a stray postFrameCallback
+    // racing LessonGraphEditor's own dispose() could otherwise leave a
+    // stale non-null value showing these on completely unrelated screens.
+    // Every lesson-builder path (course editor, lesson editor, and the
+    // graph inside it) lives under /admin/builder — this is the same
+    // prefix _sectionAliases below already uses to recognize the section.
+    final graphActions = currentPath.startsWith('/admin/builder') ? ref.watch(graphSidebarActionsProvider) : null;
 
     return Container(
       width: 88,
@@ -148,17 +157,67 @@ class _NavRail extends ConsumerWidget {
                 active: _isActive(item, currentPath),
                 onTap: () => context.go(item.path),
               ),
-            const Spacer(),
-            _RailButton(
-              icon: Icons.logout,
-              tooltip: 'Выйти',
-              active: false,
-              onTap: () => _confirmLogout(context, ref),
-            ),
+            if (graphActions != null) ...[
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                child: Divider(color: Colors.white24, height: 1),
+              ),
+              Expanded(child: SingleChildScrollView(child: _GraphToolsSection(actions: graphActions))),
+            ] else
+              const Spacer(),
+            if (graphActions == null)
+              _RailButton(
+                icon: Icons.logout,
+                tooltip: 'Выйти',
+                active: false,
+                onTap: () => _confirmLogout(context, ref),
+              ),
             const SizedBox(height: 16),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The graph editor's own tool group (§ graph editor layout, 2026-09-04,
+/// changes 1-3): every "+ add block" type as an icon button, then "Соединить
+/// блоки"/"Отменить соединение", "Урок" (opens the lesson-settings dialog),
+/// "Маршрут" (opens the connections dialog), and "Выйти из графа" — all in
+/// the same rail, replacing the logout button while a graph is open (still
+/// reachable from Settings/Profile, same convention _BottomBar already uses
+/// for not fitting logout into its own row).
+class _GraphToolsSection extends StatelessWidget {
+  const _GraphToolsSection({required this.actions});
+  final GraphSidebarActions actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (final block in actions.blockTypes)
+          _RailButton(
+            icon: block.icon,
+            tooltip: block.label,
+            active: false,
+            enabled: !actions.busy,
+            onTap: () => actions.onAdd(block.type),
+          ),
+        _RailButton(
+          icon: Icons.arrow_right_alt,
+          tooltip: actions.connecting ? 'Отменить соединение' : 'Соединить блоки',
+          active: actions.connecting,
+          enabled: !actions.busy,
+          onTap: actions.onToggleConnect,
+        ),
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+          child: Divider(color: Colors.white24, height: 1),
+        ),
+        _RailButton(icon: Icons.description_outlined, tooltip: 'Урок', active: false, onTap: actions.onOpenLessonSettings),
+        _RailButton(icon: Icons.route_outlined, tooltip: 'Маршрут', active: false, onTap: actions.onOpenRoute),
+        _RailButton(icon: Icons.logout, tooltip: 'Выйти из графа', active: false, onTap: actions.onExit),
+      ],
     );
   }
 }
@@ -181,12 +240,16 @@ Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
 }
 
 class _RailButton extends StatelessWidget {
-  const _RailButton({required this.icon, required this.tooltip, required this.active, required this.onTap});
+  const _RailButton({required this.icon, required this.tooltip, required this.active, required this.onTap, this.enabled = true});
 
   final IconData icon;
   final String tooltip;
   final bool active;
   final VoidCallback onTap;
+  // Additive (§ graph editor layout, 2026-09-04) — every pre-existing call
+  // site omits this and keeps its exact old always-enabled behavior; only
+  // the graph tool buttons pass false while a request is in flight.
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -194,17 +257,20 @@ class _RailButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Tooltip(
         message: tooltip,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: active ? Colors.white.withValues(alpha: 0.22) : Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
+        child: Opacity(
+          opacity: enabled ? 1 : 0.4,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: enabled ? onTap : null,
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: active ? Colors.white.withValues(alpha: 0.22) : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: Colors.white, size: 22),
             ),
-            child: Icon(icon, color: Colors.white, size: 22),
           ),
         ),
       ),
