@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/utils/avatar_identity.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../data/social_repository.dart';
 
@@ -27,7 +28,11 @@ class UserListRow extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: c.accentSoft,
+              // Same deterministic per-identity color as the leaderboard's
+              // podium/rows (§ leaderboard redesign, 2026-09-04) — a given
+              // person now looks the same here and there, instead of every
+              // initials-only avatar sharing one flat theme color.
+              backgroundColor: avatarColorFor(user.id, Theme.of(context).colorScheme),
               // Plain NetworkImage, not cached — same reasoning as every
               // other-users list in the app (leaderboard rows): caching is
               // reserved for the signed-in user's own single avatar.

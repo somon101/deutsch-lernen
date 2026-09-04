@@ -353,5 +353,28 @@
   "exerciseStageResultTitle": "Результат",
   "exerciseStageAllCorrect": "Отлично, всё верно!",
   "exerciseStageGoodResult": "Хороший результат. Разберём ошибки ниже.",
-  "exerciseStageContinueEnter": "Продолжить (Enter)"
+  "exerciseStageContinueEnter": "Продолжить (Enter)",
+
+  "homeMapWordCount": "{count} слов",
+  "@homeMapWordCount": {"placeholders": {"count": {"type": "int"}}},
+  "homeMapLockedSnack": "Завершите предыдущий урок",
+
+  "leaderboardPeriodDay": "День",
+  "leaderboardPeriodWeek": "Неделя",
+  "leaderboardPeriodMonth": "Месяц",
+  "leaderboardPeriodAllTime": "Всё время",
+  "leaderboardColumnRank": "Место",
+  "leaderboardColumnStudent": "Ученик",
+  "leaderboardColumnPoints": "Очки",
+  "leaderboardGoalToPlace": "До {rank} места — {points} очков",
+  "@leaderboardGoalToPlace": {"placeholders": {"rank": {"type": "int"}, "points": {"type": "int"}}},
+  "leaderboardGoalBeatName": "Один урок, и ты обгонишь {name}",
+  "@leaderboardGoalBeatName": {"placeholders": {"name": {"type": "String"}}},
+  "leaderboardGoalTop": "Ты на вершине. Удержи позицию",
+  "leaderboardThisIsYou": "Это ты",
+  "leaderboardSearchTooltip": "Поиск",
+  "leaderboardInfoTooltip": "Как начисляются очки",
+  "leaderboardInfoTitle": "Как начисляются очки",
+  "leaderboardInfoBody": "10 очков за каждый правильно отвеченный вопрос и 50 очков за завершённый урок.",
+  "leaderboardRetry": "Повторить"
 }

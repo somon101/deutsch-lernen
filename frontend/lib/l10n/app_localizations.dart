@@ -1717,6 +1717,114 @@ abstract class AppLocalizations {
   /// In ru, this message translates to:
   /// **'Продолжить (Enter)'**
   String get exerciseStageContinueEnter;
+
+  /// No description provided for @homeMapWordCount.
+  ///
+  /// In ru, this message translates to:
+  /// **'{count} слов'**
+  String homeMapWordCount(int count);
+
+  /// No description provided for @homeMapLockedSnack.
+  ///
+  /// In ru, this message translates to:
+  /// **'Завершите предыдущий урок'**
+  String get homeMapLockedSnack;
+
+  /// No description provided for @leaderboardPeriodDay.
+  ///
+  /// In ru, this message translates to:
+  /// **'День'**
+  String get leaderboardPeriodDay;
+
+  /// No description provided for @leaderboardPeriodWeek.
+  ///
+  /// In ru, this message translates to:
+  /// **'Неделя'**
+  String get leaderboardPeriodWeek;
+
+  /// No description provided for @leaderboardPeriodMonth.
+  ///
+  /// In ru, this message translates to:
+  /// **'Месяц'**
+  String get leaderboardPeriodMonth;
+
+  /// No description provided for @leaderboardPeriodAllTime.
+  ///
+  /// In ru, this message translates to:
+  /// **'Всё время'**
+  String get leaderboardPeriodAllTime;
+
+  /// No description provided for @leaderboardColumnRank.
+  ///
+  /// In ru, this message translates to:
+  /// **'Место'**
+  String get leaderboardColumnRank;
+
+  /// No description provided for @leaderboardColumnStudent.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ученик'**
+  String get leaderboardColumnStudent;
+
+  /// No description provided for @leaderboardColumnPoints.
+  ///
+  /// In ru, this message translates to:
+  /// **'Очки'**
+  String get leaderboardColumnPoints;
+
+  /// No description provided for @leaderboardGoalToPlace.
+  ///
+  /// In ru, this message translates to:
+  /// **'До {rank} места — {points} очков'**
+  String leaderboardGoalToPlace(int rank, int points);
+
+  /// No description provided for @leaderboardGoalBeatName.
+  ///
+  /// In ru, this message translates to:
+  /// **'Один урок, и ты обгонишь {name}'**
+  String leaderboardGoalBeatName(String name);
+
+  /// No description provided for @leaderboardGoalTop.
+  ///
+  /// In ru, this message translates to:
+  /// **'Ты на вершине. Удержи позицию'**
+  String get leaderboardGoalTop;
+
+  /// No description provided for @leaderboardThisIsYou.
+  ///
+  /// In ru, this message translates to:
+  /// **'Это ты'**
+  String get leaderboardThisIsYou;
+
+  /// No description provided for @leaderboardSearchTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Поиск'**
+  String get leaderboardSearchTooltip;
+
+  /// No description provided for @leaderboardInfoTooltip.
+  ///
+  /// In ru, this message translates to:
+  /// **'Как начисляются очки'**
+  String get leaderboardInfoTooltip;
+
+  /// No description provided for @leaderboardInfoTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'Как начисляются очки'**
+  String get leaderboardInfoTitle;
+
+  /// No description provided for @leaderboardInfoBody.
+  ///
+  /// In ru, this message translates to:
+  /// **'10 очков за каждый правильно отвеченный вопрос и 50 очков за завершённый урок.'**
+  String get leaderboardInfoBody;
+
+  /// No description provided for @leaderboardRetry.
+  ///
+  /// In ru, this message translates to:
+  /// **'Повторить'**
+  String get leaderboardRetry;
 }
 
 class _AppLocalizationsDelegate

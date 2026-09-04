@@ -313,5 +313,25 @@
   "exerciseStageResultTitle": "Натиҷа",
   "exerciseStageAllCorrect": "Аъло, ҳама дуруст!",
   "exerciseStageGoodResult": "Натиҷаи хуб. Хатоҳоро дар поён баррасӣ мекунем.",
-  "exerciseStageContinueEnter": "Идома додан (Enter)"
+  "exerciseStageContinueEnter": "Идома додан (Enter)",
+
+  "homeMapWordCount": "{count} калима",
+  "homeMapLockedSnack": "Дарси қаблиро анҷом диҳед",
+
+  "leaderboardPeriodDay": "Рӯз",
+  "leaderboardPeriodWeek": "Ҳафта",
+  "leaderboardPeriodMonth": "Моҳ",
+  "leaderboardPeriodAllTime": "Тамоми вақт",
+  "leaderboardColumnRank": "Ҷой",
+  "leaderboardColumnStudent": "Донишҷӯ",
+  "leaderboardColumnPoints": "Хол",
+  "leaderboardGoalToPlace": "То ҷои {rank} — {points} хол",
+  "leaderboardGoalBeatName": "Як дарс, ва ту аз {name} пеш мегузарӣ",
+  "leaderboardGoalTop": "Ту дар қулла ҳастӣ. Ҷойгаҳатро нигоҳ дор",
+  "leaderboardThisIsYou": "Ин туӣ",
+  "leaderboardSearchTooltip": "Ҷустуҷӯ",
+  "leaderboardInfoTooltip": "Холҳо чӣ тавр ҳисоб мешаванд",
+  "leaderboardInfoTitle": "Холҳо чӣ тавр ҳисоб мешаванд",
+  "leaderboardInfoBody": "Барои ҳар як саволи дуруст ҷавобдодашуда 10 хол ва барои ҳар дарси анҷомёфта 50 хол.",
+  "leaderboardRetry": "Такрор кардан"
 }

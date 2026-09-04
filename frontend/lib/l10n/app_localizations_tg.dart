@@ -919,4 +919,65 @@ class AppLocalizationsTg extends AppLocalizations {
 
   @override
   String get exerciseStageContinueEnter => 'Идома додан (Enter)';
+
+  @override
+  String homeMapWordCount(int count) {
+    return '$count калима';
+  }
+
+  @override
+  String get homeMapLockedSnack => 'Дарси қаблиро анҷом диҳед';
+
+  @override
+  String get leaderboardPeriodDay => 'Рӯз';
+
+  @override
+  String get leaderboardPeriodWeek => 'Ҳафта';
+
+  @override
+  String get leaderboardPeriodMonth => 'Моҳ';
+
+  @override
+  String get leaderboardPeriodAllTime => 'Тамоми вақт';
+
+  @override
+  String get leaderboardColumnRank => 'Ҷой';
+
+  @override
+  String get leaderboardColumnStudent => 'Донишҷӯ';
+
+  @override
+  String get leaderboardColumnPoints => 'Хол';
+
+  @override
+  String leaderboardGoalToPlace(int rank, int points) {
+    return 'То ҷои $rank — $points хол';
+  }
+
+  @override
+  String leaderboardGoalBeatName(String name) {
+    return 'Як дарс, ва ту аз $name пеш мегузарӣ';
+  }
+
+  @override
+  String get leaderboardGoalTop => 'Ту дар қулла ҳастӣ. Ҷойгаҳатро нигоҳ дор';
+
+  @override
+  String get leaderboardThisIsYou => 'Ин туӣ';
+
+  @override
+  String get leaderboardSearchTooltip => 'Ҷустуҷӯ';
+
+  @override
+  String get leaderboardInfoTooltip => 'Холҳо чӣ тавр ҳисоб мешаванд';
+
+  @override
+  String get leaderboardInfoTitle => 'Холҳо чӣ тавр ҳисоб мешаванд';
+
+  @override
+  String get leaderboardInfoBody =>
+      'Барои ҳар як саволи дуруст ҷавобдодашуда 10 хол ва барои ҳар дарси анҷомёфта 50 хол.';
+
+  @override
+  String get leaderboardRetry => 'Такрор кардан';
 }

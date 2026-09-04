@@ -24,6 +24,9 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.dangerSoft,
     required this.warning,
     required this.warningSoft,
+    required this.gold,
+    required this.silver,
+    required this.bronze,
   });
 
   final Color bg;
@@ -41,6 +44,13 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color dangerSoft;
   final Color warning;
   final Color warningSoft;
+  // Podium/rank medal colors (§ leaderboard redesign, 2026-09-04) — not
+  // part of the original CSS port above, added for the podium's gold/
+  // silver/bronze rings; same literal hex values in both themes (a medal is
+  // a medal regardless of light/dark), matching the approved mockup.
+  final Color gold;
+  final Color silver;
+  final Color bronze;
 
   static const light = AppColors(
     bg: Color(0xFFF5F6FB),
@@ -58,6 +68,9 @@ class AppColors extends ThemeExtension<AppColors> {
     dangerSoft: Color(0xFFFDEAEA),
     warning: Color(0xFFB8860B),
     warningSoft: Color(0xFFFFF6E0),
+    gold: Color(0xFFE8A33D),
+    silver: Color(0xFFA8AEC2),
+    bronze: Color(0xFFC97B45),
   );
 
   static const dark = AppColors(
@@ -76,6 +89,9 @@ class AppColors extends ThemeExtension<AppColors> {
     dangerSoft: Color(0xFF3A1E22),
     warning: Color(0xFFE0B03D),
     warningSoft: Color(0xFF3A2F14),
+    gold: Color(0xFFF0B24A),
+    silver: Color(0xFF8E96AD),
+    bronze: Color(0xFFC97B45),
   );
 
   @override
@@ -101,6 +117,9 @@ class AppColors extends ThemeExtension<AppColors> {
       dangerSoft: mix(dangerSoft, other.dangerSoft),
       warning: mix(warning, other.warning),
       warningSoft: mix(warningSoft, other.warningSoft),
+      gold: mix(gold, other.gold),
+      silver: mix(silver, other.silver),
+      bronze: mix(bronze, other.bronze),
     );
   }
 }

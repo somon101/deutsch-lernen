@@ -7,11 +7,11 @@ import '../../../core/api/api_client.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../courses/presentation/courses_overview.dart';
-import '../../courses/presentation/widgets/lesson_grid_card.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../../../l10n/app_localizations.dart';
 import 'widgets/lesson_download_gate.dart';
+import 'widgets/lesson_map.dart';
 
 /// Which language the lesson list below is showing — deliberately
 /// independent of the profile's own progress-language preference
@@ -125,27 +125,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 if (user != null)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                     child: Text(l10n.homeGreeting(user.firstName), style: Theme.of(context).textTheme.titleLarge),
                   ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: languages.length > 1 ? () => _pickLanguage(languages, selected.id) : null,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.language, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(selected.name, style: Theme.of(context).textTheme.titleMedium)),
-                          if (languages.length > 1) const Icon(Icons.expand_more),
-                        ],
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: languages.length > 1 ? () => _pickLanguage(languages, selected.id) : null,
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.language, size: 16),
+                            const SizedBox(width: 6),
+                            Text(selected.name, style: Theme.of(context).textTheme.bodyMedium),
+                            if (languages.length > 1) ...[
+                              const SizedBox(width: 2),
+                              const Icon(Icons.expand_more, size: 18),
+                            ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -160,36 +168,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       }
                       return RefreshIndicator(
                         onRefresh: () async => ref.invalidate(homeLessonsProvider((id: selected.id, name: selected.name))),
-                        child: ListView(
-                          padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + bottomBarClearance(context)),
-                          children: [
-                            for (var i = 0; i < lessons.length; i++)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: LessonGridCard(
-                                  index: i,
-                                  lesson: lessons[i],
-                                  // The lesson's word photos are pulled onto
-                                  // the device first, with progress, and the
-                                  // lesson opens after (§ pre-download word
-                                  // photos, 2026-09-02). A lesson opened
-                                  // before has them on disk already and goes
-                                  // straight through without any sheet.
-                                  onTap: () {
-                                    final lesson = lessons[i];
-                                    final target = lesson.courseId != null
-                                        ? '/courses/${lesson.courseId}/lesson/${lesson.lessonId}/${lesson.targetStage.name}'
-                                        : '/lesson/${lesson.lessonId}/${lesson.targetStage.name}';
-                                    openLessonWithPhotos(
-                                      context,
-                                      api: ref.read(apiClientProvider),
-                                      imageUrls: lesson.imageUrls,
-                                      open: () => context.go(target),
-                                    );
-                                  },
-                                ),
-                              ),
-                          ],
+                        child: Padding(
+                          padding: EdgeInsets.only(bottom: bottomBarClearance(context)),
+                          child: LessonMap(
+                            lessons: lessons,
+                            // The lesson's word photos are pulled onto the
+                            // device first, with progress, and the lesson
+                            // opens after (§ pre-download word photos,
+                            // 2026-09-02). A lesson opened before has them
+                            // on disk already and goes straight through
+                            // without any sheet.
+                            onOpenLesson: (lesson) {
+                              final target = lesson.courseId != null
+                                  ? '/courses/${lesson.courseId}/lesson/${lesson.lessonId}/${lesson.targetStage.name}'
+                                  : '/lesson/${lesson.lessonId}/${lesson.targetStage.name}';
+                              openLessonWithPhotos(
+                                context,
+                                api: ref.read(apiClientProvider),
+                                imageUrls: lesson.imageUrls,
+                                open: () => context.go(target),
+                              );
+                            },
+                          ),
                         ),
                       );
                     },

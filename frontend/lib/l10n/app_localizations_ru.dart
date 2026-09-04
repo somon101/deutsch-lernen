@@ -918,4 +918,65 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get exerciseStageContinueEnter => 'Продолжить (Enter)';
+
+  @override
+  String homeMapWordCount(int count) {
+    return '$count слов';
+  }
+
+  @override
+  String get homeMapLockedSnack => 'Завершите предыдущий урок';
+
+  @override
+  String get leaderboardPeriodDay => 'День';
+
+  @override
+  String get leaderboardPeriodWeek => 'Неделя';
+
+  @override
+  String get leaderboardPeriodMonth => 'Месяц';
+
+  @override
+  String get leaderboardPeriodAllTime => 'Всё время';
+
+  @override
+  String get leaderboardColumnRank => 'Место';
+
+  @override
+  String get leaderboardColumnStudent => 'Ученик';
+
+  @override
+  String get leaderboardColumnPoints => 'Очки';
+
+  @override
+  String leaderboardGoalToPlace(int rank, int points) {
+    return 'До $rank места — $points очков';
+  }
+
+  @override
+  String leaderboardGoalBeatName(String name) {
+    return 'Один урок, и ты обгонишь $name';
+  }
+
+  @override
+  String get leaderboardGoalTop => 'Ты на вершине. Удержи позицию';
+
+  @override
+  String get leaderboardThisIsYou => 'Это ты';
+
+  @override
+  String get leaderboardSearchTooltip => 'Поиск';
+
+  @override
+  String get leaderboardInfoTooltip => 'Как начисляются очки';
+
+  @override
+  String get leaderboardInfoTitle => 'Как начисляются очки';
+
+  @override
+  String get leaderboardInfoBody =>
+      '10 очков за каждый правильно отвеченный вопрос и 50 очков за завершённый урок.';
+
+  @override
+  String get leaderboardRetry => 'Повторить';
 }
