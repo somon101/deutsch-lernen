@@ -63,6 +63,15 @@ class BuilderLessonEditScreen extends ConsumerWidget {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
+                // Same explicit clear as _switchToLinear/_exit below (§
+                // sidebar-stuck-after-exit fix, 2026-09-04) — this button
+                // navigates away from the graph editor exactly like
+                // LessonGraphEditor's own "Выйти" does, but through a
+                // separate handler that never calls that widget's _exit(),
+                // so it needs its own copy of the same defensive clear.
+                try {
+                  ref.read(graphSidebarActionsProvider.notifier).state = null;
+                } catch (_) {}
                 final nav = Navigator.of(context);
                 if (nav.canPop()) {
                   nav.pop();

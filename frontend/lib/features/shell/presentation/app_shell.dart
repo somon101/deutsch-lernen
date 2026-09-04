@@ -150,21 +150,23 @@ class _NavRail extends ConsumerWidget {
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13, height: 1.25),
             ),
             const SizedBox(height: 32),
-            for (final item in items)
-              _RailButton(
-                icon: _isActive(item, currentPath) ? item.activeIcon : item.icon,
-                tooltip: item.label,
-                active: _isActive(item, currentPath),
-                onTap: () => context.go(item.path),
-              ),
-            if (graphActions != null) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                child: Divider(color: Colors.white24, height: 1),
-              ),
-              Expanded(child: SingleChildScrollView(child: _GraphToolsSection(actions: graphActions))),
-            ] else
+            // While a graph is open, the rail shows ONLY its tools — not
+            // the normal nav items alongside them (§ graph editor layout,
+            // 2026-09-04 follow-up: "не должно быть эти кнопки там только
+            // будут рабочие которые нам нужны"). "Выйти из графа" is the
+            // way back; the normal items return the moment it isn't null.
+            if (graphActions != null)
+              Expanded(child: SingleChildScrollView(child: _GraphToolsSection(actions: graphActions)))
+            else ...[
+              for (final item in items)
+                _RailButton(
+                  icon: _isActive(item, currentPath) ? item.activeIcon : item.icon,
+                  tooltip: item.label,
+                  active: _isActive(item, currentPath),
+                  onTap: () => context.go(item.path),
+                ),
               const Spacer(),
+            ],
             if (graphActions == null)
               _RailButton(
                 icon: Icons.logout,

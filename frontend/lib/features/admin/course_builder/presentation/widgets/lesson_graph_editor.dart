@@ -173,6 +173,16 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
   // didn't ask for, instead of the "back to the regular course editor"
   // behaviour the exit button is supposed to have.
   void _exit() {
+    // Cleared here, synchronously, before the navigation even starts (§
+    // sidebar-stuck-after-exit fix, 2026-09-04) — not left to dispose()
+    // alone. Verified live: after "Выйти из графа" the widget's dispose()
+    // call sometimes lands too late (or its own ref use silently no-ops,
+    // same edge case as the Граф/Линейный tab-switch race this file
+    // already works around elsewhere), leaving the rail stuck showing
+    // graph tools on the course-structure screen it navigates to — which
+    // still matches the /admin/builder prefix _NavRail gates on, so a
+    // missed clear there doesn't get caught by that gate at all.
+    _clearSidebar();
     final nav = Navigator.of(context);
     if (nav.canPop()) {
       nav.pop();

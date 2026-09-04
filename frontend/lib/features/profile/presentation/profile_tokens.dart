@@ -131,20 +131,17 @@ class ProfileMetrics {
   static const bottomBarHeight = 60.0;
 }
 
-/// Extra bottom padding a shell-hosted scrollable screen needs so its last
-/// item isn't hidden behind AppShell's mobile bottom tab bar. Each routed
-/// screen builds its own nested Scaffold inside AppShell's `child`, and a
-/// nested Scaffold has no way to know about an ancestor Scaffold's
-/// `bottomNavigationBar` height — so this has to be added explicitly to
-/// each screen's own scroll padding, rather than relying on Flutter to
-/// account for it automatically. Just the bar's own height — the system
-/// gesture-bar/home-indicator inset underneath it is a separate concern
-/// each screen's own SafeArea already handles. Zero on wide layouts, where
-/// the bottom bar doesn't exist (AppShell shows the side rail instead).
-double bottomBarClearance(BuildContext context) {
-  final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;
-  return isWide ? 0 : ProfileMetrics.bottomBarHeight;
-}
+/// Always 0 (§ bottom dead-space bug, 2026-09-04). Kept as a no-op instead
+/// of ripping out every call site: a routed screen's own nested Scaffold
+/// sits inside AppShell's OUTER Scaffold(body: child, bottomNavigationBar:
+/// _BottomBar(...)) — and a Scaffold with a bottomNavigationBar (extendBody
+/// is false, the default) already shrinks `body` to stop exactly above the
+/// bar on its own, with no help needed from the child. The screens calling
+/// this were adding clearance for that same bar a second time on top of
+/// what Flutter had already reserved, which showed up as a dead strip of
+/// empty space above the bar instead of the list/sticky-bar actually
+/// reaching it — visible on the home lesson map and the leaderboard.
+double bottomBarClearance(BuildContext context) => 0;
 
 /// Font is Inter per the design spec, with a system-ui fallback for when
 /// it isn't bundled — no font asset is in pubspec.yaml today, so this
