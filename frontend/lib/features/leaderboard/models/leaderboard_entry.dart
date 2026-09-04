@@ -1,11 +1,9 @@
 /// Which window of activity the leaderboard is ranked over (§ leaderboard
-/// redesign, 2026-09-04). TODO(backend): GET /api/leaderboard has no period
-/// parameter yet — every value here currently produces the identical
-/// all-time ranking; services/leaderboard.py's own docstring already
-/// anticipates this ("`as_of` already makes 'rank as of a point in time'
-/// reusable for a real period filter later"), it just isn't wired up. Once
-/// it is, LeaderboardRepository.fetchLeaderboard is the only place that
-/// needs to actually send it.
+/// redesign, 2026-09-04; wired to the backend § leaderboard periods,
+/// 2026-09-04). `.name` is sent to GET /api/leaderboard and /api/me/rank as
+/// the `period` query param verbatim — day/week/month rank by points earned
+/// inside that window (UTC calendar day / ISO week / calendar month),
+/// allTime is the original unbounded ranking.
 enum LeaderboardPeriod { day, week, month, allTime }
 
 /// One row on the global leaderboard (§ rating system, 2026-08-30) — 10

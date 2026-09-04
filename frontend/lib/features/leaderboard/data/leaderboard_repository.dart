@@ -11,18 +11,15 @@ class LeaderboardRepository {
   final ApiClient _api;
 
   Future<Leaderboard> fetchLeaderboard({LeaderboardPeriod period = LeaderboardPeriod.allTime}) async {
-    // TODO(backend): `period` isn't sent yet — see LeaderboardPeriod's
-    // docstring. Once GET /api/leaderboard accepts one, add
-    // `query: {'period': period.name}` here.
-    final res = await _api.get('/api/leaderboard');
+    final res = await _api.get('/api/leaderboard', query: {'period': period.name});
     return Leaderboard(
       entries: (res['entries'] as List<dynamic>).map((e) => LeaderboardEntry.fromJson(e as Map<String, dynamic>)).toList(),
       total: res['total'] as int,
     );
   }
 
-  Future<MyRankSummary> fetchMyRank() async {
-    final res = await _api.get('/api/me/rank');
+  Future<MyRankSummary> fetchMyRank({LeaderboardPeriod period = LeaderboardPeriod.allTime}) async {
+    final res = await _api.get('/api/me/rank', query: {'period': period.name});
     return MyRankSummary.fromJson(res);
   }
 }
@@ -40,6 +37,11 @@ final leaderboardProvider = FutureProvider.autoDispose<Leaderboard>((ref) {
   return ref.watch(leaderboardRepositoryProvider).fetchLeaderboard(period: period);
 });
 
-final myRankProvider = FutureProvider.autoDispose<MyRankSummary>((ref) {
-  return ref.watch(leaderboardRepositoryProvider).fetchMyRank();
+/// Keyed by period (§ leaderboard periods, 2026-09-04) so the leaderboard
+/// screen's sticky own-rank bar can track whichever tab is selected there,
+/// while profile_screen.dart's rank card keeps requesting `allTime`
+/// explicitly and so stays on the global standing it has always shown,
+/// independent of whatever tab was last picked on the leaderboard screen.
+final myRankProvider = FutureProvider.autoDispose.family<MyRankSummary, LeaderboardPeriod>((ref, period) {
+  return ref.watch(leaderboardRepositoryProvider).fetchMyRank(period: period);
 });

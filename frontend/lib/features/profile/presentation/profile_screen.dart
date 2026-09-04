@@ -98,7 +98,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final totalTime = ref.watch(totalTimeSecondsProvider);
     final streakDays = ref.watch(streakDaysProvider);
     final weekActivity = ref.watch(weekActivityProvider);
-    final myRank = ref.watch(myRankProvider);
+    final myRank = ref.watch(myRankProvider(LeaderboardPeriod.allTime));
     final myFollowStats = ref.watch(userProfileProvider(user.id));
     final overview = ref.watch(profileGamificationProvider);
     final isWide = MediaQuery.sizeOf(context).width >= ProfileMetrics.wideBreakpoint;

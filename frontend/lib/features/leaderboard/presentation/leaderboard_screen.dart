@@ -203,7 +203,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                     constraints: const BoxConstraints(maxWidth: _maxContentWidth - 24),
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final myRank = ref.watch(myRankProvider);
+                        final myRank = ref.watch(myRankProvider(period));
                         return myRank.when(
                           data: (summary) => MyRankBar(summary: summary, me: me, onTap: () => context.go('/profile')),
                           loading: () => const SizedBox.shrink(),

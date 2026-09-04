@@ -173,9 +173,17 @@ async def evaluate(db: AsyncSession, user_id: str) -> dict:
     }
 
 
-async def total_award_points(db: AsyncSession) -> dict[str, int]:
+async def total_award_points(db: AsyncSession, since: date | None = None, as_of: date | None = None) -> dict[str, int]:
     """Daily-goal points per user, for the leaderboard to fold into the score
     it already computes. Kept here rather than in leaderboard.py so this
-    module owns every rule about what a daily goal is worth."""
-    rows = (await db.execute(select(DailyGoalAward.userId, func.sum(DailyGoalAward.points)).group_by(DailyGoalAward.userId))).all()
+    module owns every rule about what a daily goal is worth. `since`/`as_of`
+    bound `awardDate` (inclusive) for the leaderboard's period tabs (§
+    leaderboard periods, 2026-09-04) — both default to None, which is the
+    original unbounded all-time sum."""
+    query = select(DailyGoalAward.userId, func.sum(DailyGoalAward.points))
+    if since is not None:
+        query = query.where(DailyGoalAward.awardDate >= since)
+    if as_of is not None:
+        query = query.where(DailyGoalAward.awardDate <= as_of)
+    rows = (await db.execute(query.group_by(DailyGoalAward.userId))).all()
     return {user_id: int(points or 0) for user_id, points in rows}
