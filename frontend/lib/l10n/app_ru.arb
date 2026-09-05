@@ -258,6 +258,13 @@
   "weekActivityAvgPerDay": "{minutes}м/день",
   "@weekActivityAvgPerDay": {"placeholders": {"minutes": {"type": "int"}}},
 
+  "activityHistoryTitle": "История активности",
+  "activityHistoryLoadError": "Не удалось загрузить историю: {error}",
+  "@activityHistoryLoadError": {"placeholders": {"error": {"type": "Object"}}},
+  "activityHistoryMinutesActive": "{minutes} мин активности",
+  "@activityHistoryMinutesActive": {"placeholders": {"minutes": {"type": "int"}}},
+  "activityHistoryNoActivity": "Нет активности",
+
   "stageVocabulary": "Слова",
   "stageMaterial": "Материал",
   "stageVideo": "Видео",

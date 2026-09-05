@@ -1292,6 +1292,30 @@ abstract class AppLocalizations {
   /// **'{minutes}м/день'**
   String weekActivityAvgPerDay(int minutes);
 
+  /// No description provided for @activityHistoryTitle.
+  ///
+  /// In ru, this message translates to:
+  /// **'История активности'**
+  String get activityHistoryTitle;
+
+  /// No description provided for @activityHistoryLoadError.
+  ///
+  /// In ru, this message translates to:
+  /// **'Не удалось загрузить историю: {error}'**
+  String activityHistoryLoadError(Object error);
+
+  /// No description provided for @activityHistoryMinutesActive.
+  ///
+  /// In ru, this message translates to:
+  /// **'{minutes} мин активности'**
+  String activityHistoryMinutesActive(int minutes);
+
+  /// No description provided for @activityHistoryNoActivity.
+  ///
+  /// In ru, this message translates to:
+  /// **'Нет активности'**
+  String get activityHistoryNoActivity;
+
   /// No description provided for @stageVocabulary.
   ///
   /// In ru, this message translates to:

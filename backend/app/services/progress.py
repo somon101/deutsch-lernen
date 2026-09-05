@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -455,6 +455,44 @@ async def get_week_activity_summary(db: AsyncSession, user_id: str) -> dict:
         "yesterdaySeconds": yesterday_seconds,
         "percentChangeVsYesterday": percent_change,
     }
+
+
+async def get_activity_history(db: AsyncSession, user_id: str, start: date, end: date) -> dict:
+    """Per-day activity for an arbitrary inclusive [start, end] range (§
+    activity history calendar, 2026-09-05) — same per-day shape
+    get_week_activity_summary's `days` list already uses, just generalized
+    beyond one hardcoded Monday-Sunday so the calendar opened from the week
+    card's "Все" button can page through any month. Deliberately global
+    (every language summed together), same reasoning as
+    get_week_activity_summary. Real per-day data only exists from whenever
+    DailyActivity/ActivityTime started being written — a range reaching
+    further back just comes back with every one of those earlier days
+    marked inactive/0 seconds, which is the correct, honest answer for a
+    day nothing was ever recorded for."""
+    active_dates = set(
+        (
+            await db.execute(
+                select(DailyActivity.activityDate).where(
+                    DailyActivity.userId == user_id, DailyActivity.activityDate >= start, DailyActivity.activityDate <= end
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    rows = (
+        await db.execute(
+            select(ActivityTime.activityDate, func.sum(ActivityTime.seconds))
+            .where(ActivityTime.userId == user_id, ActivityTime.activityDate >= start, ActivityTime.activityDate <= end)
+            .group_by(ActivityTime.activityDate)
+        )
+    ).all()
+    seconds_by_date = {d: s for d, s in rows}
+
+    all_dates = [start + timedelta(days=i) for i in range((end - start).days + 1)]
+    days = [{"date": d.isoformat(), "active": d in active_dates, "seconds": seconds_by_date.get(d, 0)} for d in all_dates]
+    return {"days": days}
 
 
 async def get_topic_progress(db: AsyncSession, user_id: str, topic_id: str) -> dict:

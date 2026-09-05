@@ -187,7 +187,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   weekActivity.when(
                     loading: () => const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator())),
                     error: (err, st) => Text(l10n.profileActivityLoadError(err), style: ProfileTypography.body(context)),
-                    data: (summary) => WeekActivityCard(activity: summary),
+                    data: (summary) => WeekActivityCard(activity: summary, onSeeAll: () => context.push('/profile/activity-history')),
                   ),
                   const SizedBox(height: 24),
                 ],

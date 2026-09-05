@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,6 +29,7 @@ from app.schemas.taxonomy import (
 from app.services import taxonomy as svc
 from app.services.progress import (
     add_activity_time,
+    get_activity_history,
     get_lesson_progress_from_answers,
     get_level_progress,
     get_overall_progress,
@@ -451,6 +454,18 @@ async def streak_route(user: User = Depends(require_auth), db: AsyncSession = De
 @router.get("/me/activity/week")
 async def week_activity_route(user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
     return await get_week_activity_summary(db, user.id)
+
+
+@router.get("/me/activity/history")
+async def activity_history_route(start: date, end: date, user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)):
+    """Powers the full-history calendar opened from the week card's "Все"
+    button (§ activity history calendar, 2026-09-05) — `start`/`end` are
+    inclusive ISO dates, typically one calendar month at a time."""
+    if end < start:
+        raise ApiError(400, "end must not be before start")
+    if (end - start).days > 366:
+        raise ApiError(400, "Диапазон слишком большой (максимум 366 дней)")
+    return await get_activity_history(db, user.id, start, end)
 
 
 @router.get("/me/progress/topic/{topic_id}")

@@ -26,6 +26,7 @@ import 'features/auth/presentation/login_screen.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'features/leaderboard/presentation/leaderboard_screen.dart';
 import 'features/lesson_runner/presentation/lesson_runner_screen.dart';
+import 'features/profile/presentation/activity_history_screen.dart';
 import 'features/profile/presentation/profile_qr_screen.dart';
 import 'features/profile/presentation/profile_screen.dart';
 import 'features/settings/presentation/personal_details_screen.dart';
@@ -154,6 +155,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => AdminUserDetailScreen(userId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/profile/qr', builder: (context, state) => const ProfileQrScreen()),
+      GoRoute(path: '/profile/activity-history', builder: (context, state) => const ActivityHistoryScreen()),
       GoRoute(path: '/my-words', builder: (context, state) => const MyWordsScreen()),
       GoRoute(
         path: '/users/:id',

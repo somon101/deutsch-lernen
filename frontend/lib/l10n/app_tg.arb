@@ -232,6 +232,11 @@
 
   "weekActivityAvgPerDay": "{minutes}д/рӯз",
 
+  "activityHistoryTitle": "Таърихи фаъолият",
+  "activityHistoryLoadError": "Боркунии таърих ноком шуд: {error}",
+  "activityHistoryMinutesActive": "{minutes} дақ фаъолият",
+  "activityHistoryNoActivity": "Фаъолият нест",
+
   "stageVocabulary": "Калимаҳо",
   "stageMaterial": "Мавод",
   "stageVideo": "Видео",

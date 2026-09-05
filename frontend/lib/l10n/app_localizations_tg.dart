@@ -669,6 +669,22 @@ class AppLocalizationsTg extends AppLocalizations {
   }
 
   @override
+  String get activityHistoryTitle => 'Таърихи фаъолият';
+
+  @override
+  String activityHistoryLoadError(Object error) {
+    return 'Боркунии таърих ноком шуд: $error';
+  }
+
+  @override
+  String activityHistoryMinutesActive(int minutes) {
+    return '$minutes дақ фаъолият';
+  }
+
+  @override
+  String get activityHistoryNoActivity => 'Фаъолият нест';
+
+  @override
   String get stageVocabulary => 'Калимаҳо';
 
   @override

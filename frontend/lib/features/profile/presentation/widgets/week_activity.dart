@@ -19,9 +19,15 @@ List<String> _dayLabels(AppLocalizations l10n) => [
 /// 2026-08-29 — real data now, not a placeholder): a 7-dot week row, then
 /// the average time/day and a today-vs-yesterday change indicator.
 class WeekActivityCard extends StatelessWidget {
-  const WeekActivityCard({super.key, required this.activity});
+  const WeekActivityCard({super.key, required this.activity, this.onSeeAll});
 
   final WeekActivitySummary activity;
+
+  /// Opens the full activity-history calendar (§ activity history
+  /// calendar, 2026-09-05) — null on the read-only "another user's
+  /// profile" usage of this same card, where there's no history endpoint
+  /// scoped to someone else yet, so no button renders there at all.
+  final VoidCallback? onSeeAll;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +41,24 @@ class WeekActivityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.weekActivityTitle, style: ProfileTypography.sectionTitle(context)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(l10n.weekActivityTitle, style: ProfileTypography.sectionTitle(context)),
+              if (onSeeAll != null)
+                TextButton(
+                  onPressed: onSeeAll,
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 0), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(l10n.profileSeeAll, style: ProfileTypography.body(context).copyWith(color: c.accent)),
+                      Icon(Icons.chevron_right, size: 18, color: c.accent),
+                    ],
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

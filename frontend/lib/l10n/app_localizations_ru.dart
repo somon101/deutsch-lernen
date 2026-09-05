@@ -669,6 +669,22 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get activityHistoryTitle => 'История активности';
+
+  @override
+  String activityHistoryLoadError(Object error) {
+    return 'Не удалось загрузить историю: $error';
+  }
+
+  @override
+  String activityHistoryMinutesActive(int minutes) {
+    return '$minutes мин активности';
+  }
+
+  @override
+  String get activityHistoryNoActivity => 'Нет активности';
+
+  @override
   String get stageVocabulary => 'Слова';
 
   @override

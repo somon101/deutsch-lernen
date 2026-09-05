@@ -197,6 +197,20 @@ class ProfileRepository {
   Future<Map<String, dynamic>> fetchWeekActivityRaw() {
     return _api.get('/api/me/activity/week');
   }
+
+  /// One calendar month's per-day activity (§ activity history calendar,
+  /// 2026-09-05) — the "Все" button on the week card opens a screen built
+  /// entirely from this, one month fetch at a time.
+  Future<List<DayActivity>> fetchActivityHistory(DateTime start, DateTime end) async {
+    final res = await fetchActivityHistoryRaw(start, end);
+    return (res['days'] as List<dynamic>).map((d) => DayActivity.fromJson(d as Map<String, dynamic>)).toList();
+  }
+
+  /// Raw-JSON variant for the caching layer (see cached_json.dart).
+  Future<Map<String, dynamic>> fetchActivityHistoryRaw(DateTime start, DateTime end) {
+    String iso(DateTime d) => d.toIso8601String().split('T').first;
+    return _api.get('/api/me/activity/history', query: {'start': iso(start), 'end': iso(end)});
+  }
 }
 
 /// One calendar day's activity summary (§ streak mode, 2026-08-29).
@@ -335,5 +349,21 @@ final weekActivityProvider = StreamProvider.autoDispose<WeekActivitySummary>((re
   final repo = ref.watch(profileRepositoryProvider);
   await for (final raw in cachedJsonStream(key: 'week_activity', fetchFresh: () => repo.fetchWeekActivityRaw())) {
     yield WeekActivitySummary.fromJson(raw);
+  }
+});
+
+/// One calendar month's activity for the full-history screen (§ activity
+/// history calendar, 2026-09-05), keyed by year+month so switching months
+/// caches each one independently instead of refetching a month you already
+/// paged past. `month` is 1-12.
+final activityHistoryMonthProvider = StreamProvider.autoDispose.family<List<DayActivity>, ({int year, int month})>((ref, ym) async* {
+  final repo = ref.watch(profileRepositoryProvider);
+  final start = DateTime(ym.year, ym.month, 1);
+  final end = DateTime(ym.year, ym.month + 1, 0);
+  await for (final raw in cachedJsonStream(
+    key: 'activity_history_${ym.year}_${ym.month}',
+    fetchFresh: () => repo.fetchActivityHistoryRaw(start, end),
+  )) {
+    yield (raw['days'] as List<dynamic>).map((d) => DayActivity.fromJson(d as Map<String, dynamic>)).toList();
   }
 });
