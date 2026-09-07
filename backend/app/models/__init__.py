@@ -17,6 +17,7 @@ from app.models.lesson_edge import LessonEdge
 from app.models.lesson_node import LessonNode
 from app.models.lesson_node_media import LessonNodeMedia
 from app.models.lesson_question import LessonQuestion
+from app.models.lesson_reminder import LessonReminderLog
 from app.models.lesson_state import LessonAttempt, LessonState
 from app.models.level import Level
 from app.models.login_event import LoginEvent
@@ -60,6 +61,7 @@ __all__ = [
     "LessonNode",
     "LessonNodeMedia",
     "LessonQuestion",
+    "LessonReminderLog",
     "LessonState",
     "Level",
     "LoginEvent",

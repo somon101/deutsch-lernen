@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     firebase_project_id: str = ""
     firebase_service_account_json_b64: str = ""
 
+    # Shared secret the lesson-reminder cron trigger (a scheduled GitHub
+    # Actions workflow, since Cloud Run has no built-in scheduler) presents
+    # via the X-Cron-Secret header (§ lesson reminder fix, 2026-09-07) —
+    # left unset, the endpoint refuses every request rather than running
+    # with no auth at all.
+    cron_secret: str = ""
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

@@ -11,21 +11,40 @@ overwrite, with its own stale copy, a setting changed a moment earlier on
 another device.
 """
 
+from zoneinfo import available_timezones
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.errors import ApiError
 from app.models.daily_goal import UserPreference
 from app.services.daily_goal import DEFAULT_GOAL_MINUTES, is_allowed_goal
 
 # What a user who has never opened Settings gets. Both sounds on, because
 # that is exactly how the app behaved before these switches existed — adding
-# a setting must not silently change anyone's experience.
+# a setting must not silently change anyone's experience. pushEnabled/
+# lessonReminderEnabled/lessonReminderHour/lessonReminderMinute mirror
+# SettingsPrefs.defaults in the (now-retired for these fields) frontend
+# settings_repository.dart exactly, so migrating a user who never touches
+# Settings again changes nothing about what they'd see.
 DEFAULTS = {
     "dailyGoalMinutes": DEFAULT_GOAL_MINUTES,
     "lessonSoundEnabled": True,
     "wordAudioEnabled": True,
+    "pushEnabled": True,
+    "lessonReminderEnabled": False,
+    "lessonReminderHour": 19,
+    "lessonReminderMinute": 0,
+    "timezone": None,
 }
+
+_FIELDS = ("dailyGoalMinutes", "lessonSoundEnabled", "wordAudioEnabled", "pushEnabled", "lessonReminderEnabled", "lessonReminderHour", "lessonReminderMinute", "timezone")
+
+# Computed once at import time — available_timezones() reads a data file
+# every call; nothing about the valid IANA name set changes while the
+# process is running.
+_VALID_TIMEZONES = available_timezones()
 
 
 def _serialize(row: UserPreference | None) -> dict:
@@ -38,6 +57,11 @@ def _serialize(row: UserPreference | None) -> dict:
         "dailyGoalMinutes": row.dailyGoalMinutes if is_allowed_goal(row.dailyGoalMinutes) else DEFAULT_GOAL_MINUTES,
         "lessonSoundEnabled": bool(row.lessonSoundEnabled),
         "wordAudioEnabled": bool(row.wordAudioEnabled),
+        "pushEnabled": bool(row.pushEnabled),
+        "lessonReminderEnabled": bool(row.lessonReminderEnabled),
+        "lessonReminderHour": row.lessonReminderHour,
+        "lessonReminderMinute": row.lessonReminderMinute,
+        "timezone": row.timezone,
     }
 
 
@@ -49,16 +73,23 @@ async def get_preferences(db: AsyncSession, user_id: str) -> dict:
 async def update_preferences(db: AsyncSession, user_id: str, changes: dict) -> dict:
     """Applies only the keys actually present in `changes`.
 
-    Validation has already happened in the schema — the values arriving here
-    are booleans, and the goal is one of the five allowed numbers.
+    Validation has already happened in the schema for every field except
+    `timezone` — a plain string that has to be checked against the real IANA
+    database here, since pydantic has no built-in "is this a real zone name"
+    type. An unrecognized value is rejected outright rather than silently
+    stored: a bad timezone would otherwise make the reminder tick either
+    skip the user forever or compute the wrong local time for them.
     """
+    if "timezone" in changes and changes["timezone"] not in _VALID_TIMEZONES:
+        raise ApiError(400, f"Неизвестный часовой пояс: {changes['timezone']!r}")
+
     row = (await db.execute(select(UserPreference).where(UserPreference.userId == user_id))).scalar_one_or_none()
     creating = row is None
     if row is None:
         row = UserPreference(userId=user_id, **DEFAULTS)
         db.add(row)
 
-    for field in ("dailyGoalMinutes", "lessonSoundEnabled", "wordAudioEnabled"):
+    for field in _FIELDS:
         if field in changes:
             setattr(row, field, changes[field])
 
@@ -80,7 +111,7 @@ async def update_preferences(db: AsyncSession, user_id: str, changes: dict) -> d
     except IntegrityError:
         await db.rollback()
         row = (await db.execute(select(UserPreference).where(UserPreference.userId == user_id))).scalar_one()
-        for field in ("dailyGoalMinutes", "lessonSoundEnabled", "wordAudioEnabled"):
+        for field in _FIELDS:
             if field in changes:
                 setattr(row, field, changes[field])
         await db.commit()

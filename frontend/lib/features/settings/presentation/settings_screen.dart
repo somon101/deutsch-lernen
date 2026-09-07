@@ -16,6 +16,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../profile/data/profile_repository.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../data/daily_goal_repository.dart';
+import '../data/lesson_reminder_repository.dart';
 import '../data/settings_repository.dart';
 import 'widgets/avatar_picker_sheet.dart';
 import 'widgets/profile_header.dart';
@@ -123,6 +124,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
     final c = context.profileColors;
     final settings = ref.watch(settingsProvider);
+    final reminderSettings = ref.watch(lessonReminderPreferencesProvider);
     final effectiveLanguage = ref.watch(effectiveLanguageProvider).valueOrNull;
     final themeMode = ref.watch(themeModeProvider);
     final locale = ref.watch(localeProvider);
@@ -233,24 +235,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   SettingsSection(
                     title: l10n.sectionNotifications,
                     children: [
+                      // These three read/write the server-backed
+                      // lessonReminderPreferencesProvider (§ lesson reminder
+                      // fix, 2026-09-07), not the device-local
+                      // settingsProvider — the whole reason the reminder
+                      // never fired before was that nothing here ever
+                      // reached the server. streakReminder below is
+                      // unrelated and stays exactly as it was.
                       SettingsSwitchTile(
                         icon: Icons.notifications_outlined,
                         label: l10n.pushNotifications,
-                        value: settings.pushNotifications,
-                        onChanged: (v) => ref.read(settingsProvider.notifier).setPushNotifications(v),
+                        value: reminderSettings.pushEnabled,
+                        onChanged: (v) => ref.read(lessonReminderPreferencesProvider.notifier).setPushEnabled(v),
                       ),
                       SettingsSwitchTile(
                         icon: Icons.alarm_outlined,
                         label: l10n.lessonReminder,
-                        value: settings.lessonReminder,
-                        onChanged: (v) => ref.read(settingsProvider.notifier).setLessonReminder(v),
+                        value: reminderSettings.lessonReminderEnabled,
+                        onChanged: (v) => ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderEnabled(v),
                       ),
-                      if (settings.lessonReminder)
+                      if (reminderSettings.lessonReminderEnabled)
                         SettingsNavTile(
                           icon: Icons.access_time,
                           label: l10n.reminderTime,
-                          value: _formatTime(settings.lessonReminderHour, settings.lessonReminderMinute),
-                          onTap: () => _pickReminderTime(context, settings.lessonReminderHour, settings.lessonReminderMinute),
+                          value: _formatTime(reminderSettings.lessonReminderHour, reminderSettings.lessonReminderMinute),
+                          onTap: () => _pickReminderTime(context, reminderSettings.lessonReminderHour, reminderSettings.lessonReminderMinute),
                         ),
                       SettingsSwitchTile(
                         icon: Icons.local_fire_department_outlined,
@@ -480,6 +489,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _pickReminderTime(BuildContext context, int hour, int minute) async {
     final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: hour, minute: minute));
-    if (picked != null) await ref.read(settingsProvider.notifier).setLessonReminderTime(picked.hour, picked.minute);
+    if (picked != null) await ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderTime(picked.hour, picked.minute);
   }
 }

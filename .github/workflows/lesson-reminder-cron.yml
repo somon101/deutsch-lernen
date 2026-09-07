@@ -1,0 +1,23 @@
+name: Lesson Reminder Cron
+
+# Cloud Run has no built-in scheduler of its own — this is what actually
+# drives the lesson-reminder tick periodically (§ lesson reminder fix,
+# 2026-09-07). GitHub's schedule trigger isn't second-precise (it can slip
+# by several minutes under load), which is fine here: the reminder only
+# needs to notice "it's past the user's reminder time" within a few
+# minutes, not to the second, and every 10 minutes keeps the 2-hour repeat
+# chain comfortably granular.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder tick
+        run: |
+          curl -sf -X POST "https://deutsch-lernen-api-n3ss7qmkpa-an.a.run.app/api/cron/reminders" \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            -w "\nHTTP %{http_code}\n"

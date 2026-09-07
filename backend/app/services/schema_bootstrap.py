@@ -331,3 +331,42 @@ async def ensure_content_locale_tables(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_content_locale_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# Kept byte-for-byte in step with
+# server/prisma/migrations/20260907100000_lesson_reminder/migration.sql.
+_LESSON_REMINDER_STATEMENTS = (
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "pushEnabled" BOOLEAN NOT NULL DEFAULT true',
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "lessonReminderEnabled" BOOLEAN NOT NULL DEFAULT false',
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "lessonReminderHour" INTEGER NOT NULL DEFAULT 19',
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "lessonReminderMinute" INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE "UserPreference" ADD COLUMN IF NOT EXISTS "timezone" TEXT',
+    """
+    CREATE TABLE IF NOT EXISTS "LessonReminderLog" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "reminderDate" DATE NOT NULL,
+        "sendCount" INTEGER NOT NULL DEFAULT 1,
+        "lastSentAt" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LessonReminderLog_pkey" PRIMARY KEY ("id")
+    )
+    """,
+    'CREATE UNIQUE INDEX IF NOT EXISTS "LessonReminderLog_userId_reminderDate_key" ON "LessonReminderLog"("userId", "reminderDate")',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "LessonReminderLog" ADD CONSTRAINT "LessonReminderLog_userId_fkey"
+            FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+)
+
+
+async def ensure_lesson_reminder_tables(db: AsyncSession) -> None:
+    for statement in _LESSON_REMINDER_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_lesson_reminder_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

@@ -16,3 +16,10 @@ regex==2024.11.6
 # Re-encodes uploaded photos to WebP (§ word photo weight, 2026-09-02) —
 # a 825 KB PNG becomes 23 KB at the same resolution.
 pillow==11.1.0
+# stdlib zoneinfo has no bundled tz database of its own — it reads the
+# system's (e.g. /usr/share/zoneinfo on Linux) if present, and otherwise
+# falls back to importing this package automatically. Not guaranteed to be
+# on the Cloud Run base image, so pinned explicitly rather than assumed (§
+# lesson reminder fix, 2026-09-07 — services/reminders.py needs correct,
+# DST-aware local time per user via ZoneInfo).
+tzdata==2025.2

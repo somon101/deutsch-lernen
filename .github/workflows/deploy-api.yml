@@ -39,6 +39,7 @@ jobs:
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
             FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
             FIREBASE_SERVICE_ACCOUNT_JSON_B64=${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON_B64 }}
+            CRON_SECRET=${{ secrets.CRON_SECRET }}
           secrets: |
             DATABASE_URL=DATABASE_URL:latest
             JWT_SECRET=JWT_SECRET:latest

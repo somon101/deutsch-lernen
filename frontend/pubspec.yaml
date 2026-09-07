@@ -74,6 +74,7 @@ dependencies:
   # cached_network_image's own disk cache manager — a direct dependency
   # because Settings' "Очистить кэш" clears it explicitly (DefaultCacheManager).
   flutter_cache_manager: ^3.4.1
+  flutter_timezone: ^5.1.0
 
 dev_dependencies:
   flutter_test:

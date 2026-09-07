@@ -32,6 +32,18 @@ class UserPreference(Base):
     # pronunciation are different wishes, and one flag could not express both.
     lessonSoundEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     wordAudioEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Lesson-reminder settings (§ lesson reminder fix, 2026-09-07) — moved
+    # here from device-local SharedPreferences, which is exactly why the
+    # reminder never actually fired: the server had no way to know a time
+    # was ever set. `timezone` is an IANA name (e.g. "Asia/Dushanbe"), sent
+    # by the app whenever Settings loads — required to compute the user's
+    # local time correctly across DST; a user with no timezone on file is
+    # simply never considered by the reminder tick (see services/reminders.py).
+    pushEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    lessonReminderEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    lessonReminderHour: Mapped[int] = mapped_column(Integer, nullable=False, default=19)
+    lessonReminderMinute: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    timezone: Mapped[str | None] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, onupdate=utcnow)
 

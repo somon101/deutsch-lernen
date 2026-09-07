@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Literal
 
@@ -23,6 +23,16 @@ class PreferencesPatch(BaseModel):
     dailyGoalMinutes: Literal[3, 5, 10, 15, 20] | None = None
     lessonSoundEnabled: bool | None = None
     wordAudioEnabled: bool | None = None
+    # Lesson-reminder settings (§ lesson reminder fix, 2026-09-07).
+    pushEnabled: bool | None = None
+    lessonReminderEnabled: bool | None = None
+    lessonReminderHour: int | None = Field(default=None, ge=0, le=23)
+    lessonReminderMinute: int | None = Field(default=None, ge=0, le=59)
+    # IANA name (e.g. "Asia/Dushanbe") — validated against Python's own
+    # timezone database in the service layer, not here, so the 400 for a bad
+    # value reads the same way every other domain validation error in this
+    # app does (ApiError), not FastAPI's generic 422.
+    timezone: str | None = None
 
 
 @router.get("")

@@ -1,11 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// TODO: подключить API — none of this has a backend endpoint yet (no
-/// user-preferences table/route exists). Persisted locally in
-/// SharedPreferences purely so choices survive an app restart; every
-/// setter here is a placeholder for what will eventually be a PATCH to a
-/// real preferences endpoint.
+/// TODO: подключить API — dailyGoalMinutes/languageLevel/streakReminder have
+/// no backend endpoint yet. Persisted locally in SharedPreferences purely so
+/// choices survive an app restart; every setter here is a placeholder for
+/// what will eventually be a PATCH to a real preferences endpoint.
 enum LanguageLevel { a1, a2, b1, b2, c1, c2 }
 
 extension LanguageLevelLabel on LanguageLevel {
@@ -19,64 +18,43 @@ extension LanguageLevelLabel on LanguageLevel {
       };
 }
 
-// Lesson-sound and word-pronunciation toggles live in
-// core/settings/sound_preferences.dart (soundPreferencesProvider) —
-// server-backed, unlike everything else in this file.
+// Lesson-sound/word-pronunciation toggles live in
+// core/settings/sound_preferences.dart (soundPreferencesProvider), and
+// push/lesson-reminder settings live in
+// features/settings/data/lesson_reminder_repository.dart
+// (lessonReminderPreferencesProvider, § lesson reminder fix, 2026-09-07) —
+// both server-backed, unlike everything still in this file.
 class SettingsPrefs {
   const SettingsPrefs({
     required this.dailyGoalMinutes,
     required this.languageLevel,
-    required this.pushNotifications,
-    required this.lessonReminder,
-    required this.lessonReminderHour,
-    required this.lessonReminderMinute,
     required this.streakReminder,
   });
 
   final int dailyGoalMinutes;
   final LanguageLevel languageLevel;
-  final bool pushNotifications;
-  final bool lessonReminder;
-  final int lessonReminderHour;
-  final int lessonReminderMinute;
   final bool streakReminder;
 
   static const defaults = SettingsPrefs(
     dailyGoalMinutes: 20,
     languageLevel: LanguageLevel.a1,
-    pushNotifications: true,
-    lessonReminder: false,
-    lessonReminderHour: 19,
-    lessonReminderMinute: 0,
     streakReminder: true,
   );
 
   SettingsPrefs copyWith({
     int? dailyGoalMinutes,
     LanguageLevel? languageLevel,
-    bool? pushNotifications,
-    bool? lessonReminder,
-    int? lessonReminderHour,
-    int? lessonReminderMinute,
     bool? streakReminder,
   }) =>
       SettingsPrefs(
         dailyGoalMinutes: dailyGoalMinutes ?? this.dailyGoalMinutes,
         languageLevel: languageLevel ?? this.languageLevel,
-        pushNotifications: pushNotifications ?? this.pushNotifications,
-        lessonReminder: lessonReminder ?? this.lessonReminder,
-        lessonReminderHour: lessonReminderHour ?? this.lessonReminderHour,
-        lessonReminderMinute: lessonReminderMinute ?? this.lessonReminderMinute,
         streakReminder: streakReminder ?? this.streakReminder,
       );
 }
 
 const _kDailyGoal = 'settings_daily_goal';
 const _kLevel = 'settings_level';
-const _kPush = 'settings_push';
-const _kLessonReminder = 'settings_lesson_reminder';
-const _kReminderHour = 'settings_reminder_hour';
-const _kReminderMinute = 'settings_reminder_minute';
 const _kStreakReminder = 'settings_streak_reminder';
 
 class SettingsNotifier extends Notifier<SettingsPrefs> {
@@ -92,10 +70,6 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
     state = SettingsPrefs(
       dailyGoalMinutes: prefs.getInt(_kDailyGoal) ?? d.dailyGoalMinutes,
       languageLevel: LanguageLevel.values.byName(prefs.getString(_kLevel) ?? d.languageLevel.name),
-      pushNotifications: prefs.getBool(_kPush) ?? d.pushNotifications,
-      lessonReminder: prefs.getBool(_kLessonReminder) ?? d.lessonReminder,
-      lessonReminderHour: prefs.getInt(_kReminderHour) ?? d.lessonReminderHour,
-      lessonReminderMinute: prefs.getInt(_kReminderMinute) ?? d.lessonReminderMinute,
       streakReminder: prefs.getBool(_kStreakReminder) ?? d.streakReminder,
     );
   }
@@ -105,19 +79,11 @@ class SettingsNotifier extends Notifier<SettingsPrefs> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kDailyGoal, next.dailyGoalMinutes);
     await prefs.setString(_kLevel, next.languageLevel.name);
-    await prefs.setBool(_kPush, next.pushNotifications);
-    await prefs.setBool(_kLessonReminder, next.lessonReminder);
-    await prefs.setInt(_kReminderHour, next.lessonReminderHour);
-    await prefs.setInt(_kReminderMinute, next.lessonReminderMinute);
     await prefs.setBool(_kStreakReminder, next.streakReminder);
   }
 
   Future<void> setDailyGoal(int minutes) => _apply(state.copyWith(dailyGoalMinutes: minutes));
   Future<void> setLanguageLevel(LanguageLevel level) => _apply(state.copyWith(languageLevel: level));
-  Future<void> setPushNotifications(bool value) => _apply(state.copyWith(pushNotifications: value));
-  Future<void> setLessonReminder(bool value) => _apply(state.copyWith(lessonReminder: value));
-  Future<void> setLessonReminderTime(int hour, int minute) =>
-      _apply(state.copyWith(lessonReminderHour: hour, lessonReminderMinute: minute));
   Future<void> setStreakReminder(bool value) => _apply(state.copyWith(streakReminder: value));
 }
 
