@@ -488,7 +488,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _pickReminderTime(BuildContext context, int hour, int minute) async {
-    final picked = await showTimePicker(context: context, initialTime: TimeOfDay(hour: hour, minute: minute));
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: hour, minute: minute),
+      // Forces a 24-hour dial/text field regardless of the device's own
+      // locale time-format setting (§ lesson reminder fix, 2026-09-08 QA
+      // finding) — the default AM/PM keyboard-entry mode kept a stale PM
+      // carried over from the 19:00 initial default when only the hour
+      // digits were retyped, silently saving e.g. "11" as 23:00 instead of
+      // 11:00. A 24-hour field removes that ambiguity outright.
+      builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true), child: child!),
+    );
     if (picked != null) await ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderTime(picked.hour, picked.minute);
   }
 }
