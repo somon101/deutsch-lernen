@@ -45,7 +45,7 @@ from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, text
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -129,12 +129,16 @@ async def _maybe_send_for_user(db: AsyncSession, pref: UserPreference, now_utc: 
     if now_utc - log.lastSentAt < REPEAT_INTERVAL:
         return False  # too soon since the last one for a repeat to be due
 
+    # Column-bound update() rather than raw SQL text() — lets SQLAlchemy's
+    # own type system bind `now_utc`/`log.lastSentAt` correctly regardless of
+    # backend, instead of relying on the DBAPI driver's own guess for a bare
+    # parameter dict. The `lastSentAt == log.lastSentAt` clause is the actual
+    # guard: only a request that read the SAME lastSentAt this one did can
+    # win the update, so two racing repeats can't both succeed.
     result = await db.execute(
-        text(
-            'UPDATE "LessonReminderLog" SET "sendCount" = "sendCount" + 1, "lastSentAt" = :now '
-            'WHERE "userId" = :uid AND "reminderDate" = :d AND "lastSentAt" = :prev_sent'
-        ),
-        {"now": now_utc, "uid": pref.userId, "d": today_local, "prev_sent": log.lastSentAt},
+        update(LessonReminderLog)
+        .where(LessonReminderLog.userId == pref.userId, LessonReminderLog.reminderDate == today_local, LessonReminderLog.lastSentAt == log.lastSentAt)
+        .values(sendCount=LessonReminderLog.sendCount + 1, lastSentAt=now_utc)
     )
     await db.commit()
     if result.rowcount == 0:
