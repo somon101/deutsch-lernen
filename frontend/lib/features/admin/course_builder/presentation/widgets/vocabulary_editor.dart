@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../../core/api/api_client.dart';
 import '../../../../../core/widgets/word_audio_button.dart';
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
@@ -145,9 +147,15 @@ class _WordRowState extends ConsumerState<_WordRow> {
   }
 
   Future<void> _delete() async {
+    // § shared dictionary, 2026-09-14 — for a word only REUSED here (not
+    // native to this lesson), the backend's own removeWord now removes
+    // just the link, so the confirmation should say so rather than imply
+    // the word itself is being deleted.
     final ok = await confirmDialog(
       context,
-      title: 'Удалить слово «${widget.word.german}» из словаря курса?',
+      title: widget.word.isNative
+          ? 'Удалить слово «${widget.word.german}» из словаря курса?'
+          : 'Убрать переиспользованное слово «${widget.word.german}» из этого урока?',
     );
     if (!ok) return;
     try {
@@ -260,8 +268,47 @@ class _WordRowState extends ConsumerState<_WordRow> {
     }
   }
 
+  /// § shared dictionary, 2026-09-14 — a word this lesson only REUSES (not
+  /// its native home) is shown read-only: its own edit/audio/image/
+  /// translation endpoints all require the NATIVE course/lesson, which
+  /// this row doesn't have. Editing happens in the "Словарь" screen
+  /// instead, which always knows a word's real home.
+  Widget _buildLinkedRow(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          WordAudioButton(word: widget.word.german, audioUrl: widget.word.audioUrl),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: widget.word.german, style: AdminTypography.body.copyWith(fontWeight: FontWeight.w600)),
+                    TextSpan(text: '  —  ${widget.word.translation}', style: AdminTypography.body),
+                  ]),
+                ),
+                Text('Слово из общего словаря — переиспользовано в этом уроке', style: AdminTypography.caption),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => context.go('/admin/vocabulary'),
+            style: AdminButtonStyles.text(),
+            child: const Text('Открыть в словаре'),
+          ),
+          AdminDeleteLink(onPressed: _delete, label: 'Убрать'),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!widget.word.isNative) return _buildLinkedRow(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -395,11 +442,27 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
     });
   }
 
-  void _pickSuggestion(WordLibraryEntry entry) {
-    _german.text = entry.german;
-    _translation.text = entry.translation;
-    _pronunciation.text = entry.pronunciation;
-    setState(() => _suggestions = null);
+  /// Attaches the EXISTING word by id, no copy (§ shared dictionary,
+  /// 2026-09-14) — this used to just copy the suggestion's text into the
+  /// form fields, leaving the admin to press "+ Добавить" and create a
+  /// second, unrelated row; that's exactly the duplication this feature
+  /// exists to stop.
+  Future<void> _pickSuggestion(WordLibraryEntry entry) async {
+    setState(() {
+      _suggestions = null;
+      _busy = true;
+    });
+    try {
+      await ref.read(builderRepositoryProvider).linkExistingWord(widget.courseId, widget.lessonId, entry.id);
+      _german.clear();
+      _translation.clear();
+      _pronunciation.clear();
+      widget.onChanged();
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось добавить слово из словаря');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -474,17 +537,26 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
             ),
             child: Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Уже есть в словаре — нажмите, чтобы добавить сюда же (без копии):', style: AdminTypography.caption),
+                  ),
+                ),
+                // § shared dictionary, 2026-09-14 — tapping one of these
+                // now calls linkExistingWord (attach by id) instead of
+                // copying text into the form above; every entry here is a
+                // real, separate VocabularyItem row (search no longer
+                // dedupes by text), so its own location is shown to tell
+                // them apart.
                 for (final s in _suggestions!)
                   ListTile(
                     dense: true,
-                    title: Text(
-                      '${s.german} — ${s.translation}',
-                      style: AdminTypography.body,
-                    ),
-                    subtitle: Text(
-                      'Уже есть в другом уроке — использовать?',
-                      style: AdminTypography.caption,
-                    ),
+                    enabled: !_busy,
+                    leading: s.imageUrl == null ? null : CircleAvatar(backgroundImage: NetworkImage(ref.read(apiClientProvider).assetUrl(s.imageUrl))),
+                    title: Text('${s.german} — ${s.translation}', style: AdminTypography.body),
+                    subtitle: Text(s.locationLabel, style: AdminTypography.caption),
                     onTap: () => _pickSuggestion(s),
                   ),
               ],

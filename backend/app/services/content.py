@@ -109,11 +109,18 @@ async def list_legacy_lessons(db: AsyncSession) -> list[dict]:
 
 
 async def get_lesson_content(db: AsyncSession, lesson_id: str) -> dict:
+    # Local import: services/vocabulary.py imports normalize_word from this
+    # very module, so a top-level import here would be circular.
+    from app.services.vocabulary import get_linked_items_by_lesson
+
     content = await db.get(LessonContent, lesson_id)
     vocab_result = await db.execute(
         select(VocabularyItem).where(VocabularyItem.lessonId == lesson_id).order_by(VocabularyItem.position)
     )
-    vocabulary = vocab_result.scalars().all()
+    vocabulary = list(vocab_result.scalars().all())
+    # Words reused into this lesson via LessonVocabularyLink (§ shared
+    # dictionary, 2026-09-14), on top of its own native words above.
+    vocabulary += (await get_linked_items_by_lesson(db, [lesson_id])).get(lesson_id, [])
     q_result = await db.execute(
         select(LessonQuestion).where(LessonQuestion.lessonId == lesson_id).order_by(LessonQuestion.setName, LessonQuestion.position)
     )
@@ -124,7 +131,19 @@ async def get_lesson_content(db: AsyncSession, lesson_id: str) -> dict:
     blocks = b_result.scalars().all()
 
     vocabulary_dtos = [
-        {"id": v.id, "german": v.german, "translation": v.translation, "pronunciation": v.pronunciation, "audioUrl": v.audioUrl}
+        {
+            "id": v.id,
+            "german": v.german,
+            "translation": v.translation,
+            "pronunciation": v.pronunciation,
+            "audioUrl": v.audioUrl,
+            "imageUrl": v.imageUrl,
+            # § shared dictionary, 2026-09-14 — see get_course's identical
+            # word_dto field for what these mean.
+            "isNative": v.lessonId == lesson_id,
+            "nativeLessonId": v.lessonId,
+            "nativeCourseId": v.courseId,
+        }
         for v in vocabulary
     ]
     material_text = content.materialText if content else None

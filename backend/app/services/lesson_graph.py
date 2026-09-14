@@ -33,6 +33,7 @@ from app.models.material import Material
 from app.models.material_block import MaterialBlock
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import LEGACY_COURSE_ID
+from app.services.vocabulary import get_linked_items_by_lesson
 
 NODE_TYPES = ("vocabulary", "material", "video", "audio", "minitest", "practice", "review")
 # Node types backed by their own content row (as opposed to vocabulary/video/
@@ -151,6 +152,11 @@ async def _synthesize_legacy_chain(db: AsyncSession, course_id: str, lesson: Cou
     chain: list[dict] = []
 
     has_words = await db.scalar(select(VocabularyItem.id).where(VocabularyItem.lessonId == lesson.id).limit(1))
+    if not has_words:
+        # § shared dictionary, 2026-09-14 — a lesson can teach vocabulary
+        # purely by reuse (no native VocabularyItem row of its own), and
+        # still needs its "Слова" node when converting to a graph.
+        has_words = bool((await get_linked_items_by_lesson(db, [lesson.id])).get(lesson.id))
     if has_words:
         chain.append({"type": "vocabulary", "refId": None, "mediaUrl": None, "title": None})
 

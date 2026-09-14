@@ -26,6 +26,7 @@ from app.models.lesson_edge import LessonEdge
 from app.models.lesson_node import LessonNode
 from app.models.lesson_node_media import LessonNodeMedia
 from app.models.lesson_question import LessonQuestion
+from app.models.lesson_vocabulary_link import LessonVocabularyLink
 from app.models.level import Level
 from app.models.material import Material
 from app.models.material_block import MaterialBlock
@@ -39,7 +40,7 @@ from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_qui
 from app.services.content_locale import DEFAULT_CONTENT_LOCALE, SUPPORTED_CONTENT_LOCALES, translations_by_locale
 from app.services.lesson_graph import bulk_graphs_for_lessons
 from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
-from app.services.vocabulary import get_or_create_category
+from app.services.vocabulary import get_linked_items_by_lesson, get_or_create_category
 from app.utils import to_iso_z, utcnow
 
 STAGE_TITLES = {"minitest": "Мини-тест", "practice": "Практика", "review": "Закрепление"}
@@ -156,7 +157,18 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
         if lesson_ids
         else []
     )
-    word_ids = [w.id for w in words]
+    # Words reused into these lessons via LessonVocabularyLink (§ shared
+    # dictionary, 2026-09-14), on top of each lesson's own native words
+    # above — empty for every lesson that's never had a word attached this
+    # way, which is every lesson that existed before this table did.
+    linked_items_by_lesson = await get_linked_items_by_lesson(db, lesson_ids)
+    words_by_lesson: dict[str, list[VocabularyItem]] = {}
+    for w in words:
+        words_by_lesson.setdefault(w.lessonId, []).append(w)
+    for lid, linked_items in linked_items_by_lesson.items():
+        words_by_lesson.setdefault(lid, []).extend(linked_items)
+
+    word_ids = [w.id for w in words] + [w.id for items in linked_items_by_lesson.values() for w in items]
     word_translations_result = (
         (await db.execute(select(VocabularyTranslation).where(VocabularyTranslation.vocabularyItemId.in_(word_ids))))
         .scalars()
@@ -194,14 +206,14 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
     new_vocab_keys_by_lesson: dict[str, set[str]] = {}
     for lesson in lessons:
         new_vocab_keys_by_lesson[lesson.id] = set(taught_so_far)
-        taught_so_far |= {w.germanKey for w in words if w.lessonId == lesson.id}
+        taught_so_far |= {w.germanKey for w in words_by_lesson.get(lesson.id, [])}
 
     new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids, locale)
     pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks], locale)
     graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids, locale)
 
     def lesson_dto(lesson: CourseLesson) -> dict:
-        lesson_words = [w for w in words if w.lessonId == lesson.id]
+        lesson_words = words_by_lesson.get(lesson.id, [])
         lesson_questions = [q for q in questions if q.lessonId == lesson.id]
         lesson_blocks = [b for b in blocks if b.lessonId == lesson.id]
         def word_dto(w: VocabularyItem) -> dict:
@@ -220,6 +232,14 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
                 # column IS today's Russian text, not a fallback standing in
                 # for one. Only a non-default locale needs an explicit row.
                 "contentLocaleComplete": (locale == DEFAULT_CONTENT_LOCALE or w_resolved is not None) if locale else None,
+                # § shared dictionary, 2026-09-14 — false means this word is
+                # only REUSED here via LessonVocabularyLink, not owned by
+                # this lesson; nativeLessonId/nativeCourseId are always this
+                # word's true home, so an editor can route edit/delete
+                # actions there regardless of which lesson is showing it.
+                "isNative": w.lessonId == lesson.id,
+                "nativeLessonId": w.lessonId,
+                "nativeCourseId": w.courseId,
             }
 
         vocabulary_dtos = [word_dto(w) for w in lesson_words]
@@ -575,6 +595,32 @@ async def delete_lesson(db: AsyncSession, course_id: str, lesson_id: str) -> dic
     lesson = result.scalar_one_or_none()
     if not lesson:
         return None
+
+    # A word natively owned by this lesson but ALSO reused elsewhere
+    # (§ shared dictionary, 2026-09-14) gets promoted to one of those other
+    # lessons instead of being deleted along with this one — otherwise
+    # deleting this lesson would cascade-delete the word and silently
+    # remove it from every other lesson reusing it too, breaking exactly
+    # the guarantee this feature exists to make.
+    native_words = (await db.execute(select(VocabularyItem).where(VocabularyItem.lessonId == lesson_id))).scalars().all()
+    if native_words:
+        native_ids = [w.id for w in native_words]
+        links = (
+            await db.execute(select(LessonVocabularyLink).where(LessonVocabularyLink.wordId.in_(native_ids)).order_by(LessonVocabularyLink.createdAt))
+        ).scalars().all()
+        first_link_by_word: dict[str, LessonVocabularyLink] = {}
+        for link in links:
+            first_link_by_word.setdefault(link.wordId, link)
+        for word in native_words:
+            promote_to = first_link_by_word.get(word.id)
+            if promote_to is None:
+                continue
+            word.lessonId = promote_to.lessonId
+            word.courseId = promote_to.courseId
+            await db.delete(promote_to)
+        await db.flush()  # the reassignment above must land before the bulk deletes below run
+
+    await db.execute(LessonVocabularyLink.__table__.delete().where(LessonVocabularyLink.lessonId == lesson_id))
     await db.execute(VocabularyItem.__table__.delete().where(VocabularyItem.lessonId == lesson_id))
     await db.execute(LessonQuestion.__table__.delete().where(LessonQuestion.lessonId == lesson_id))
     await db.execute(LessonBlock.__table__.delete().where(LessonBlock.lessonId == lesson_id))
@@ -820,20 +866,58 @@ async def search_material_library(db: AsyncSession, query: str) -> list[dict]:
 
 
 async def search_word_library(db: AsyncSession, query: str) -> list[dict]:
+    """Every matching word, each with its own real id (§ shared dictionary,
+    2026-09-14) — this used to dedupe by normalized text and throw the id
+    away, which is exactly why a teacher could never actually REUSE a
+    search result: there was no id left to attach. Deliberately NOT
+    deduped by text anymore: if the same word text exists as several
+    distinct rows (different courses, from before this feature existed),
+    each is a real, separately-owned entity and the caller needs to see
+    and pick the specific one they mean, not one arbitrary survivor."""
     q = query.strip()
     if len(q) < 2:
         return []
     result = await db.execute(
-        select(VocabularyItem.german, VocabularyItem.translation, VocabularyItem.pronunciation, VocabularyItem.germanKey)
+        select(VocabularyItem)
         .where(or_(VocabularyItem.german.ilike(f"%{q}%"), VocabularyItem.translation.ilike(f"%{q}%")))
         .order_by(VocabularyItem.german)
-        .limit(300)
+        .limit(30)
     )
-    by_key: dict[str, dict] = {}
-    for german, translation, pronunciation, german_key in result.all():
-        if german_key not in by_key:
-            by_key[german_key] = {"german": german, "translation": translation, "pronunciation": pronunciation}
-    return list(by_key.values())[:20]
+    items = result.scalars().all()
+    if not items:
+        return []
+
+    course_ids = {i.courseId for i in items}
+    course_titles: dict[str, str] = {}
+    if course_ids - {LEGACY_COURSE_ID}:
+        rows = (await db.execute(select(Course.id, Course.title).where(Course.id.in_(course_ids)))).all()
+        course_titles = dict(rows)
+    lesson_ids = {i.lessonId for i in items}
+    lesson_titles: dict[str, str] = {}
+    if lesson_ids:
+        rows = (await db.execute(select(CourseLesson.id, CourseLesson.title).where(CourseLesson.id.in_(lesson_ids)))).all()
+        lesson_titles = dict(rows)
+
+    def location_label(item: VocabularyItem) -> str:
+        if item.courseId == LEGACY_COURSE_ID:
+            return f"Немецкий с нуля — {lesson_label(item.lessonId)}"
+        course_title = course_titles.get(item.courseId, "курс")
+        lesson_title = lesson_titles.get(item.lessonId, lesson_label(item.lessonId))
+        return f"{course_title} — {lesson_title}"
+
+    return [
+        {
+            "id": item.id,
+            "german": item.german,
+            "translation": item.translation,
+            "pronunciation": item.pronunciation,
+            "imageUrl": item.imageUrl,
+            "courseId": item.courseId,
+            "lessonId": item.lessonId,
+            "locationLabel": location_label(item),
+        }
+        for item in items
+    ]
 
 
 async def derive_language_id(db: AsyncSession, course_id: str) -> str | None:
@@ -843,6 +927,42 @@ async def derive_language_id(db: AsyncSession, course_id: str) -> str | None:
     if course_id == LEGACY_COURSE_ID:
         return await db.scalar(select(Language.id).where(func.lower(func.trim(Language.name)) == "немецкий"))
     return await db.scalar(select(Level.languageId).join(Course, Course.levelId == Level.id).where(Course.id == course_id))
+
+
+async def link_existing_word_to_lesson(db: AsyncSession, course_id: str, lesson_id: str, word_id: str) -> dict | None:
+    """Attaches an EXISTING word to a lesson without copying it (§ shared
+    dictionary, 2026-09-14) — the actual "reuse" mechanism behind the
+    constructor's "выбрать существующее слово" flow. This never creates a
+    VocabularyItem row; it only ever adds a LessonVocabularyLink row (or
+    does nothing if the word is already present here, natively or via an
+    earlier link — attaching twice is not a second attach). Deliberately
+    NOT restricted to the word's own course: reusing a word across
+    different courses is exactly what this feature is for."""
+    if not await _owned_lesson(db, course_id, lesson_id):
+        return None
+    word = await db.get(VocabularyItem, word_id)
+    if not word:
+        return None
+    if word.lessonId == lesson_id:
+        return {"ok": True, "alreadyPresent": True}
+
+    existing_link = (
+        await db.execute(select(LessonVocabularyLink).where(LessonVocabularyLink.lessonId == lesson_id, LessonVocabularyLink.wordId == word_id))
+    ).scalar_one_or_none()
+    if existing_link:
+        return {"ok": True, "alreadyPresent": True}
+
+    last = await db.scalar(select(func.max(LessonVocabularyLink.position)).where(LessonVocabularyLink.lessonId == lesson_id))
+    db.add(LessonVocabularyLink(lessonId=lesson_id, courseId=course_id, wordId=word_id, position=(last if last is not None else -1) + 1))
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Another request attached the same word to this lesson a moment
+        # earlier (double-click, replayed request) — the row exists now,
+        # exactly as this call wanted, so there's nothing left to do.
+        await db.rollback()
+        return {"ok": True, "alreadyPresent": True}
+    return {"ok": True, "alreadyPresent": False}
 
 
 async def add_vocabulary_word(
@@ -860,20 +980,19 @@ async def add_vocabulary_word(
     language_id = await derive_language_id(db, course_id)
 
     last = await db.scalar(select(VocabularyItem.position).where(VocabularyItem.lessonId == lesson_id).order_by(VocabularyItem.position.desc()).limit(1))
-    db.add(
-        VocabularyItem(
-            courseId=course_id,
-            lessonId=lesson_id,
-            german=german,
-            translation=translation,
-            pronunciation=pronunciation,
-            position=(last if last is not None else -1) + 1,
-            germanKey=german_key,
-            categoryId=category_id,
-            imageUrl=image_url,
-            languageId=language_id,
-        )
+    word = VocabularyItem(
+        courseId=course_id,
+        lessonId=lesson_id,
+        german=german,
+        translation=translation,
+        pronunciation=pronunciation,
+        position=(last if last is not None else -1) + 1,
+        germanKey=german_key,
+        categoryId=category_id,
+        imageUrl=image_url,
+        languageId=language_id,
     )
+    db.add(word)
     try:
         await db.commit()
     except IntegrityError as e:
@@ -882,7 +1001,13 @@ async def add_vocabulary_word(
             raise
         clashes_now = await _find_word_clashes(db, course_id, [german_key])
         raise DuplicateWordError(_clash_message(clashes_now))
-    return {"ok": True}
+    # § shared dictionary, 2026-09-14 — the new word's id, so a caller that
+    # just created it (e.g. the "Словарь" screen's own create form) can
+    # immediately act on it further (upload an image) without a second
+    # round-trip to find it again. VocabularyItem.id has a Python-side
+    # default (a fresh uuid4), so `word.id` is already populated here even
+    # though it was never re-fetched from the database.
+    return {"ok": True, "id": word.id}
 
 
 async def update_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: str, word_id: str, changes: dict) -> dict | None:
@@ -946,10 +1071,37 @@ async def set_vocabulary_translation(
 
 
 async def delete_vocabulary_word(db: AsyncSession, course_id: str, lesson_id: str, word_id: str) -> dict | None:
-    result = await db.execute(select(VocabularyItem).where(VocabularyItem.id == word_id, VocabularyItem.lessonId == lesson_id, VocabularyItem.courseId == course_id))
-    word = result.scalar_one_or_none()
+    """"Remove this word from THIS lesson" (§ shared dictionary,
+    2026-09-14) — not always "delete the word". If `word_id` isn't native
+    to `lesson_id` (it's only here via LessonVocabularyLink), this removes
+    just that link; the word itself, and every other lesson using it, is
+    untouched. Only when `lesson_id` IS the word's native home does this
+    touch VocabularyItem at all — and even then it refuses if the word is
+    reused elsewhere, since deleting it here would otherwise silently
+    vanish it from every other lesson too. That explicit, deliberate
+    removal is the "Словарь" screen's own delete instead
+    (services/vocabulary.py's delete_word_globally)."""
+    word = await db.get(VocabularyItem, word_id)
     if not word:
         return None
+
+    if word.lessonId != lesson_id:
+        link = (
+            await db.execute(select(LessonVocabularyLink).where(LessonVocabularyLink.lessonId == lesson_id, LessonVocabularyLink.wordId == word_id))
+        ).scalar_one_or_none()
+        if not link:
+            return None
+        await db.delete(link)
+        await db.commit()
+        return {"ok": True}
+
+    if word.courseId != course_id:
+        return None
+
+    other_links = await db.scalar(select(func.count()).select_from(LessonVocabularyLink).where(LessonVocabularyLink.wordId == word_id))
+    if other_links:
+        raise DuplicateWordError(f"Это слово используется ещё в {other_links} уроке(ах). Уберите его оттуда или удалите полностью через раздел «Словарь».")
+
     await db.delete(word)
     await db.commit()
     return {"ok": True}

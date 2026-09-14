@@ -16,6 +16,7 @@ from app.services.schema_bootstrap import (
     ensure_daily_goal_tables,
     ensure_lesson_graph_tables,
     ensure_lesson_reminder_tables,
+    ensure_lesson_vocabulary_link_table,
     ensure_phone_removed,
 )
 from app.uploads.storage import UPLOADS_ROOT, ensure_storage_bucket
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
         await ensure_phone_removed(session)
         await ensure_content_locale_tables(session)
         await ensure_lesson_reminder_tables(session)
+        await ensure_lesson_vocabulary_link_table(session)
         await ensure_admin_exists(session)
     yield
 

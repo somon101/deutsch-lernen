@@ -88,6 +88,13 @@ class VocabularyImportPayload(BaseModel):
     words: list[VocabularyImportWordInput] = Field(min_length=1)
 
 
+class VocabularyLinkInput(BaseModel):
+    """§ shared dictionary, 2026-09-14 — attaches an EXISTING word (by id)
+    to a lesson without copying it."""
+
+    wordId: str = Field(min_length=1)
+
+
 class VocabularyTranslationInput(BaseModel):
     """One locale's variant of a word's translation (§ course content
     language, 2026-09-04) — `german`/`pronunciation` never appear here, see

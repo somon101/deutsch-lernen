@@ -206,6 +206,13 @@ class BuilderRepository {
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
 
+  /// Every category that already exists (§ word cards, 2026-08-31) — for
+  /// a "pick an existing one, or type a new name" category field.
+  Future<List<AdminCategory>> listCategories() async {
+    final res = await _api.get('/api/builder/vocabulary/categories');
+    return (res['categories'] as List<dynamic>).map((c) => AdminCategory.fromJson(c as Map<String, dynamic>)).toList();
+  }
+
   Future<List<WordLibraryEntry>> searchWordLibrary(String query) async {
     final res = await _api.get(
       '/api/builder/words/search',
@@ -249,21 +256,31 @@ class BuilderRepository {
   String _vocabBase(String courseId, String lessonId) =>
       '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/vocabulary';
 
-  Future<void> addWord(
+  /// Returns the new word's id (§ shared dictionary, 2026-09-14) — added
+  /// so a caller that just created a word (e.g. the "Словарь" screen's own
+  /// create form) can act on it further (upload an image) without a
+  /// second round-trip to find it again. Every existing caller that never
+  /// used the old `Future<void>` return value keeps working unchanged.
+  Future<String> addWord(
     String courseId,
     String lessonId, {
     required String german,
     required String translation,
     required String pronunciation,
+    String? categoryName,
+    String? imageUrl,
   }) async {
-    await _api.post(
+    final res = await _api.post(
       _vocabBase(courseId, lessonId),
       body: {
         'german': german,
         'translation': translation,
         'pronunciation': pronunciation,
+        'categoryName': ?categoryName,
+        'imageUrl': ?imageUrl,
       },
     );
+    return res['id'] as String;
   }
 
   Future<void> updateWord(
@@ -273,6 +290,7 @@ class BuilderRepository {
     String? german,
     String? translation,
     String? pronunciation,
+    String? categoryName,
   }) async {
     await _api.patch(
       '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}',
@@ -280,6 +298,7 @@ class BuilderRepository {
         'german': ?german,
         'translation': ?translation,
         'pronunciation': ?pronunciation,
+        'categoryName': ?categoryName,
       },
     );
   }
@@ -291,6 +310,57 @@ class BuilderRepository {
   ) async {
     await _api.delete(
       '${_vocabBase(courseId, lessonId)}/${Uri.encodeComponent(wordId)}',
+    );
+  }
+
+  /// Attaches an EXISTING word (picked via the dictionary search) to this
+  /// lesson without copying it (§ shared dictionary, 2026-09-14) — the
+  /// "выбрать существующее слово" half of the constructor's word picker.
+  Future<void> linkExistingWord(
+    String courseId,
+    String lessonId,
+    String wordId,
+  ) async {
+    await _api.post(
+      '${_vocabBase(courseId, lessonId)}/link',
+      body: {'wordId': wordId},
+    );
+  }
+
+  /// Every word in the system, browsable/searchable regardless of which
+  /// lesson it lives in (§ shared dictionary, 2026-09-14) — the admin
+  /// "Словарь" screen's data source.
+  Future<DictionaryPage> listDictionaryWords({
+    String? query,
+    String? languageId,
+    String? categoryId,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final res = await _api.get(
+      '/api/builder/vocabulary',
+      query: {
+        'q': ?query,
+        'languageId': ?languageId,
+        'categoryId': ?categoryId,
+        'limit': '$limit',
+        'offset': '$offset',
+      },
+    );
+    return DictionaryPage.fromJson(res);
+  }
+
+  /// Removes a word from the dictionary entirely, regardless of which
+  /// lesson(s) it's placed in (§ shared dictionary, 2026-09-14) — unlike
+  /// [removeWord] above (which only ever detaches from ONE lesson and
+  /// refuses if the word is still used elsewhere), this is the "Словарь"
+  /// screen's own deliberate, explicit delete. Without `force`, the server
+  /// refuses with a 409 (surfaced as ApiException) naming how many lessons/
+  /// learners are affected — the caller shows that as a real confirmation
+  /// and retries with `force: true` if the admin still wants to proceed.
+  Future<void> deleteWordGlobally(String wordId, {bool force = false}) async {
+    await _api.delete(
+      '/api/builder/vocabulary/${Uri.encodeComponent(wordId)}${force ? '?force=true' : ''}',
     );
   }
 

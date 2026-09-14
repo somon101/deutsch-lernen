@@ -19,6 +19,7 @@ from app.models.lesson_node_media import LessonNodeMedia
 from app.models.lesson_question import LessonQuestion
 from app.models.lesson_reminder import LessonReminderLog
 from app.models.lesson_state import LessonAttempt, LessonState
+from app.models.lesson_vocabulary_link import LessonVocabularyLink
 from app.models.level import Level
 from app.models.login_event import LoginEvent
 from app.models.material import Material
@@ -63,6 +64,7 @@ __all__ = [
     "LessonQuestion",
     "LessonReminderLog",
     "LessonState",
+    "LessonVocabularyLink",
     "Level",
     "LoginEvent",
     "Material",

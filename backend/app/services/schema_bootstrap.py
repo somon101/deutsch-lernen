@@ -370,3 +370,39 @@ async def ensure_lesson_reminder_tables(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_lesson_reminder_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# Kept byte-for-byte in step with
+# server/prisma/migrations/20260914120000_lesson_vocabulary_link/migration.sql.
+_LESSON_VOCABULARY_LINK_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "LessonVocabularyLink" (
+        "id" TEXT NOT NULL,
+        "lessonId" TEXT NOT NULL,
+        "courseId" TEXT NOT NULL,
+        "wordId" TEXT NOT NULL,
+        "position" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "LessonVocabularyLink_pkey" PRIMARY KEY ("id")
+    )
+    """,
+    'CREATE UNIQUE INDEX IF NOT EXISTS "LessonVocabularyLink_lessonId_wordId_key" ON "LessonVocabularyLink"("lessonId", "wordId")',
+    'CREATE INDEX IF NOT EXISTS "LessonVocabularyLink_wordId_idx" ON "LessonVocabularyLink"("wordId")',
+    'CREATE INDEX IF NOT EXISTS "LessonVocabularyLink_lessonId_idx" ON "LessonVocabularyLink"("lessonId")',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "LessonVocabularyLink" ADD CONSTRAINT "LessonVocabularyLink_wordId_fkey"
+            FOREIGN KEY ("wordId") REFERENCES "VocabularyItem"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+)
+
+
+async def ensure_lesson_vocabulary_link_table(db: AsyncSession) -> None:
+    for statement in _LESSON_VOCABULARY_LINK_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_lesson_vocabulary_link_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

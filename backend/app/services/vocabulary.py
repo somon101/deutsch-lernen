@@ -8,15 +8,25 @@ and grouping a user's learned words by category for "Мои слова".
 Nothing here duplicates a word card anywhere — a category is a small shared
 row words point at, and a user's "learned" state is a bare (userId, wordId)
 link, never a copy of the word itself.
+
+§ shared dictionary, 2026-09-14: this module also now owns the
+course/lesson-agnostic half of the word — browsing/searching every word
+that exists (`list_dictionary_words`, for the admin "Словарь" screen) and
+resolving how many places a word is actually used before letting it be
+deleted outright (`get_word_usage`/`delete_word_globally`). The lesson-
+scoped authoring endpoints (add/edit/delete a word FROM one lesson) stay in
+services/courses.py exactly as they were; this is only the cross-lesson view
+on top of the same VocabularyItem rows.
 """
 
 import random
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
+from app.models.lesson_vocabulary_link import LessonVocabularyLink
 from app.models.user_word_progress import UserWordProgress
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import normalize_word
@@ -67,6 +77,37 @@ async def get_words(db: AsyncSession, word_ids: list[str]) -> list[dict]:
     return [by_id[wid] for wid in word_ids if wid in by_id]
 
 
+async def get_linked_items_by_lesson(db: AsyncSession, lesson_ids: list[str]) -> dict[str, list[VocabularyItem]]:
+    """lessonId -> ordered list of VocabularyItem rows reused into it via
+    LessonVocabularyLink (§ shared dictionary, 2026-09-14) — words the
+    lesson teaches without owning (its native words are still the plain
+    `WHERE VocabularyItem.lessonId == X` query every caller already had).
+    Empty for any lesson that's never had a word attached this way — every
+    lesson that existed before this table did — so a caller that just adds
+    this on top of its existing native-word query behaves exactly as
+    before for them."""
+    if not lesson_ids:
+        return {}
+    links = (
+        await db.execute(
+            select(LessonVocabularyLink.lessonId, LessonVocabularyLink.wordId)
+            .where(LessonVocabularyLink.lessonId.in_(lesson_ids))
+            .order_by(LessonVocabularyLink.position)
+        )
+    ).all()
+    if not links:
+        return {}
+    word_ids = [wid for _, wid in links]
+    items = (await db.execute(select(VocabularyItem).where(VocabularyItem.id.in_(word_ids)))).scalars().all()
+    by_id = {i.id: i for i in items}
+    by_lesson: dict[str, list[VocabularyItem]] = {}
+    for lid, wid in links:
+        item = by_id.get(wid)
+        if item:
+            by_lesson.setdefault(lid, []).append(item)
+    return by_lesson
+
+
 async def get_or_create_category(db: AsyncSession, name: str) -> Category:
     """Reuses an existing category by name (case/punctuation-insensitive,
     same normalize_word idea VocabularyItem.germanKey already uses for
@@ -106,7 +147,9 @@ async def mark_lesson_words_learned(db: AsyncSession, user_id: str, lesson_id: s
     fully completed = its words are learned) — idempotent, so re-completing
     the same lesson links nothing twice. Returns how many NEW links were
     created (0 on a repeat completion or a lesson with no vocabulary)."""
-    word_ids = (await db.execute(select(VocabularyItem.id).where(VocabularyItem.lessonId == lesson_id))).scalars().all()
+    native_ids = (await db.execute(select(VocabularyItem.id).where(VocabularyItem.lessonId == lesson_id))).scalars().all()
+    linked_ids = [w.id for w in (await get_linked_items_by_lesson(db, [lesson_id])).get(lesson_id, [])]
+    word_ids = list(native_ids) + linked_ids
     if not word_ids:
         return 0
 
@@ -172,3 +215,117 @@ async def get_random_learned_words(db: AsyncSession, user_id: str, count: int, l
         candidates.append(w)
     random.shuffle(candidates)
     return candidates[:count]
+
+
+# ---------------------------------------------------------------------------
+# Admin "Словарь" — every word, regardless of which lesson it lives in
+# (§ shared dictionary, 2026-09-14). Read/delete only; creating and editing
+# a word both stay on the existing lesson-scoped endpoints in
+# services/courses.py — the dictionary screen just calls those with
+# whichever course/lesson the word already reports as its own.
+# ---------------------------------------------------------------------------
+
+
+async def list_dictionary_words(
+    db: AsyncSession, *, query: str | None = None, language_id: str | None = None, category_id: str | None = None, limit: int = 50, offset: int = 0
+) -> dict:
+    """The admin "Словарь" screen's one and only data source. No new
+    storage: a plain filtered/paginated read over the same VocabularyItem
+    rows every lesson editor already writes — nothing here can create a
+    word, so it can never diverge from what the lesson editors see."""
+    filters = []
+    if query and query.strip():
+        q = f"%{query.strip()}%"
+        filters.append(or_(VocabularyItem.german.ilike(q), VocabularyItem.translation.ilike(q)))
+    if language_id:
+        filters.append(VocabularyItem.languageId == language_id)
+    if category_id:
+        filters.append(VocabularyItem.categoryId == category_id)
+
+    count_query = select(func.count()).select_from(VocabularyItem)
+    list_query = select(VocabularyItem).order_by(VocabularyItem.german)
+    for f in filters:
+        count_query = count_query.where(f)
+        list_query = list_query.where(f)
+
+    total = await db.scalar(count_query)
+    items = (await db.execute(list_query.limit(limit).offset(offset))).scalars().all()
+
+    category_ids = {i.categoryId for i in items if i.categoryId}
+    categories: dict[str, Category] = {}
+    if category_ids:
+        rows = (await db.execute(select(Category).where(Category.id.in_(category_ids)))).scalars().all()
+        categories = {c.id: c for c in rows}
+
+    # How many OTHER lessons each of these words is reused into, for a
+    # small "used in N lessons" badge — one extra grouped query for the
+    # whole page, not one per word.
+    word_ids = [i.id for i in items]
+    link_counts: dict[str, int] = {}
+    if word_ids:
+        rows = (
+            await db.execute(
+                select(LessonVocabularyLink.wordId, func.count())
+                .where(LessonVocabularyLink.wordId.in_(word_ids))
+                .group_by(LessonVocabularyLink.wordId)
+            )
+        ).all()
+        link_counts = dict(rows)
+
+    words = []
+    for item in items:
+        dto = _word_card_dto(item, categories.get(item.categoryId))
+        dto["usedInLessonsCount"] = 1 + link_counts.get(item.id, 0)  # native lesson + every link
+        words.append(dto)
+
+    return {"words": words, "total": total or 0}
+
+
+async def get_word_usage(db: AsyncSession, word_id: str) -> dict | None:
+    """Every place a word is actually placed/known (§ shared dictionary,
+    2026-09-14) — its native lesson, every lesson it's been reused into via
+    LessonVocabularyLink, and how many learners already have it in "Мои
+    слова". Computed before a global delete so the admin sees exactly what
+    deleting it would take with it, instead of a blind confirm dialog."""
+    item = await db.get(VocabularyItem, word_id)
+    if not item:
+        return None
+    links = (
+        await db.execute(select(LessonVocabularyLink.lessonId, LessonVocabularyLink.courseId).where(LessonVocabularyLink.wordId == word_id))
+    ).all()
+    learner_count = await db.scalar(select(func.count()).select_from(UserWordProgress).where(UserWordProgress.wordId == word_id))
+    return {
+        "wordId": word_id,
+        "nativeLessonId": item.lessonId,
+        "nativeCourseId": item.courseId,
+        "linkedLessons": [{"lessonId": lid, "courseId": cid} for lid, cid in links],
+        "learnerCount": learner_count or 0,
+    }
+
+
+async def delete_word_globally(db: AsyncSession, word_id: str, force: bool = False) -> dict:
+    """Removes a word from the dictionary entirely (§ shared dictionary,
+    2026-09-14) — the ONE place a word can be deleted regardless of where
+    it's used, unlike the deliberately conservative lesson-scoped
+    delete_vocabulary_word in services/courses.py (which refuses to delete
+    a word that's reused elsewhere, treating that request as "remove from
+    THIS lesson" instead — see that function's own docstring).
+
+    Without `force`, refuses and returns the word's usage if it's linked
+    into any other lesson or already learned by someone, so the caller can
+    show a real confirmation ("используется в 3 уроках, изучено 12
+    учениками — удалить всё равно?") instead of silently breaking those.
+    `force=True` deletes regardless — ON DELETE CASCADE on
+    LessonVocabularyLink.wordId and UserWordProgress.wordId cleans up both
+    automatically, so no separate cleanup step is needed here."""
+    usage = await get_word_usage(db, word_id)
+    if usage is None:
+        return {"ok": False, "reason": "not_found"}
+    in_use = bool(usage["linkedLessons"]) or usage["learnerCount"] > 0
+    if in_use and not force:
+        return {"ok": False, "reason": "in_use", "usage": usage}
+
+    item = await db.get(VocabularyItem, word_id)
+    await db.delete(item)
+    await db.commit()
+    return {"ok": True}

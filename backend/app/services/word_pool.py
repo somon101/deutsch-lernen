@@ -28,7 +28,7 @@ from app.models.course_lesson import CourseLesson
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import normalize_word
 from app.services.courses import derive_language_id
-from app.services.vocabulary import get_my_words, get_words
+from app.services.vocabulary import get_linked_items_by_lesson, get_my_words, get_words
 
 # Kept as plain strings rather than an enum so the stored question `data`
 # round-trips as ordinary JSON, the same way every other question kind's
@@ -68,10 +68,14 @@ def _dedupe(cards: list[dict]) -> list[dict]:
 async def _lesson_pool(db: AsyncSession, *, user_id: str, lesson_id: str) -> list[dict]:
     """Every word taught by this lesson. Independent of the learner — two
     people on the same lesson draw from the same set."""
-    word_ids = (
+    native_ids = (
         await db.execute(select(VocabularyItem.id).where(VocabularyItem.lessonId == lesson_id).order_by(VocabularyItem.position, VocabularyItem.id))
     ).scalars().all()
-    return _dedupe(await get_words(db, list(word_ids)))
+    # Plus any words reused into this lesson via LessonVocabularyLink
+    # (§ shared dictionary, 2026-09-14) — a lesson's own taught vocabulary
+    # includes what it teaches by reuse, not only what it natively owns.
+    linked_ids = [w.id for w in (await get_linked_items_by_lesson(db, [lesson_id])).get(lesson_id, [])]
+    return _dedupe(await get_words(db, list(native_ids) + linked_ids))
 
 
 async def _learned_pool(db: AsyncSession, *, user_id: str, lesson_id: str) -> list[dict]:

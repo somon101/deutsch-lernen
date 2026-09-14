@@ -16,6 +16,9 @@ class AdminVocabWord {
     this.audioUrl,
     this.imageUrl,
     this.translations = const {},
+    this.isNative = true,
+    this.nativeLessonId,
+    this.nativeCourseId,
   });
 
   factory AdminVocabWord.fromJson(Map<String, dynamic> json) => AdminVocabWord(
@@ -32,6 +35,15 @@ class AdminVocabWord {
           (locale, v) => MapEntry(locale, (v as Map<String, dynamic>)['translation'] as String),
         ) ??
         const {},
+    // § shared dictionary, 2026-09-14 — false means this row is only
+    // REUSED into the current lesson via LessonVocabularyLink, not owned
+    // by it; nativeLessonId/nativeCourseId are this word's true home
+    // (defaulting to "true"/null for any older DTO shape that predates
+    // this field, e.g. a cached response — that reads exactly like a
+    // native word, which every word was before this feature existed).
+    isNative: json['isNative'] as bool? ?? true,
+    nativeLessonId: json['nativeLessonId'] as String?,
+    nativeCourseId: json['nativeCourseId'] as String?,
   );
 
   final String id;
@@ -41,6 +53,9 @@ class AdminVocabWord {
   final String? audioUrl;
   final String? imageUrl;
   final Map<String, String> translations;
+  final bool isNative;
+  final String? nativeLessonId;
+  final String? nativeCourseId;
 }
 
 class AdminBlock {
@@ -349,21 +364,116 @@ class AdminCourseSummary {
   final String? levelId;
 }
 
+/// A word's category (§ word cards, 2026-08-31) — the backend has had
+/// get_or_create_category/list_categories since then, but no screen ever
+/// called them; the "Словарь" screen (§ shared dictionary, 2026-09-14) is
+/// the first real picker UI for this already-existing mechanism.
+class AdminCategory {
+  const AdminCategory({required this.id, required this.name});
+  factory AdminCategory.fromJson(Map<String, dynamic> json) => AdminCategory(id: json['categoryId'] as String, name: json['name'] as String);
+  final String id;
+  final String name;
+}
+
 class WordLibraryEntry {
   const WordLibraryEntry({
+    required this.id,
     required this.german,
     required this.translation,
     required this.pronunciation,
+    this.imageUrl,
+    required this.courseId,
+    required this.lessonId,
+    required this.locationLabel,
   });
   factory WordLibraryEntry.fromJson(Map<String, dynamic> json) =>
       WordLibraryEntry(
+        // § shared dictionary, 2026-09-14 — the real id, so a search
+        // result can actually be ATTACHED to a lesson (via
+        // BuilderRepository.linkExistingWord) instead of only ever
+        // copying its text into a new-word form.
+        id: json['id'] as String,
         german: json['german'] as String,
         translation: json['translation'] as String,
         pronunciation: json['pronunciation'] as String? ?? '',
+        imageUrl: json['imageUrl'] as String?,
+        courseId: json['courseId'] as String,
+        lessonId: json['lessonId'] as String,
+        locationLabel: json['locationLabel'] as String,
       );
+  final String id;
   final String german;
   final String translation;
   final String pronunciation;
+  final String? imageUrl;
+  final String courseId;
+  final String lessonId;
+  final String locationLabel;
+}
+
+/// One row in the admin "Словарь" screen (§ shared dictionary, 2026-09-14)
+/// — shape matches services/vocabulary.py's `_word_card_dto` plus
+/// `usedInLessonsCount`, distinct from AdminVocabWord's lesson-scoped shape
+/// (wordId/word here vs id/german there) because this is the SAME
+/// underlying word card the rest of the app already addresses by wordId
+/// (exercises, "Мои слова", batch /api/words) — reusing that exact shape
+/// instead of inventing a new one for just this screen.
+class DictionaryWord {
+  const DictionaryWord({
+    required this.wordId,
+    required this.word,
+    required this.translation,
+    this.pronunciation,
+    this.audioUrl,
+    this.imageUrl,
+    this.categoryId,
+    this.categoryName,
+    this.languageId,
+    required this.lessonId,
+    required this.courseId,
+    required this.usedInLessonsCount,
+  });
+
+  factory DictionaryWord.fromJson(Map<String, dynamic> json) => DictionaryWord(
+        wordId: json['wordId'] as String,
+        word: json['word'] as String,
+        translation: json['translation'] as String,
+        pronunciation: json['pronunciation'] as String?,
+        audioUrl: json['audioUrl'] as String?,
+        imageUrl: json['imageUrl'] as String?,
+        categoryId: json['categoryId'] as String?,
+        categoryName: json['categoryName'] as String?,
+        languageId: json['languageId'] as String?,
+        lessonId: json['lessonId'] as String,
+        courseId: json['courseId'] as String,
+        usedInLessonsCount: json['usedInLessonsCount'] as int,
+      );
+
+  final String wordId;
+  final String word;
+  final String translation;
+  final String? pronunciation;
+  final String? audioUrl;
+  final String? imageUrl;
+  final String? categoryId;
+  final String? categoryName;
+  final String? languageId;
+  /// This word's native (home) lesson/course — where its own edit/delete
+  /// endpoints operate, regardless of how many other lessons reuse it.
+  final String lessonId;
+  final String courseId;
+  final int usedInLessonsCount;
+}
+
+/// One page of the "Словарь" screen's list (§ shared dictionary, 2026-09-14).
+class DictionaryPage {
+  const DictionaryPage({required this.words, required this.total});
+  factory DictionaryPage.fromJson(Map<String, dynamic> json) => DictionaryPage(
+        words: (json['words'] as List<dynamic>).map((w) => DictionaryWord.fromJson(w as Map<String, dynamic>)).toList(),
+        total: json['total'] as int,
+      );
+  final List<DictionaryWord> words;
+  final int total;
 }
 
 class MediaLibraryEntry {

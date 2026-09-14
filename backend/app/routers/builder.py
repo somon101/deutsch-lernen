@@ -16,11 +16,11 @@ from app.schemas.course import (
     MediaReuseInput,
     ReorderInput,
 )
-from app.schemas.vocabulary import VocabularyImportPayload, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
+from app.schemas.vocabulary import VocabularyImportPayload, VocabularyLinkInput, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
 from app.services import courses as svc
 from app.services.content import DuplicateWordError
 from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
-from app.services.vocabulary import list_categories
+from app.services.vocabulary import delete_word_globally, list_categories, list_dictionary_words
 from app.uploads.storage import COURSE_MEDIA_DIR, WORD_AUDIO_DIR, WORD_IMAGES_DIR, delete_file, save_course_media, save_word_audio, save_word_image
 
 router = APIRouter(prefix="/api/builder", tags=["builder"], dependencies=[Depends(require_staff)])
@@ -299,6 +299,42 @@ async def search_words(q: str = "", db: AsyncSession = Depends(get_db)):
     return {"words": await svc.search_word_library(db, q)}
 
 
+# ---------------------------------------------------------------------------
+# Dictionary ("Словарь") — every word, regardless of which lesson it lives
+# in (§ shared dictionary, 2026-09-14). Creating/editing a word both still
+# go through the lesson-scoped endpoints below; this section is browse +
+# global delete only.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/vocabulary")
+async def list_vocabulary(
+    q: str | None = None,
+    languageId: str | None = None,
+    categoryId: str | None = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_dictionary_words(db, query=q, language_id=languageId, category_id=categoryId, limit=limit, offset=offset)
+
+
+@router.delete("/vocabulary/{word_id}")
+async def delete_vocabulary_globally(word_id: str, force: bool = False, db: AsyncSession = Depends(get_db)):
+    result = await delete_word_globally(db, word_id, force=force)
+    if not result["ok"]:
+        if result["reason"] == "not_found":
+            raise ApiError(404, "Слово не найдено")
+        usage = result["usage"]
+        lesson_count = len(usage["linkedLessons"])
+        raise ApiError(
+            409,
+            f"Слово используется в {lesson_count} другом уроке(ах) и изучено {usage['learnerCount']} учеником(ами). "
+            "Повторите запрос с force=true, чтобы удалить его полностью.",
+        )
+    return {"ok": True}
+
+
 @router.get("/media/library")
 async def media_library(kind: str = Query(...), db: AsyncSession = Depends(get_db)):
     if kind not in ("video", "audio"):
@@ -343,6 +379,17 @@ async def add_vocabulary(course_id: str, lesson_id: str, body: VocabularyWordInp
     return result
 
 
+@router.post("/courses/{course_id}/lessons/{lesson_id}/vocabulary/link", status_code=201)
+async def link_vocabulary(course_id: str, lesson_id: str, body: VocabularyLinkInput, db: AsyncSession = Depends(get_db)):
+    """Attaches an EXISTING word (picked from the "Словарь" search) to this
+    lesson without copying it (§ shared dictionary, 2026-09-14) — the
+    "выбрать существующее слово" half of the constructor's word picker."""
+    result = await svc.link_existing_word_to_lesson(db, course_id, lesson_id, body.wordId)
+    if not result:
+        raise ApiError(404, "Слово не найдено")
+    return result
+
+
 @router.patch("/courses/{course_id}/lessons/{lesson_id}/vocabulary/{word_id}")
 async def update_vocabulary(course_id: str, lesson_id: str, word_id: str, body: VocabularyWordUpdateInput, db: AsyncSession = Depends(get_db)):
     try:
@@ -356,7 +403,10 @@ async def update_vocabulary(course_id: str, lesson_id: str, word_id: str, body: 
 
 @router.delete("/courses/{course_id}/lessons/{lesson_id}/vocabulary/{word_id}")
 async def delete_vocabulary(course_id: str, lesson_id: str, word_id: str, db: AsyncSession = Depends(get_db)):
-    result = await svc.delete_vocabulary_word(db, course_id, lesson_id, word_id)
+    try:
+        result = await svc.delete_vocabulary_word(db, course_id, lesson_id, word_id)
+    except DuplicateWordError as e:
+        raise ApiError(409, str(e))
     if not result:
         raise ApiError(404, "Слово не найдено")
     return result

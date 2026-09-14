@@ -75,6 +75,7 @@ class _NavItem {
 const _navItems = [
   _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Главная', path: '/'),
   _NavItem(icon: Icons.edit_note_outlined, activeIcon: Icons.edit_note, label: 'Конструктор курсов', path: '/admin/courses'),
+  _NavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book, label: 'Словарь', path: '/admin/vocabulary'),
   _NavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Пользователи', path: '/admin'),
   _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Профиль', path: '/profile'),
   _NavItem(icon: Icons.emoji_events_outlined, activeIcon: Icons.emoji_events, label: 'Рейтинг', path: '/leaderboard'),
@@ -83,6 +84,11 @@ const _navItems = [
 
 bool _visibleFor(_NavItem item, AppUser? user) {
   if (item.path == '/admin/courses') return user?.isStaff ?? false;
+  // Same audience as the course builder — the backend's own
+  // /api/builder/vocabulary endpoint is gated by require_staff, not
+  // require_admin (§ shared dictionary, 2026-09-14), so the nav should
+  // offer this to exactly whoever the API already lets call it.
+  if (item.path == '/admin/vocabulary') return user?.isStaff ?? false;
   if (item.path == '/admin') return user?.isAdmin ?? false;
   return true;
 }
