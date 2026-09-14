@@ -327,10 +327,14 @@ async def delete_vocabulary_globally(word_id: str, force: bool = False, db: Asyn
             raise ApiError(404, "Слово не найдено")
         usage = result["usage"]
         lesson_count = len(usage["linkedLessons"])
+        # No mention of the `force` query param here — that's the client's
+        # own retry mechanics (see AdminVocabularyScreen._delete), not
+        # something a human reading this in a confirmation dialog should
+        # have to parse (§ shared dictionary QA finding, 2026-09-14).
         raise ApiError(
             409,
             f"Слово используется в {lesson_count} другом уроке(ах) и изучено {usage['learnerCount']} учеником(ами). "
-            "Повторите запрос с force=true, чтобы удалить его полностью.",
+            "Удалить его отовсюду?",
         )
     return {"ok": True}
 

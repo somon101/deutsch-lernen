@@ -140,7 +140,7 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
     } catch (e) {
       if (e is ApiException && e.statusCode == 409) {
         if (!mounted) return;
-        final forceOk = await confirmDialog(context, title: 'Слово используется', message: e.message);
+        final forceOk = await confirmDialog(context, title: 'Слово используется', message: e.message, confirmLabel: 'Удалить всё равно');
         if (!forceOk) return;
         try {
           await ref.read(builderRepositoryProvider).deleteWordGlobally(word.wordId, force: true);

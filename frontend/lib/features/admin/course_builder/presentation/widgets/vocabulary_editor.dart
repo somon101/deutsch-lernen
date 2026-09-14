@@ -448,6 +448,13 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
   /// second, unrelated row; that's exactly the duplication this feature
   /// exists to stop.
   Future<void> _pickSuggestion(WordLibraryEntry entry) async {
+    // Synchronous re-entrancy guard, checked BEFORE the first setState —
+    // found via QA: two taps landing in the same frame (a fast
+    // double-click) both pass the ListTile's `enabled: !_busy` check,
+    // since that only takes effect once the widget actually rebuilds.
+    // The backend already dedupes this safely (alreadyPresent: true), but
+    // there's no reason to fire the second request at all.
+    if (_busy) return;
     setState(() {
       _suggestions = null;
       _busy = true;
