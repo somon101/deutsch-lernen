@@ -24,8 +24,8 @@ final _legacyLessonCountProvider = FutureProvider.autoDispose<int>(
   (ref) async =>
       (await ref.watch(profileRepositoryProvider).fetchLegacyLessons()).length,
 );
-final _autoSendOnNewLessonProvider = FutureProvider.autoDispose<bool>(
-  (ref) => ref.watch(notificationSettingsRepositoryProvider).getAutoSendOnNewLesson(),
+final _notificationSettingsProvider = FutureProvider.autoDispose<AdminNotificationSettings>(
+  (ref) => ref.watch(notificationSettingsRepositoryProvider).getSettings(),
 );
 
 /// Language + Level lists, used only to group the (unchanged) course list
@@ -459,9 +459,12 @@ class _CourseRowState extends ConsumerState<_CourseRow> {
 }
 
 /// Generic push mechanism (§ any future event type reuses the same
-/// send path), only "lesson_created" wired up today: ON sends
+/// send path), two event types wired up: "lesson_created" (ON sends
 /// automatically when a lesson is added to an already-published course;
-/// OFF leaves it to the "Отправить уведомление" button on the lesson itself.
+/// OFF leaves it to the "Отправить уведомление" button on the lesson
+/// itself) and the streak-at-risk reminder (§ streak reminder, 2026-09-15
+/// — the ONLY control for that mechanism anywhere: no ordinary user ever
+/// sees a setting for it, so this admin-wide switch is it).
 class _NotificationSettingsCard extends ConsumerStatefulWidget {
   const _NotificationSettingsCard();
   @override
@@ -469,49 +472,99 @@ class _NotificationSettingsCard extends ConsumerStatefulWidget {
 }
 
 class _NotificationSettingsCardState extends ConsumerState<_NotificationSettingsCard> {
-  bool _busy = false;
+  bool _busyAutoSend = false;
+  bool _busyStreak = false;
 
-  Future<void> _toggle(bool value) async {
-    setState(() => _busy = true);
+  Future<void> _toggleAutoSend(bool value) async {
+    setState(() => _busyAutoSend = true);
     try {
       await ref.read(notificationSettingsRepositoryProvider).setAutoSendOnNewLesson(value);
-      ref.invalidate(_autoSendOnNewLessonProvider);
+      ref.invalidate(_notificationSettingsProvider);
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось изменить настройку');
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busyAutoSend = false);
+    }
+  }
+
+  Future<void> _toggleStreak(bool value) async {
+    setState(() => _busyStreak = true);
+    try {
+      await ref.read(notificationSettingsRepositoryProvider).setStreakReminderEnabled(value);
+      ref.invalidate(_notificationSettingsProvider);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось изменить настройку');
+    } finally {
+      if (mounted) setState(() => _busyStreak = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final autoSend = ref.watch(_autoSendOnNewLessonProvider);
+    final settings = ref.watch(_notificationSettingsProvider);
     return AdminCard(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Автоматическая отправка уведомлений', style: AdminTypography.cardTitle),
-                const SizedBox(height: 2),
-                Text(
-                  'Когда включено: уведомление о новом уроке уходит сразу после его создания (если курс уже опубликован). '
-                  'Когда выключено: уведомление можно отправить вручную кнопкой у урока.',
-                  style: AdminTypography.caption,
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Автоматическая отправка уведомлений', style: AdminTypography.cardTitle),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Когда включено: уведомление о новом уроке уходит сразу после его создания (если курс уже опубликован). '
+                      'Когда выключено: уведомление можно отправить вручную кнопкой у урока.',
+                      style: AdminTypography.caption,
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 12),
+              settings.when(
+                loading: () => const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                error: (err, st) => const Icon(Icons.error_outline, color: AdminColors.danger),
+                data: (value) => Switch(
+                  value: value.autoSendOnNewLesson,
+                  onChanged: _busyAutoSend ? null : _toggleAutoSend,
+                  activeThumbColor: AdminColors.accent,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          autoSend.when(
-            loading: () => const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
-            error: (err, st) => const Icon(Icons.error_outline, color: AdminColors.danger),
-            data: (value) => Switch(
-              value: value,
-              onChanged: _busy ? null : _toggle,
-              activeThumbColor: AdminColors.accent,
-            ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: AdminColors.border),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Напоминания об ударном режиме', style: AdminTypography.cardTitle),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Глобальный переключатель для всей системы — пользователи его не видят и не настраивают. '
+                      'Когда включено: пользователям с серией дней под угрозой (не заходили сегодня) сервер отправляет push, '
+                      'с повтором каждые несколько часов, пока серия под угрозой. Когда выключено: такие push не отправляются вообще.',
+                      style: AdminTypography.caption,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              settings.when(
+                loading: () => const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                error: (err, st) => const Icon(Icons.error_outline, color: AdminColors.danger),
+                data: (value) => Switch(
+                  value: value.streakReminderEnabled,
+                  onChanged: _busyStreak ? null : _toggleStreak,
+                  activeThumbColor: AdminColors.accent,
+                ),
+              ),
+            ],
           ),
         ],
       ),

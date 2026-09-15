@@ -1,12 +1,17 @@
-name: Lesson Reminder Cron
+name: Streak Reminder Cron
 
 # Cloud Run has no built-in scheduler of its own — this is what actually
-# drives the lesson-reminder tick periodically (§ lesson reminder fix,
-# 2026-09-07). GitHub's schedule trigger isn't second-precise (it can slip
-# by several minutes under load), which is fine here: the reminder only
-# needs to notice "it's past the user's reminder time" within a few
-# minutes, not to the second, and every 10 minutes keeps the 2-hour repeat
-# chain comfortably granular.
+# drives the reminder tick periodically. Originally built for the lesson
+# reminder (§ lesson reminder fix, 2026-09-07); that reminder moved to a
+# LOCAL device notification (§ study reminder local delivery, 2026-09-15)
+# and no longer needs a server tick at all, so this same schedule/secret/
+# endpoint now drives the streak-at-risk push reminder instead (§ streak
+# reminder, 2026-09-15) — POST /api/cron/reminders runs
+# run_streak_reminder_tick now, see backend/app/routers/cron.py. GitHub's
+# schedule trigger isn't second-precise (it can slip by several minutes
+# under load), which is fine here: the reminder only needs to notice
+# "it's past the check hour" within a few minutes, not to the second, and
+# every 10 minutes keeps the repeat chain comfortably granular.
 on:
   schedule:
     - cron: '*/10 * * * *'
@@ -16,7 +21,7 @@ jobs:
   tick:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger reminder tick
+      - name: Trigger streak reminder tick
         run: |
           curl -sf -X POST "https://deutsch-lernen-api-n3ss7qmkpa-an.a.run.app/api/cron/reminders" \
             -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \

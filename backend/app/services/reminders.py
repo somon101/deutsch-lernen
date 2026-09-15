@@ -1,6 +1,19 @@
 """Lesson-reminder push, with a repeat chain (§ lesson reminder fix,
 2026-09-07).
 
+**Superseded, 2026-09-15**: the study/lesson reminder is now delivered as
+a LOCAL device notification (frontend's core/notifications/
+local_reminder_service.dart), scheduled on-device from the same
+UserPreference.lessonReminderEnabled/Hour/Minute this module reads — so it
+fires without any server round-trip, per that later request. Nothing here
+calls `run_reminder_tick` anymore (routers/cron.py's POST
+/api/cron/reminders now runs services/streak_reminders.py's
+run_streak_reminder_tick instead — a separate, independent mechanism).
+This module and the LessonReminderLog table are left in place, unused,
+rather than deleted — the DB-level dedup logic here is still correct and
+may be useful reference/precedent, and dropping a live table is a
+separate, riskier change than simply no longer invoking this.
+
 Root cause of "the reminder never fires" (found before writing any of this):
 the Settings screen's reminder toggle/time picker was 100% device-local
 SharedPreferences state (settings_repository.dart, literal "TODO: подключить

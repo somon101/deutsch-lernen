@@ -20,6 +20,7 @@ from app.models.lesson_question import LessonQuestion
 from app.models.lesson_reminder import LessonReminderLog
 from app.models.lesson_state import LessonAttempt, LessonState
 from app.models.lesson_vocabulary_link import LessonVocabularyLink
+from app.models.streak_reminder import StreakReminderLog
 from app.models.level import Level
 from app.models.login_event import LoginEvent
 from app.models.material import Material
@@ -77,6 +78,7 @@ __all__ = [
     "Question",
     "QuestionPlacement",
     "QuestionTranslation",
+    "StreakReminderLog",
     "Topic",
     "User",
     "UserWordProgress",

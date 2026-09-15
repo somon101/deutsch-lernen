@@ -406,3 +406,38 @@ async def ensure_lesson_vocabulary_link_table(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_lesson_vocabulary_link_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# Kept byte-for-byte in step with
+# server/prisma/migrations/20260915100000_streak_reminder/migration.sql.
+_STREAK_REMINDER_STATEMENTS = (
+    'ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "streakReminderEnabled" BOOLEAN NOT NULL DEFAULT false',
+    """
+    CREATE TABLE IF NOT EXISTS "StreakReminderLog" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "reminderDate" DATE NOT NULL,
+        "sendCount" INTEGER NOT NULL DEFAULT 1,
+        "lastSentAt" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "StreakReminderLog_pkey" PRIMARY KEY ("id")
+    )
+    """,
+    'CREATE UNIQUE INDEX IF NOT EXISTS "StreakReminderLog_userId_reminderDate_key" ON "StreakReminderLog"("userId", "reminderDate")',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "StreakReminderLog" ADD CONSTRAINT "StreakReminderLog_userId_fkey"
+            FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+)
+
+
+async def ensure_streak_reminder_table(db: AsyncSession) -> None:
+    for statement in _STREAK_REMINDER_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_streak_reminder_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

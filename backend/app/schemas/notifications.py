@@ -9,4 +9,8 @@ class PushTokenRegisterInput(BaseModel):
 
 
 class NotificationSettingsUpdateInput(BaseModel):
-    autoSendOnNewLesson: bool
+    """Both optional (§ streak reminder, 2026-09-15) — toggling one setting
+    no longer requires resending the other's current value."""
+
+    autoSendOnNewLesson: bool | None = None
+    streakReminderEnabled: bool | None = None

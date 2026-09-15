@@ -14,6 +14,16 @@
          in push_service.dart) to do anything at all — without it, push
          notifications silently never show on those devices. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets the locally-scheduled study reminder survive a real device
+         reboot, not just an app restart (§ study reminder local delivery,
+         2026-09-15) — without this, Android clears every app's exact
+         alarms on boot and nothing reschedules them until the app happens
+         to be opened again. RECEIVE_BOOT_COMPLETED is the permission;
+         ScheduledNotificationBootReceiver (bundled with
+         flutter_local_notifications, no custom native code needed) is the
+         receiver that re-registers the schedule at boot from what the
+         plugin already persisted on-device. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
         android:label="deutsch_lernen"
         android:name="${applicationName}"
@@ -45,6 +55,18 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Re-registers scheduled local notifications (the study
+             reminder) after a device reboot — see the
+             RECEIVE_BOOT_COMPLETED permission comment above. Bundled with
+             the flutter_local_notifications plugin itself. -->
+        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
