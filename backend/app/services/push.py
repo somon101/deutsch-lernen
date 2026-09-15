@@ -71,16 +71,24 @@ async def set_auto_send_on_new_lesson(db: AsyncSession, enabled: bool) -> Notifi
     return row
 
 
-async def update_notification_settings(db: AsyncSession, *, auto_send_on_new_lesson: bool | None, streak_reminder_enabled: bool | None) -> NotificationSettings:
+async def update_notification_settings(
+    db: AsyncSession,
+    *,
+    auto_send_on_new_lesson: bool | None,
+    streak_reminder_enabled: bool | None,
+    streak_reminder_interval_minutes: int | None = None,
+) -> NotificationSettings:
     """Partial update over the same singleton row (§ streak reminder,
-    2026-09-15) — either field omitted leaves it exactly as it was, so
-    toggling the streak switch can never accidentally flip the unrelated
-    new-lesson broadcast setting back to some stale value, or vice versa."""
+    2026-09-15) — any field omitted leaves it exactly as it was, so
+    toggling one setting can never accidentally flip an unrelated one back
+    to some stale value."""
     row = await get_settings(db)
     if auto_send_on_new_lesson is not None:
         row.autoSendOnNewLesson = auto_send_on_new_lesson
     if streak_reminder_enabled is not None:
         row.streakReminderEnabled = streak_reminder_enabled
+    if streak_reminder_interval_minutes is not None:
+        row.streakReminderIntervalMinutes = streak_reminder_interval_minutes
     await db.commit()
     await db.refresh(row)
     return row

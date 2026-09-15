@@ -5,6 +5,7 @@
 
 -- AlterTable
 ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "streakReminderEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "streakReminderIntervalMinutes" INTEGER NOT NULL DEFAULT 120;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "StreakReminderLog" (

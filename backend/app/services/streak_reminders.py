@@ -45,9 +45,11 @@ from app.services.push import get_settings, send_push_to_user
 from app.utils import utcnow
 
 # Local hour (in each user's own timezone) after which a user with no
-# activity yet today starts being considered for a reminder.
+# activity yet today starts being considered for a reminder. The repeat
+# interval itself is admin-editable (NotificationSettings.
+# streakReminderIntervalMinutes, § streak reminder repeat interval,
+# 2026-09-15) rather than a constant here.
 STREAK_CHECK_HOUR = 20
-REPEAT_INTERVAL = timedelta(hours=2)
 
 
 def _as_utc(naive_utc: datetime) -> datetime:
@@ -72,20 +74,21 @@ async def run_streak_reminder_tick(db: AsyncSession) -> dict:
         await db.execute(select(UserPreference).where(UserPreference.pushEnabled.is_(True), UserPreference.timezone.is_not(None)))
     ).scalars().all()
 
+    repeat_interval = timedelta(minutes=settings.streakReminderIntervalMinutes)
     now_utc = utcnow()
     checked = 0
     sent = 0
     for pref in prefs:
         checked += 1
         try:
-            if await _maybe_send_for_user(db, pref, now_utc):
+            if await _maybe_send_for_user(db, pref, now_utc, repeat_interval):
                 sent += 1
         except Exception as exc:  # noqa: BLE001 — one user's failure must never stop the tick
             print(f"streak_reminders: не удалось обработать пользователя {pref.userId}: {exc!r}")
     return {"checked": checked, "sent": sent, "enabled": True}
 
 
-async def _maybe_send_for_user(db: AsyncSession, pref: UserPreference, now_utc: datetime) -> bool:
+async def _maybe_send_for_user(db: AsyncSession, pref: UserPreference, now_utc: datetime, repeat_interval: timedelta) -> bool:
     try:
         tz = ZoneInfo(pref.timezone)
     except Exception:
@@ -128,7 +131,7 @@ async def _maybe_send_for_user(db: AsyncSession, pref: UserPreference, now_utc: 
         await send_push_to_user(db, user_id=pref.userId, title="Серия под угрозой", body=_streak_push_body(streak), deep_link="/leaderboard")
         return True
 
-    if now_utc - log.lastSentAt < REPEAT_INTERVAL:
+    if now_utc - log.lastSentAt < repeat_interval:
         return False  # too soon since the last one for a repeat to be due
 
     # Column-bound update(), not raw SQL — see services/reminders.py's own

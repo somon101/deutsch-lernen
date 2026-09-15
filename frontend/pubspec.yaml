@@ -95,8 +95,6 @@ dependencies:
   # because Settings' "Очистить кэш" clears it explicitly (DefaultCacheManager).
   flutter_cache_manager: ^3.4.1
   flutter_timezone: ^5.1.0
-  flutter_local_notifications: ^22.3.1
-  timezone: ^0.11.1
 
 dev_dependencies:
   flutter_test:

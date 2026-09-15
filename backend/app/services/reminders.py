@@ -1,18 +1,26 @@
 """Lesson-reminder push, with a repeat chain (§ lesson reminder fix,
 2026-09-07).
 
-**Superseded, 2026-09-15**: the study/lesson reminder is now delivered as
-a LOCAL device notification (frontend's core/notifications/
-local_reminder_service.dart), scheduled on-device from the same
-UserPreference.lessonReminderEnabled/Hour/Minute this module reads — so it
-fires without any server round-trip, per that later request. Nothing here
-calls `run_reminder_tick` anymore (routers/cron.py's POST
-/api/cron/reminders now runs services/streak_reminders.py's
-run_streak_reminder_tick instead — a separate, independent mechanism).
-This module and the LessonReminderLog table are left in place, unused,
-rather than deleted — the DB-level dedup logic here is still correct and
-may be useful reference/precedent, and dropping a live table is a
-separate, riskier change than simply no longer invoking this.
+**Briefly superseded 2026-09-15, reinstated the same day**: for a few
+hours the study/lesson reminder was delivered as a LOCAL device
+notification instead (frontend's core/notifications/
+local_reminder_service.dart, scheduled on-device via AlarmManager) to make
+it independent of server/network availability at fire time. A real
+on-device test on a Xiaomi/MIUI phone found that guarantee doesn't hold in
+practice: MIUI's own "Автозапуск" (autostart) restriction blocked the
+app's background process from completing the notification after the
+alarm fired (confirmed via `adb shell dumpsys alarm`/`logcat` —
+`AutoStartManagerService: MIUILOG- Reject RestartService` for this exact
+package), with no in-app way to detect or fix that short of asking every
+user to manually grant autostart per OEM. Push notifications, by
+contrast, ride Google Play Services' own already-whitelisted process, so
+they aren't affected by that same restriction — confirmed working on the
+very same device throughout. Given how common MIUI-family phones are,
+"works offline at the exact fire second" lost to "actually fires" — this
+module is active again, `local_reminder_service.dart` and its plumbing
+were removed rather than left as unreachable code, and routers/cron.py's
+POST /api/cron/reminders now calls both this tick and
+services/streak_reminders.py's run_streak_reminder_tick.
 
 Root cause of "the reminder never fires" (found before writing any of this):
 the Settings screen's reminder toggle/time picker was 100% device-local

@@ -67,6 +67,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.comingSoon)));
   }
 
+  /// lessonReminderPreferencesProvider's setters roll back and rethrow on a
+  /// failed save (see that file's own `_patch`), which — with no catch here
+  /// before this fix — meant a failed save was completely invisible: the
+  /// switch/time would silently snap back with no explanation, easy to
+  /// mistake for "the reminder just didn't fire" (§ real device test,
+  /// 2026-09-15, right after a run of genuine network instability). Wrapping
+  /// every reminder-setting change here surfaces that failure instead of
+  /// hiding it.
+  Future<void> _saveReminderSetting(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось сохранить настройку напоминания — проверьте соединение и попробуйте ещё раз.')),
+        );
+      }
+    }
+  }
+
   Future<void> _confirmLogout() async {
     final l10n = AppLocalizations.of(context);
     final c = context.profileColors;
@@ -235,24 +255,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   SettingsSection(
                     title: l10n.sectionNotifications,
                     children: [
-                      // These three read/write the server-backed
+                      // These read/write the server-backed
                       // lessonReminderPreferencesProvider (§ lesson reminder
                       // fix, 2026-09-07), not the device-local
                       // settingsProvider — the whole reason the reminder
                       // never fired before was that nothing here ever
-                      // reached the server. streakReminder below is
-                      // unrelated and stays exactly as it was.
+                      // reached the server.
+                      //
+                      // The streak-at-risk reminder (§ streak reminder,
+                      // 2026-09-15) intentionally has NO tile here: it's a
+                      // server+push mechanism gated by a single global admin
+                      // switch, and must never be exposed as a per-user
+                      // setting. A now-removed local-only placeholder switch
+                      // used to sit here (never wired to any backend); it
+                      // was confusing users into thinking they controlled
+                      // it, so it's gone rather than fixed.
                       SettingsSwitchTile(
                         icon: Icons.notifications_outlined,
                         label: l10n.pushNotifications,
                         value: reminderSettings.pushEnabled,
-                        onChanged: (v) => ref.read(lessonReminderPreferencesProvider.notifier).setPushEnabled(v),
+                        onChanged: (v) => _saveReminderSetting(() => ref.read(lessonReminderPreferencesProvider.notifier).setPushEnabled(v)),
                       ),
                       SettingsSwitchTile(
                         icon: Icons.alarm_outlined,
                         label: l10n.lessonReminder,
                         value: reminderSettings.lessonReminderEnabled,
-                        onChanged: (v) => ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderEnabled(v),
+                        onChanged: (v) =>
+                            _saveReminderSetting(() => ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderEnabled(v)),
                       ),
                       if (reminderSettings.lessonReminderEnabled)
                         SettingsNavTile(
@@ -261,12 +290,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           value: _formatTime(reminderSettings.lessonReminderHour, reminderSettings.lessonReminderMinute),
                           onTap: () => _pickReminderTime(context, reminderSettings.lessonReminderHour, reminderSettings.lessonReminderMinute),
                         ),
-                      SettingsSwitchTile(
-                        icon: Icons.local_fire_department_outlined,
-                        label: l10n.streakReminder,
-                        value: settings.streakReminder,
-                        onChanged: (v) => ref.read(settingsProvider.notifier).setStreakReminder(v),
-                      ),
                     ],
                   ),
                   const SizedBox(height: ProfileMetrics.cardGap),
@@ -499,6 +522,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // 11:00. A 24-hour field removes that ambiguity outright.
       builder: (context, child) => MediaQuery(data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true), child: child!),
     );
-    if (picked != null) await ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderTime(picked.hour, picked.minute);
+    if (picked != null) {
+      await _saveReminderSetting(
+        () => ref.read(lessonReminderPreferencesProvider.notifier).setLessonReminderTime(picked.hour, picked.minute),
+      );
+    }
   }
 }

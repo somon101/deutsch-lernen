@@ -412,6 +412,7 @@ async def ensure_lesson_vocabulary_link_table(db: AsyncSession) -> None:
 # server/prisma/migrations/20260915100000_streak_reminder/migration.sql.
 _STREAK_REMINDER_STATEMENTS = (
     'ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "streakReminderEnabled" BOOLEAN NOT NULL DEFAULT false',
+    'ALTER TABLE "NotificationSettings" ADD COLUMN IF NOT EXISTS "streakReminderIntervalMinutes" INTEGER NOT NULL DEFAULT 120',
     """
     CREATE TABLE IF NOT EXISTS "StreakReminderLog" (
         "id" TEXT NOT NULL,

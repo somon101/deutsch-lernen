@@ -474,6 +474,14 @@ class _NotificationSettingsCard extends ConsumerStatefulWidget {
 class _NotificationSettingsCardState extends ConsumerState<_NotificationSettingsCard> {
   bool _busyAutoSend = false;
   bool _busyStreak = false;
+  bool _busyInterval = false;
+  final _intervalController = TextEditingController();
+
+  @override
+  void dispose() {
+    _intervalController.dispose();
+    super.dispose();
+  }
 
   Future<void> _toggleAutoSend(bool value) async {
     setState(() => _busyAutoSend = true);
@@ -496,6 +504,24 @@ class _NotificationSettingsCardState extends ConsumerState<_NotificationSettings
       if (mounted) showErrorSnack(context, e, 'Не удалось изменить настройку');
     } finally {
       if (mounted) setState(() => _busyStreak = false);
+    }
+  }
+
+  Future<void> _saveInterval() async {
+    final minutes = int.tryParse(_intervalController.text.trim());
+    if (minutes == null || minutes <= 0) {
+      showErrorSnack(context, Exception('invalid'), 'Введите целое число минут больше 0');
+      return;
+    }
+    setState(() => _busyInterval = true);
+    try {
+      await ref.read(notificationSettingsRepositoryProvider).setStreakReminderIntervalMinutes(minutes);
+      ref.invalidate(_notificationSettingsProvider);
+      if (mounted) showSuccessSnack(context, 'Интервал сохранён');
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось изменить интервал');
+    } finally {
+      if (mounted) setState(() => _busyInterval = false);
     }
   }
 
@@ -566,6 +592,42 @@ class _NotificationSettingsCardState extends ConsumerState<_NotificationSettings
               ),
             ],
           ),
+          settings.whenOrNull(
+                data: (value) {
+                  if (_intervalController.text.isEmpty) {
+                    _intervalController.text = '${value.streakReminderIntervalMinutes}';
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Text('Интервал повтора, минут — пока серия под угрозой', style: AdminTypography.caption),
+                        ),
+                        const SizedBox(width: 12),
+                        SizedBox(
+                          width: 72,
+                          child: TextField(
+                            controller: _intervalController,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            enabled: !_busyInterval,
+                            decoration: adminInputDecoration(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: _busyInterval ? null : _saveInterval,
+                          style: AdminButtonStyles.text(),
+                          child: const Text('Сохранить'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ) ??
+              const SizedBox.shrink(),
         ],
       ),
     );

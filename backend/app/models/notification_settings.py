@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -22,4 +22,10 @@ class NotificationSettings(Base):
     # switch does. Off by default so the mechanism never starts pushing
     # anyone the moment this column is added.
     streakReminderEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # How long to wait between repeat streak-at-risk pushes, admin-editable
+    # (§ streak reminder repeat interval, 2026-09-15) — was a fixed
+    # REPEAT_INTERVAL constant in services/streak_reminders.py; that module
+    # now reads this column instead so an admin can tune it without a code
+    # change/redeploy. 120 default matches the original hardcoded 2 hours.
+    streakReminderIntervalMinutes: Mapped[int] = mapped_column(Integer, nullable=False, default=120)
     updatedAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, onupdate=utcnow)

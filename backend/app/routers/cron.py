@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db import get_db
 from app.errors import ApiError
+from app.services.reminders import run_reminder_tick
 from app.services.streak_reminders import run_streak_reminder_tick
 
 router = APIRouter(prefix="/api/cron", tags=["cron"])
@@ -17,15 +18,14 @@ async def reminders_tick_route(x_cron_secret: str | None = Header(default=None),
     all, just the secret configured on both sides. An unset CRON_SECRET
     refuses every request rather than accepting an unauthenticated one.
 
-    § streak reminder, 2026-09-15 — same URL/secret/GitHub Actions
-    schedule as before (no infra change needed), but now runs the
-    streak-at-risk tick instead of the old lesson-reminder tick: the
-    lesson/study reminder moved to a LOCAL device notification (see
-    frontend's local_reminder_service.dart), which needs no server tick at
-    all — services/reminders.py's run_reminder_tick and LessonReminderLog
-    are kept in the codebase (harmless, unused) rather than deleted, since
-    removing a live table is a separate, riskier change than simply no
-    longer calling it."""
+    Runs both independent reminder ticks on the same GitHub Actions
+    schedule (no reason to double the infra — they don't share state or
+    dedup tables, see each module's own header). The study/lesson reminder
+    briefly moved to a local device notification (§ study reminder local
+    delivery, 2026-09-15) and was moved back to push the same day after a
+    real-device MIUI test — see reminders.py's own header for why."""
     if not settings.cron_secret or x_cron_secret != settings.cron_secret:
         raise ApiError(401, "unauthorized")
-    return await run_streak_reminder_tick(db)
+    lesson_result = await run_reminder_tick(db)
+    streak_result = await run_streak_reminder_tick(db)
+    return {"lessonReminder": lesson_result, "streakReminder": streak_result}

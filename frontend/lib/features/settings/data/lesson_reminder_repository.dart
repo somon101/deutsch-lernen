@@ -2,30 +2,35 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 
 import '../../../core/api/api_client.dart';
-import '../../../core/notifications/local_reminder_service.dart';
 
 /// Server-backed "Push-уведомления" + "Напоминание о занятии" settings (§
-/// lesson reminder fix, 2026-09-07; delivery moved to a LOCAL device
-/// notification §2026-09-15 — see local_reminder_service.dart's own header
-/// for why).
+/// lesson reminder fix, 2026-09-07).
 ///
 /// Previously local-only SharedPreferences state in settings_repository.dart
-/// (that file's own header still says "TODO: подключить API") — which is
+/// (that file's own header still said "TODO: подключить API") — which is
 /// exactly why the reminder never actually fired: nothing the user set ever
 /// reached the server, so nothing server-side could ever check it. Mirrors
 /// core/settings/sound_preferences.dart's load-then-patch pattern, the
 /// established way this app moves a device-local setting onto the account.
 ///
-/// The setting itself still lives on the server (so it survives a
-/// reinstall/new device), but what actually fires the reminder at the
-/// chosen time is now a locally-scheduled OS notification, reconciled
-/// against this state after every load/patch — see `_syncLocalSchedule`.
+/// Delivery briefly moved to a local on-device notification (§ study
+/// reminder local delivery, 2026-09-15) and moved back to push the same day:
+/// a real Xiaomi/MIUI device test found the local alarm fires but MIUI's own
+/// autostart restriction can block the app from completing the notification
+/// afterwards, with no in-app way to detect or fix that — see
+/// backend/app/services/reminders.py's header for the full story. Push rides
+/// Google Play Services' already-whitelisted process, so it isn't affected
+/// by that same restriction. This file is back to being pure settings I/O:
+/// the actual send now happens server-side (services/reminders.py's
+/// run_reminder_tick), which is why `_syncTimezone` below still matters —
+/// it's the one signal that server-side tick needs and has no other way to
+/// learn.
 ///
-/// `dailyGoalMinutes`/`languageLevel`/`streakReminder` stay exactly where
-/// they were, in settingsProvider — untouched, out of scope for this fix.
-/// The unrelated, admin-only streak-at-risk push reminder has no per-user
-/// setting at all (see AdminNotificationSettings) — nothing here gates or
-/// affects it, by design.
+/// `dailyGoalMinutes`/`languageLevel` stay exactly where they were, in
+/// settingsProvider — untouched, out of scope for this fix. The unrelated,
+/// admin-only streak-at-risk push reminder has no per-user setting at all
+/// (see AdminNotificationSettings) — nothing here gates or affects it, by
+/// design.
 class LessonReminderPreferences {
   const LessonReminderPreferences({
     required this.pushEnabled,
@@ -82,15 +87,10 @@ class LessonReminderPreferencesNotifier extends Notifier<LessonReminderPreferenc
       final json = await ref.read(apiClientProvider).get('/api/me/preferences');
       state = LessonReminderPreferences.fromJson(json);
     } catch (_) {
-      // Not signed in yet, or offline — keep whatever is in state, and
-      // don't touch the local schedule: on a genuine offline app start
-      // the last OS-level schedule (from the previous successful load) is
-      // exactly what should keep firing, not something this failed
-      // request should cancel or guess about.
+      // Not signed in yet, or offline — keep whatever is in state.
       return;
     }
     await _syncTimezone();
-    await _syncLocalSchedule();
   }
 
   /// Applies the change locally first so the switch responds at once, then
@@ -105,24 +105,6 @@ class LessonReminderPreferencesNotifier extends Notifier<LessonReminderPreferenc
     } catch (_) {
       state = previous;
       rethrow;
-    }
-    await _syncLocalSchedule();
-  }
-
-  /// Reconciles the OS-level local notification against the current state
-  /// (§ study reminder local delivery, 2026-09-15) — the actual mechanism
-  /// behind "изменение времени должно сразу перепланировать локальное
-  /// уведомление" / "выключение должно отменять локальное уведомление".
-  /// Called after every successful load/patch, so the schedule can never
-  /// drift from what Settings currently shows: on by itself is not enough,
-  /// the master "Push-уведомления" switch has to be on too, matching how
-  /// that switch already reads to the user as "notifications, in general".
-  Future<void> _syncLocalSchedule() async {
-    final s = state;
-    if (s.pushEnabled && s.lessonReminderEnabled) {
-      await LocalReminderService.scheduleStudyReminder(hour: s.lessonReminderHour, minute: s.lessonReminderMinute);
-    } else {
-      await LocalReminderService.cancelStudyReminder();
     }
   }
 
