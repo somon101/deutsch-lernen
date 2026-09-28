@@ -5,7 +5,7 @@
 // stay required, matching the per-word form. What these tests pin down is
 // that a rejection now names the field, the word and the row, instead of the
 // bare English "Field required" the server's report used to collapse into.
-import 'package:deutsch_lernen/features/admin/course_builder/domain/vocabulary_import.dart';
+import 'package:payroha/features/admin/course_builder/domain/vocabulary_import.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,5 +1,5 @@
-name: deutsch_lernen
-description: "Deutsch Lernen — German learning platform"
+name: payroha
+description: "Payroha — German learning platform"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -26,7 +26,7 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/icon/icon.png"
-  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_background: "#060712"
   adaptive_icon_foreground: "assets/icon/icon.png"
   windows:
     generate: true
@@ -35,8 +35,8 @@ flutter_launcher_icons:
   web:
     generate: true
     image_path: "assets/icon/icon.png"
-    background_color: "#FFFFFF"
-    theme_color: "#FFFFFF"
+    background_color: "#060712"
+    theme_color: "#060712"
 
 environment:
   sdk: ^3.13.1

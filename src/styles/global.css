@@ -195,8 +195,10 @@ button {
   text-decoration: none;
 }
 
-.brand-flag {
-  font-size: 22px;
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
 }
 
 /* ---------- Home / course map ---------- */

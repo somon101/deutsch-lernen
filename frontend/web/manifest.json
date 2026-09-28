@@ -1,11 +1,11 @@
 {
-    "name": "deutsch_lernen",
-    "short_name": "deutsch_lernen",
+    "name": "Payroha",
+    "short_name": "Payroha",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFFFF",
-    "theme_color": "#FFFFFF",
-    "description": "A new Flutter project.",
+    "background_color": "#060712",
+    "theme_color": "#060712",
+    "description": "Payroha — German learning platform",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

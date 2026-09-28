@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Deutsch Lernen API", lifespan=lifespan)
+app = FastAPI(title="Payroha API", lifespan=lifespan)
 
 # Mirrors index.ts's custom CORS origin-matching function exactly:
 #   1. no Origin header -> allowed (CORSMiddleware doesn't gate non-CORS

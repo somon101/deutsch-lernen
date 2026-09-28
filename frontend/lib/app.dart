@@ -182,14 +182,14 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class DeutschLernenApp extends ConsumerStatefulWidget {
-  const DeutschLernenApp({super.key});
+class PayrohaApp extends ConsumerStatefulWidget {
+  const PayrohaApp({super.key});
 
   @override
-  ConsumerState<DeutschLernenApp> createState() => _DeutschLernenAppState();
+  ConsumerState<PayrohaApp> createState() => _PayrohaAppState();
 }
 
-class _DeutschLernenAppState extends ConsumerState<DeutschLernenApp> {
+class _PayrohaAppState extends ConsumerState<PayrohaApp> {
   @override
   void initState() {
     super.initState();
@@ -216,7 +216,7 @@ class _DeutschLernenAppState extends ConsumerState<DeutschLernenApp> {
     });
 
     return MaterialApp.router(
-      title: 'Deutsch Lernen',
+      title: 'Payroha',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,

@@ -18,7 +18,7 @@ export default function AdminTopNav({ back, extra }: { back?: { label: string; t
   return (
     <nav className="top-nav">
       <Link to="/" className="brand">
-        <span className="brand-flag">🇩🇪</span> Deutsch Lernen
+        <img className="brand-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="" /> Payroha
       </Link>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         {back && (

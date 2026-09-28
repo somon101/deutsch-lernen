@@ -21,7 +21,7 @@ export default function Home() {
     <div className="app-shell">
       <nav className="top-nav">
         <Link to="/" className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
+          <img className="brand-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="" /> Payroha
         </Link>
         {user ? (
           <div style={{ display: "flex", gap: 10 }}>

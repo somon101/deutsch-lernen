@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/features/lesson_runner/domain/exercise.dart';
-import 'package:deutsch_lernen/features/lesson_runner/grading/scramble_grader.dart';
+import 'package:payroha/features/lesson_runner/domain/exercise.dart';
+import 'package:payroha/features/lesson_runner/grading/scramble_grader.dart';
 
 /// Covers the auto "Собери фразу" mode (§ auto scramble, 2026-09-02): the
 /// server sends only the phrase, the pieces are derived from it, and the

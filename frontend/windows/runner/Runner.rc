@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.deutschlernen" "\0"
-            VALUE "FileDescription", "deutsch_lernen" "\0"
+            VALUE "CompanyName", "Payroha" "\0"
+            VALUE "FileDescription", "Payroha" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "deutsch_lernen" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.deutschlernen. All rights reserved." "\0"
-            VALUE "OriginalFilename", "deutsch_lernen.exe" "\0"
-            VALUE "ProductName", "deutsch_lernen" "\0"
+            VALUE "InternalName", "payroha" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Payroha. All rights reserved." "\0"
+            VALUE "OriginalFilename", "payroha.exe" "\0"
+            VALUE "ProductName", "Payroha" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

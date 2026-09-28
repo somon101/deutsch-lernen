@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/core/utils/text_utils.dart';
+import 'package:payroha/core/utils/text_utils.dart';
 
 void main() {
   group('normalizeAnswer', () {

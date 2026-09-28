@@ -15,7 +15,7 @@
          notifications silently never show on those devices. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
-        android:label="deutsch_lernen"
+        android:label="Payroha"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

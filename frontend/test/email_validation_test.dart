@@ -4,7 +4,7 @@
 // reject every one of these same malformed shapes without a DNS lookup.
 // These cases mirror that backend check so the two never quietly disagree
 // about what counts as "obviously wrong".
-import 'package:deutsch_lernen/features/settings/presentation/security_privacy_screen.dart';
+import 'package:payroha/features/settings/presentation/security_privacy_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

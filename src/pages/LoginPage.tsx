@@ -37,7 +37,7 @@ export default function LoginPage() {
     <div className="app-shell">
       <nav className="top-nav">
         <span className="brand">
-          <span className="brand-flag">🇩🇪</span> Deutsch Lernen
+          <img className="brand-logo" src={`${import.meta.env.BASE_URL}logo.png`} alt="" /> Payroha
         </span>
       </nav>
       <main className="home-main">
