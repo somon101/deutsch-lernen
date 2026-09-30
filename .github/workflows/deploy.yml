@@ -1,8 +1,15 @@
 name: Deploy to GitHub Pages
 
+# Publishes the Flutter app (frontend/) as a website, so teachers can open
+# the course builder in a browser with nothing to install. Replaces the old
+# React site that used to be deployed here.
+
 on:
   push:
     branches: [main]
+    paths:
+      - frontend/**
+      - .github/workflows/deploy.yml
   workflow_dispatch:
 
 permissions:
@@ -17,21 +24,29 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: subosito/flutter-action@v2
         with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-        env:
-          # Address of the deployed API. Set this as a repository variable
-          # (Settings -> Secrets and variables -> Actions -> Variables).
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+      - run: flutter pub get
+      # --base-href follows the repository name, so the site keeps working
+      # if the repository is renamed. --no-web-resources-cdn bundles the
+      # rendering engine into the site instead of loading it from gstatic.
+      - run: >-
+          flutter build web --release
+          --no-web-resources-cdn
+          --no-wasm-dry-run
+          --base-href "/${{ github.event.repository.name }}/"
+          --dart-define=API_URL=${{ vars.FLUTTER_API_URL || 'https://deutsch-lernen-api-n3ss7qmkpa-an.a.run.app' }}
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: frontend/build/web
 
   deploy:
     needs: build
