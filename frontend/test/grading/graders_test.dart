@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/features/lesson_runner/domain/exercise.dart';
-import 'package:deutsch_lernen/features/lesson_runner/grading/choice_grader.dart';
-import 'package:deutsch_lernen/features/lesson_runner/grading/cloze_grader.dart';
-import 'package:deutsch_lernen/features/lesson_runner/grading/match_grader.dart';
-import 'package:deutsch_lernen/features/lesson_runner/grading/scramble_grader.dart';
-import 'package:deutsch_lernen/features/lesson_runner/grading/truefalse_grader.dart';
+import 'package:payroha/features/lesson_runner/domain/exercise.dart';
+import 'package:payroha/features/lesson_runner/grading/choice_grader.dart';
+import 'package:payroha/features/lesson_runner/grading/cloze_grader.dart';
+import 'package:payroha/features/lesson_runner/grading/match_grader.dart';
+import 'package:payroha/features/lesson_runner/grading/scramble_grader.dart';
+import 'package:payroha/features/lesson_runner/grading/truefalse_grader.dart';
 
 void main() {
   group('gradeChoice', () {

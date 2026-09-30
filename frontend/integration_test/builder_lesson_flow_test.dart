@@ -9,9 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:deutsch_lernen/app.dart';
-import 'package:deutsch_lernen/core/auth/secure_storage.dart';
-import 'package:deutsch_lernen/core/auth/user.dart';
+import 'package:payroha/app.dart';
+import 'package:payroha/core/auth/secure_storage.dart';
+import 'package:payroha/core/auth/user.dart';
 
 class _InMemorySecureStorage implements SecureStorage {
   String? token;
@@ -93,7 +93,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [secureStorageProvider.overrideWithValue(_InMemorySecureStorage())],
-        child: const DeutschLernenApp(),
+        child: const PayrohaApp(),
       ),
     );
     await tester.pumpAndSettle();

@@ -13,10 +13,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:deutsch_lernen/app.dart';
-import 'package:deutsch_lernen/core/api/api_client.dart';
-import 'package:deutsch_lernen/core/auth/secure_storage.dart';
-import 'package:deutsch_lernen/core/auth/user.dart';
+import 'package:payroha/app.dart';
+import 'package:payroha/core/api/api_client.dart';
+import 'package:payroha/core/auth/secure_storage.dart';
+import 'package:payroha/core/auth/user.dart';
 
 /// Test setup, not app behavior: the dev DB's admin user has already
 /// completed lesson1 from earlier manual QA passes across this migration,
@@ -73,7 +73,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [secureStorageProvider.overrideWithValue(_InMemorySecureStorage())],
-        child: const DeutschLernenApp(),
+        child: const PayrohaApp(),
       ),
     );
     await tester.pumpAndSettle();

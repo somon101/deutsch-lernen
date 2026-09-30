@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/core/utils/seeded_random.dart';
+import 'package:payroha/core/utils/seeded_random.dart';
 
 // Reference values computed from backend/app/legacy_parser/text_utils.py —
 // itself already verified bit-exact against the original

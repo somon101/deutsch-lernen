@@ -10,5 +10,5 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await initializePushIfSupported();
-  runApp(const ProviderScope(child: DeutschLernenApp()));
+  runApp(const ProviderScope(child: PayrohaApp()));
 }

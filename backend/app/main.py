@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Deutsch Lernen API", lifespan=lifespan)
+app = FastAPI(title="Payroha API", lifespan=lifespan)
 
 # Mirrors index.ts's custom CORS origin-matching function exactly:
 #   1. no Origin header -> allowed (CORSMiddleware doesn't gate non-CORS
@@ -56,6 +56,9 @@ _fixed_patterns = [
     # different network for ad-hoc testing. A new random subdomain each
     # time a tunnel starts, always under this fixed, Cloudflare-owned domain.
     r"^https://[a-z0-9-]+\.trycloudflare\.com$",
+    # The Flutter web build on GitHub Pages (.github/workflows/deploy.yml) —
+    # the browser version teachers use for the course builder.
+    r"^https://somon101\.github\.io$",
 ]
 _env_patterns = [rf"^{re.escape(origin)}$" for origin in settings.cors_origins_list]
 _origin_regex = "|".join(_fixed_patterns + _env_patterns)

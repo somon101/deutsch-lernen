@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/features/lesson_runner/domain/exercise.dart';
-import 'package:deutsch_lernen/features/lesson_runner/presentation/widgets/scramble_question.dart';
+import 'package:payroha/features/lesson_runner/domain/exercise.dart';
+import 'package:payroha/features/lesson_runner/presentation/widgets/scramble_question.dart';
 
 /// Covers when "Проверить" may be pressed. The three shapes below are the
 /// ones that actually exist in the content: pieces equal to the phrase's

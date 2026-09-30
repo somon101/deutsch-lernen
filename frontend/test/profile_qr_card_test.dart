@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/core/auth/user.dart';
-import 'package:deutsch_lernen/features/profile/data/profile_gamification_repository.dart';
-import 'package:deutsch_lernen/features/profile/presentation/widgets/profile_qr_card.dart';
-import 'package:deutsch_lernen/l10n/app_localizations.dart';
+import 'package:payroha/core/auth/user.dart';
+import 'package:payroha/features/profile/data/profile_gamification_repository.dart';
+import 'package:payroha/features/profile/presentation/widgets/profile_qr_card.dart';
+import 'package:payroha/l10n/app_localizations.dart';
 
 const _overview = ProfileGamificationOverview(
   social: SocialStats(followers: 1240, mutual: 42, following: 67),

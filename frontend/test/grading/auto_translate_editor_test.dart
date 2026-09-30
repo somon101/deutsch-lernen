@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:deutsch_lernen/features/admin/course_builder/domain/block_question.dart';
-import 'package:deutsch_lernen/features/admin/course_builder/presentation/widgets/question_kind_editors.dart';
+import 'package:payroha/features/admin/course_builder/domain/block_question.dart';
+import 'package:payroha/features/admin/course_builder/presentation/widgets/question_kind_editors.dart';
 
 /// Test 11's UI half: the "Количество вопросов" field must hold whole
 /// numbers only. The server validates it too — this checks the input itself

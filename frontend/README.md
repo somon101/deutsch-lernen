@@ -1,6 +1,6 @@
-# deutsch_lernen
+# Payroha
 
-Deutsch Lernen — German learning platform
+Payroha — German learning platform
 
 ## Getting Started
 

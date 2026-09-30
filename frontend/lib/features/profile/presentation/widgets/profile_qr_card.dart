@@ -32,9 +32,9 @@ class _QrCardPalette {
 }
 
 /// The shareable "profile card": avatar/name header, CEFR level ladder,
-/// a 3-column stats row, a scannable QR (center Lingora mark, error
+/// a 3-column stats row, a scannable QR (center Payroha mark, error
 /// correction level H so the logo doesn't break readability), and a
-/// Lingora-branded footer with the user's public ID. Reused by both the
+/// Payroha-branded footer with the user's public ID. Reused by both the
 /// on-screen share sheet and the PNG rendered for the system share sheet
 /// (via [repaintKey] + RepaintBoundary.toImage in the caller).
 class ProfileQrCard extends StatelessWidget {
@@ -55,7 +55,7 @@ class ProfileQrCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final fullName = '${user.firstName} ${user.lastName}'.trim();
-    final qrData = 'https://lingora.app/u/${user.username}';
+    final qrData = 'https://payroha.app/u/${user.username}';
 
     return RepaintBoundary(
       key: repaintKey,
@@ -388,13 +388,13 @@ class _QrBlock extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.all(4),
-                  child: Image.asset('assets/images/lingora_icon.png', fit: BoxFit.contain),
+                  child: Image.asset('assets/images/payroha_icon.png', fit: BoxFit.contain),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 11),
-          Text('lingora.app/u/$username', style: GoogleFonts.golosText(fontSize: 12, fontWeight: FontWeight.w500, color: _QrCardPalette.inkSoft)),
+          Text('payroha.app/u/$username', style: GoogleFonts.golosText(fontSize: 12, fontWeight: FontWeight.w500, color: _QrCardPalette.inkSoft)),
         ],
       ),
     );
@@ -413,7 +413,14 @@ class _Footer extends StatelessWidget {
       decoration: const BoxDecoration(border: Border(top: BorderSide(color: _QrCardPalette.line))),
       child: Column(
         children: [
-          Image.asset('assets/images/lingora_wordmark.png', height: 22, fit: BoxFit.contain),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/images/payroha_icon.png', height: 22, fit: BoxFit.contain),
+              const SizedBox(width: 6),
+              Text('Payroha', style: GoogleFonts.golosText(fontSize: 18, fontWeight: FontWeight.w800, color: _QrCardPalette.ink)),
+            ],
+          ),
           const SizedBox(height: 7),
           Text(
             l10n.qrCardSlogan.toUpperCase(),
