@@ -842,10 +842,12 @@ class BuilderRepository {
     double? posX,
     double? posY,
     String? title,
+    String? transcript,
+    Map<String, String>? transcriptTranslations,
   }) async {
     final res = await _api.patch(
       '${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}',
-      body: {'posX': ?posX, 'posY': ?posY, 'title': ?title},
+      body: {'posX': ?posX, 'posY': ?posY, 'title': ?title, 'transcript': ?transcript, 'transcriptTranslations': ?transcriptTranslations},
     );
     return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
   }

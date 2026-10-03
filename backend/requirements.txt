@@ -9,6 +9,8 @@ pydantic-settings==2.7.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.2.1
 pyjwt[crypto]==2.10.1
+# Encrypts the AI provider API key at rest (services/ai_settings.py).
+cryptography>=41
 python-multipart==0.0.20
 python-dotenv==1.0.1
 httpx==0.28.1

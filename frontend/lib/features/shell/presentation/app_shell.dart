@@ -76,6 +76,8 @@ const _navItems = [
   _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Главная', path: '/'),
   _NavItem(icon: Icons.edit_note_outlined, activeIcon: Icons.edit_note, label: 'Конструктор курсов', path: '/admin/courses'),
   _NavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book, label: 'Словарь', path: '/admin/vocabulary'),
+  _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble, label: 'Фразы', path: '/admin/phrases'),
+  _NavItem(icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome, label: 'ИИ', path: '/admin/ai-settings'),
   _NavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Пользователи', path: '/admin'),
   _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Профиль', path: '/profile'),
   _NavItem(icon: Icons.emoji_events_outlined, activeIcon: Icons.emoji_events, label: 'Рейтинг', path: '/leaderboard'),
@@ -89,6 +91,8 @@ bool _visibleFor(_NavItem item, AppUser? user) {
   // require_admin (§ shared dictionary, 2026-09-14), so the nav should
   // offer this to exactly whoever the API already lets call it.
   if (item.path == '/admin/vocabulary') return user?.isStaff ?? false;
+  if (item.path == '/admin/phrases') return user?.isStaff ?? false;
+  if (item.path == '/admin/ai-settings') return user?.isAdmin ?? false;
   if (item.path == '/admin') return user?.isAdmin ?? false;
   return true;
 }
@@ -300,7 +304,10 @@ class _BottomBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.profileColors;
-    final items = _navItems.where((item) => _visibleFor(item, user)).toList();
+    // The phone bar has room for ~7 icons; the two admin-only tool screens
+    // (§ AI lesson generator, 2026-10-03) stay on the wide rail only.
+    const railOnly = {'/admin/phrases', '/admin/ai-settings'};
+    final items = _navItems.where((item) => _visibleFor(item, user) && !railOnly.contains(item.path)).toList();
 
     return DecoratedBox(
       decoration: BoxDecoration(color: c.bg, border: Border(top: BorderSide(color: c.border))),

@@ -11,7 +11,15 @@ import 'progress.dart';
 /// stays on the old fixed Stage-enum runner entirely — nothing here is used
 /// for it.
 class GraphNode {
-  const GraphNode({required this.id, required this.type, required this.refId, required this.mediaUrl, required this.title});
+  const GraphNode({
+    required this.id,
+    required this.type,
+    required this.refId,
+    required this.mediaUrl,
+    required this.title,
+    this.transcript,
+    this.transcriptTranslations = const {},
+  });
 
   factory GraphNode.fromJson(Map<String, dynamic> json) => GraphNode(
         id: json['id'] as String,
@@ -19,6 +27,8 @@ class GraphNode {
         refId: json['refId'] as String?,
         mediaUrl: json['mediaUrl'] as String?,
         title: json['title'] as String,
+        transcript: json['transcript'] as String?,
+        transcriptTranslations: ((json['transcriptTranslations'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, v as String)),
       );
 
   final String id;
@@ -27,6 +37,9 @@ class GraphNode {
   final String? refId;
   final String? mediaUrl;
   final String title;
+  // Audio nodes only (§ AI lesson generator, 2026-10-03).
+  final String? transcript;
+  final Map<String, String> transcriptTranslations;
 }
 
 class GraphEdge {

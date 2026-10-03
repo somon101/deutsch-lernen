@@ -213,8 +213,13 @@ class AutoBlankDraft extends QuestionDraft {
 
   factory AutoBlankDraft.blank() => const AutoBlankDraft(phrases: ['']);
 
+  // `phrases` is absent on a reusable-pool entry: the course read expands a
+  // pool auto_blank into one learner-facing slot per phrase, without the
+  // phrase list itself. Such entries are never edited through this draft
+  // (BlockEditor keeps only "legacy" ones), so an empty list is correct —
+  // it just must not crash the whole course page.
   factory AutoBlankDraft.fromWire(Map<String, dynamic> json) =>
-      AutoBlankDraft(phrases: (json['phrases'] as List<dynamic>).cast<String>());
+      AutoBlankDraft(phrases: ((json['phrases'] as List<dynamic>?) ?? const []).cast<String>());
 
   final List<String> phrases;
 

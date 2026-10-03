@@ -837,6 +837,12 @@ class AppLocalizationsRu extends AppLocalizations {
       'Послушайте запись и закрепите произношение фраз из урока.';
 
   @override
+  String get audioStageShowTranslation => 'Показать перевод';
+
+  @override
+  String get audioStageHideTranslation => 'Скрыть перевод';
+
+  @override
   String get audioStageFinished => '✓ Запись прослушана';
 
   @override

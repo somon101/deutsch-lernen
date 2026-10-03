@@ -1,4 +1,5 @@
 from app.models.activity_time import ActivityTime
+from app.models.ai_settings import AiSettings
 from app.models.answer_log import AnswerLog
 from app.models.category import Category
 from app.models.course import Course
@@ -28,6 +29,7 @@ from app.models.material_block import MaterialBlock
 from app.models.material_block_translation import MaterialBlockTranslation
 from app.models.material_translation import MaterialTranslation
 from app.models.notification import Notification
+from app.models.phrase import Phrase, PhraseTranslation
 from app.models.notification_settings import NotificationSettings
 from app.models.push_token import PushToken
 from app.models.question import Question
@@ -44,6 +46,7 @@ __all__ = [
     "Role",
     "UserStatus",
     "ActivityTime",
+    "AiSettings",
     "AnswerLog",
     "Category",
     "Course",
@@ -74,6 +77,8 @@ __all__ = [
     "MaterialTranslation",
     "Notification",
     "NotificationSettings",
+    "Phrase",
+    "PhraseTranslation",
     "PushToken",
     "Question",
     "QuestionPlacement",

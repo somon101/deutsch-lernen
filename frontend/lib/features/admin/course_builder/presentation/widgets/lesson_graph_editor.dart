@@ -854,13 +854,22 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
         );
       case 'video':
       case 'audio':
-        return MediaEditor(
+        final media = MediaEditor(
           kind: node.type,
           url: node.mediaUrl,
           libraryLoader: () => ref.read(builderRepositoryProvider).listMediaLibrary(node.type),
           onUpload: _uploadMedia,
           onRemove: _removeMedia,
           onReuse: _reuseMedia,
+        );
+        if (node.type == 'video') return media;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            media,
+            const SizedBox(height: AdminMetrics.fieldGap),
+            _TranscriptEditor(key: ValueKey('transcript-${node.id}'), courseId: widget.courseId, lessonId: widget.lesson.id, node: node, onSaved: widget.onReload),
+          ],
         );
       case 'minitest':
       case 'practice':
@@ -900,3 +909,75 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
 }
 
 // ignore: unused_import
+
+
+/// «Текст аудио» under an audio node's file (§ AI lesson generator,
+/// 2026-10-03): the recording's text in the studied language plus its RU
+/// and TJ translations. The AI fills these before any file exists; the
+/// admin records the audio from this text. Learners see it under the player.
+class _TranscriptEditor extends ConsumerStatefulWidget {
+  const _TranscriptEditor({super.key, required this.courseId, required this.lessonId, required this.node, required this.onSaved});
+
+  final String courseId;
+  final String lessonId;
+  final AdminGraphNode node;
+  final VoidCallback onSaved;
+
+  @override
+  ConsumerState<_TranscriptEditor> createState() => _TranscriptEditorState();
+}
+
+class _TranscriptEditorState extends ConsumerState<_TranscriptEditor> {
+  late final _text = TextEditingController(text: widget.node.transcript ?? '');
+  late final _ru = TextEditingController(text: widget.node.transcriptTranslations['ru'] ?? '');
+  late final _tg = TextEditingController(text: widget.node.transcriptTranslations['tg'] ?? '');
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _ru.dispose();
+    _tg.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(builderRepositoryProvider).updateGraphNode(
+            widget.courseId,
+            widget.lessonId,
+            widget.node.id,
+            transcript: _text.text,
+            transcriptTranslations: {'ru': _ru.text, 'tg': _tg.text},
+          );
+      widget.onSaved();
+      if (mounted) showSuccessSnack(context);
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить текст аудио');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Текст аудио', style: AdminTypography.fieldLabel),
+        const SizedBox(height: 6),
+        TextField(controller: _text, minLines: 3, maxLines: 10, decoration: adminInputDecoration(hint: 'Текст записи на изучаемом языке')),
+        const SizedBox(height: 8),
+        TextField(controller: _ru, minLines: 2, maxLines: 8, decoration: adminInputDecoration(label: 'Перевод (русский)')),
+        const SizedBox(height: 8),
+        TextField(controller: _tg, minLines: 2, maxLines: 8, decoration: adminInputDecoration(label: 'Перевод (тоҷикӣ)')),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(onPressed: _busy ? null : _save, style: AdminButtonStyles.primary(), child: const Text('Сохранить текст')),
+        ),
+      ],
+    );
+  }
+}

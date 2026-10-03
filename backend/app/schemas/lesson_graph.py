@@ -24,6 +24,9 @@ class UpdateNodeInput(BaseModel):
     posX: float | None = None
     posY: float | None = None
     title: str | None = Field(default=None, max_length=200)
+    # Audio nodes only (§ AI lesson generator, 2026-10-03).
+    transcript: str | None = Field(default=None, max_length=20000)
+    transcriptTranslations: dict[str, str] | None = None
 
     @field_validator("title")
     @classmethod

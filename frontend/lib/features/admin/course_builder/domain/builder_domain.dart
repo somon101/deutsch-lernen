@@ -112,6 +112,8 @@ class AdminGraphNode {
     required this.title,
     required this.posX,
     required this.posY,
+    this.transcript,
+    this.transcriptTranslations = const {},
   });
 
   factory AdminGraphNode.fromJson(Map<String, dynamic> json) => AdminGraphNode(
@@ -122,6 +124,8 @@ class AdminGraphNode {
     title: json['title'] as String,
     posX: (json['posX'] as num).toDouble(),
     posY: (json['posY'] as num).toDouble(),
+    transcript: json['transcript'] as String?,
+    transcriptTranslations: ((json['transcriptTranslations'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, v as String)),
   );
 
   final String id;
@@ -131,6 +135,10 @@ class AdminGraphNode {
   final String title;
   final double posX;
   final double posY;
+  /// Audio nodes only (§ AI lesson generator, 2026-10-03): the recording's
+  /// text and its translations by content locale.
+  final String? transcript;
+  final Map<String, String> transcriptTranslations;
 
   AdminGraphNode copyWith({double? posX, double? posY, String? title, String? mediaUrl}) => AdminGraphNode(
     id: id,
@@ -140,6 +148,8 @@ class AdminGraphNode {
     title: title ?? this.title,
     posX: posX ?? this.posX,
     posY: posY ?? this.posY,
+    transcript: transcript,
+    transcriptTranslations: transcriptTranslations,
   );
 }
 

@@ -27,7 +27,16 @@ const _rates = [0.75, 1.0, 1.25];
 /// Mirrors AudioStage.tsx: play/pause, seek, playback rate, "Далее" gated
 /// on reaching the end of the recording.
 class AudioStage extends ConsumerStatefulWidget {
-  const AudioStage({super.key, required this.runnerKey, required this.onComplete, this.graphNodeMediaUrl = false, this.mediaUrlOverride, this.nextLabel});
+  const AudioStage({
+    super.key,
+    required this.runnerKey,
+    required this.onComplete,
+    this.graphNodeMediaUrl = false,
+    this.mediaUrlOverride,
+    this.nextLabel,
+    this.transcript,
+    this.transcriptTranslations = const {},
+  });
 
   final LessonRunnerKey runnerKey;
   final VoidCallback onComplete;
@@ -35,6 +44,10 @@ class AudioStage extends ConsumerStatefulWidget {
   final bool graphNodeMediaUrl;
   final String? mediaUrlOverride;
   final String? nextLabel;
+  // The recording's text and its translations by locale (§ AI lesson
+  // generator, 2026-10-03) — shown under the player when present.
+  final String? transcript;
+  final Map<String, String> transcriptTranslations;
 
   @override
   ConsumerState<AudioStage> createState() => _AudioStageState();
@@ -124,6 +137,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
             Text(l10n.audioStageNotFound, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text(l10n.audioStageNotUploaded, textAlign: TextAlign.center),
+            if (_hasTranscript) ...[const SizedBox(height: 16), _transcriptCard(context)],
             const SizedBox(height: 24),
             ElevatedButton(onPressed: widget.onComplete, child: Text(l10n.lessonStageSkip)),
           ],
@@ -141,10 +155,11 @@ class _AudioStageState extends ConsumerState<AudioStage> {
     final maxMs = _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1.0;
     final posMs = _position.inMilliseconds.toDouble().clamp(0, maxMs).toDouble();
 
-    return Padding(
+    return Center(
+      child: SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(l10n.audioStageListen, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
@@ -192,6 +207,7 @@ class _AudioStageState extends ConsumerState<AudioStage> {
               ),
             ),
           ),
+          if (_hasTranscript) ...[const SizedBox(height: 16), _transcriptCard(context)],
           const SizedBox(height: 20),
           Text(
             _finished ? l10n.audioStageFinished : l10n.audioStageListenToContinue,
@@ -206,6 +222,40 @@ class _AudioStageState extends ConsumerState<AudioStage> {
             child: Text(widget.nextLabel ?? l10n.audioStageDefaultNextPractice),
           ),
         ],
+      ),
+      ),
+    );
+  }
+
+  bool get _hasTranscript => (widget.transcript ?? '').trim().isNotEmpty;
+  bool _showTranslation = false;
+
+  /// The recording's text, with its translation in the learner's interface
+  /// language (falling back to Russian) behind a toggle.
+  Widget _transcriptCard(BuildContext context) {
+    final code = Localizations.localeOf(context).languageCode;
+    final translation = widget.transcriptTranslations[code] ?? widget.transcriptTranslations['ru'];
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 560),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.transcript!.trim(), style: Theme.of(context).textTheme.bodyLarge),
+              if (translation != null && translation.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => setState(() => _showTranslation = !_showTranslation),
+                  icon: Icon(_showTranslation ? Icons.visibility_off_outlined : Icons.translate, size: 18),
+                  label: Text(_showTranslation ? AppLocalizations.of(context).audioStageHideTranslation : AppLocalizations.of(context).audioStageShowTranslation),
+                ),
+                if (_showTranslation) Text(translation.trim(), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

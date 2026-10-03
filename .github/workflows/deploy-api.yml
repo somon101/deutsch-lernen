@@ -44,6 +44,6 @@ jobs:
             DATABASE_URL=DATABASE_URL:latest
             JWT_SECRET=JWT_SECRET:latest
             SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest
-          flags: --allow-unauthenticated --min-instances=0 --service-account=github-deploy@project-c4487d83-9a0e-446d-89e.iam.gserviceaccount.com
+          flags: --allow-unauthenticated --min-instances=0 --timeout=600 --service-account=github-deploy@project-c4487d83-9a0e-446d-89e.iam.gserviceaccount.com
 
       - run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
