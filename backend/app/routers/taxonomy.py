@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import require_auth, require_staff
 from app.db import get_db
 from app.errors import ApiError
+from app.models.material import Material
 from app.models.user import User
 from app.schemas.block import QuestionTranslationInput
 from app.schemas.lesson_state import ActivityTimeInput, DailyActivityInput
@@ -27,6 +28,7 @@ from app.schemas.taxonomy import (
     TopicInput,
 )
 from app.services import taxonomy as svc
+from app.services.lesson_graph import sync_graph_with_content
 from app.services.progress import (
     add_activity_time,
     get_activity_history,
@@ -168,9 +170,14 @@ async def update_material(material_id: str, body: MaterialUpdateInput, admin: Us
 
 @router.delete("/materials/{material_id}")
 async def delete_material(material_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    material = await db.get(Material, material_id)
+    lesson_id = material.lessonId if material else None
     ok = await svc.delete_material(db, material_id)
     if not ok:
         raise ApiError(404, "Материал не найден")
+    # A converted lesson's graph node for it must go too (§ linear view
+    # editable after conversion, 2026-10-03).
+    await sync_graph_with_content(db, lesson_id)
     return {"ok": True}
 
 
@@ -186,6 +193,11 @@ async def add_material_block(material_id: str, body: MaterialBlockInput, admin: 
     block = await svc.add_material_block(db, material_id, body)
     if not block:
         raise ApiError(404, "Материал не найден")
+    # First real content in the linear rail's material puts it on a
+    # converted lesson's graph (§ linear view editable after conversion).
+    material = await db.get(Material, material_id)
+    if material:
+        await sync_graph_with_content(db, material.lessonId)
     return {"block": _material_block_dto(block)}
 
 

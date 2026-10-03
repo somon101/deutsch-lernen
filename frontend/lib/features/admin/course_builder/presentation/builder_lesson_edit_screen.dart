@@ -132,19 +132,15 @@ class BuilderLessonEditScreen extends ConsumerWidget {
 /// rail, so it renders unchanged: no toggle, no wrapping, full editing,
 /// exactly as before this widget existed.
 ///
-/// A converted lesson gets both views, but NOT as two equally-live editors.
-/// Video/audio/material content forks the moment a graph node's own file
-/// diverges from the pre-conversion lesson (LessonNode.mediaUrl is a
-/// separate field from CourseLesson.videoUrl/audioUrl by design — see
-/// LessonNode's own docstring — and a graph can hold more Material rows
-/// than the rail's single "Материал" tab can show). Editing through the
-/// rail after that would silently widen that fork rather than reveal it, so
-/// the rail is READ-ONLY once a graph exists: wrapped in [IgnorePointer]
-/// rather than trusting every add/edit/delete button across
-/// LessonEditorPanel and its children (VocabularyEditor/
-/// MaterialBlockEditor/MediaEditor/BlockEditor) to individually respect a
-/// read-only flag none of them were built with. The graph stays the one
-/// place that writes.
+/// A converted lesson gets both views, and both edit (§ linear view
+/// editable after conversion, 2026-10-03). They share the same content rows
+/// — graph nodes only reference them — and the server keeps the graph in
+/// step with every rail edit: content first created through the rail gets a
+/// node at the end of the route, a block deleted through it loses its node,
+/// and the rail's single video/audio slot reads and writes the graph's
+/// first video/audio node (services/lesson_graph.py's
+/// sync_graph_with_content / set_first_node_media). What the rail cannot
+/// show — a second material, a second video — stays editable in the graph.
 class _LessonContentView extends ConsumerStatefulWidget {
   const _LessonContentView({super.key, required this.courseId, required this.lesson, required this.languageId, required this.onReload});
 
@@ -250,7 +246,7 @@ class _LessonContentViewState extends ConsumerState<_LessonContentView> {
           children: [
             _ViewTab(label: 'Граф', selected: !_showLinearView, onTap: () => setState(() => _showLinearView = false)),
             const SizedBox(width: 8),
-            _ViewTab(label: 'Линейный (просмотр)', selected: _showLinearView, onTap: _switchToLinear),
+            _ViewTab(label: 'Линейный', selected: _showLinearView, onTap: _switchToLinear),
           ],
         ),
         if (_showLinearView) ...[
@@ -258,14 +254,13 @@ class _LessonContentViewState extends ConsumerState<_LessonContentView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.info_outline, size: 16, color: AdminColors.warn),
+              const Icon(Icons.info_outline, size: 16),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Только просмотр. Урок переведён в граф — редактируется там. '
-                  'Видео, аудио и лишние блоки материала могут отличаться от графа: '
-                  'у графа для них своё, отдельное хранилище.',
-                  style: AdminTypography.caption.copyWith(color: AdminColors.warn),
+                  'Изменения сохраняются и в графе. Видео и аудио — первый блок видео/аудио графа. '
+                  'Дополнительные блоки, добавленные в графе, редактируются только в графе.',
+                  style: AdminTypography.caption,
                 ),
               ),
             ],
@@ -274,7 +269,7 @@ class _LessonContentViewState extends ConsumerState<_LessonContentView> {
         const SizedBox(height: AdminMetrics.fieldGap),
         Expanded(
           child: _showLinearView
-              ? IgnorePointer(child: panel)
+              ? panel
               : LessonGraphEditor(courseId: widget.courseId, lesson: widget.lesson, languageId: widget.languageId, onReload: widget.onReload),
         ),
       ],

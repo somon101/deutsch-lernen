@@ -461,3 +461,172 @@ async def delete_edge(db: AsyncSession, lesson_id: str, edge_id: str) -> bool:
     await db.delete(edge)
     await db.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Keeping a converted lesson's graph in step with the linear editor
+# ---------------------------------------------------------------------------
+#
+# A converted lesson can still be edited through the old linear rail (§
+# linear view editable after conversion, 2026-10-03). Both views edit the
+# SAME content rows — the graph only references them — so the only things
+# that can fall out of step are the graph's own topology rows: a word list,
+# Material or LessonBlock created through the rail has no node yet (so a
+# learner walking the graph would never reach it), and a row deleted
+# through the rail leaves a node pointing at nothing. The helpers below
+# repair exactly that, and are a no-op for an unconverted lesson.
+
+
+async def is_converted(db: AsyncSession, lesson_id: str) -> bool:
+    return (await db.scalar(select(LessonNode.id).where(LessonNode.lessonId == lesson_id).limit(1))) is not None
+
+
+async def first_node_of_type(db: AsyncSession, lesson_id: str, node_type: str) -> LessonNode | None:
+    """The node the rail's single slot for this type maps to — the earliest
+    one, in the same createdAt order the canvas numbers nodes by."""
+    return (
+        await db.execute(
+            select(LessonNode).where(LessonNode.lessonId == lesson_id, LessonNode.type == node_type).order_by(LessonNode.createdAt).limit(1)
+        )
+    ).scalar_one_or_none()
+
+
+async def _append_node(db: AsyncSession, course_id: str, lesson_id: str, node_type: str, ref_id: str | None = None, media_url: str | None = None) -> LessonNode:
+    """Adds a node at the end of the learner route: to the right of every
+    existing node, chained after the current tail. Flushes, never commits."""
+    nodes = await _real_nodes(db, lesson_id)
+    edges = await _real_edges(db, lesson_id)
+    has_out = {e.fromNodeId for e in edges}
+    has_in = {e.toNodeId for e in edges}
+    # Prefer the end of a real chain over a stray unconnected node, latest
+    # first, so the new node lands after what the learner actually walks.
+    candidates = [n for n in nodes if n.id not in has_out]
+    chained = [n for n in candidates if n.id in has_in]
+    tail = (chained or candidates or [None])[-1]
+
+    node = LessonNode(
+        courseId=course_id,
+        lessonId=lesson_id,
+        type=node_type,
+        refId=ref_id,
+        mediaUrl=media_url,
+        posX=max((n.posX for n in nodes), default=-260.0) + 260.0,
+        posY=0.0,
+    )
+    db.add(node)
+    await db.flush()
+    if tail is not None:
+        db.add(LessonEdge(lessonId=lesson_id, fromNodeId=tail.id, toNodeId=node.id, position=0))
+        await db.flush()
+    return node
+
+
+async def _remove_node_keeping_route(db: AsyncSession, lesson_id: str, node: LessonNode) -> None:
+    """Deletes one node and its edges, reconnecting its predecessor to its
+    successor so the route stays one piece. Never touches content rows."""
+    edges = await _real_edges(db, lesson_id)
+    incoming = [e for e in edges if e.toNodeId == node.id]
+    outgoing = [e for e in edges if e.fromNodeId == node.id]
+    for e in incoming + outgoing:
+        await db.delete(e)
+    await db.flush()
+    for i in incoming:
+        for o in outgoing:
+            if i.fromNodeId != o.toNodeId:
+                db.add(LessonEdge(lessonId=lesson_id, fromNodeId=i.fromNodeId, toNodeId=o.toNodeId, position=0))
+    await db.delete(node)
+    await db.flush()
+
+
+async def sync_graph_with_content(db: AsyncSession, lesson_id: str, *, words_changed: bool = False) -> None:
+    """Makes a converted lesson's graph reference all of its content again
+    after an edit through the linear rail: adds a node (at the end of the
+    route) for a Material or LessonBlock that has none, and removes a node
+    whose Material/LessonBlock no longer exists. A no-op for an unconverted
+    lesson. Commits only when something changed.
+
+    The word list is only considered when `words_changed` (a word was just
+    added through the rail): deleting the "Слова" node in the graph leaves
+    the words themselves in place, and an unrelated edit must not quietly
+    put back a node the teacher removed on purpose."""
+    nodes = await _real_nodes(db, lesson_id)
+    if not nodes:
+        return
+    lesson = await db.get(CourseLesson, lesson_id)
+    if not lesson:
+        return
+    changed = False
+
+    material_ids = set((await db.execute(select(Material.id).where(Material.lessonId == lesson_id))).scalars().all())
+    blocks = (
+        await db.execute(select(LessonBlock).where(LessonBlock.lessonId == lesson_id).order_by(LessonBlock.stage, LessonBlock.position))
+    ).scalars().all()
+    block_ids = {b.id for b in blocks}
+
+    for node in nodes:
+        if (node.type == "material" and node.refId and node.refId not in material_ids) or (
+            node.type in _BLOCK_STAGES and node.refId and node.refId not in block_ids
+        ):
+            await _remove_node_keeping_route(db, lesson_id, node)
+            changed = True
+
+    referenced = {n.refId for n in await _real_nodes(db, lesson_id) if n.refId}
+    has_vocab_node = any(n.type == "vocabulary" for n in nodes)
+    if words_changed and not has_vocab_node:
+        has_words = await db.scalar(select(VocabularyItem.id).where(VocabularyItem.lessonId == lesson_id).limit(1))
+        if not has_words:
+            has_words = bool((await get_linked_items_by_lesson(db, [lesson_id])).get(lesson_id))
+        if has_words:
+            await _append_node(db, lesson.courseId, lesson_id, "vocabulary")
+            changed = True
+
+    # Only the rail's own material — the first "text" one, the same row its
+    # "Материал" tab opens — and only when the graph has no material node
+    # at all. Older non-text Material rows a lesson may carry were never
+    # part of its route, and conversion deliberately left them out.
+    if not any(n.type == "material" for n in await _real_nodes(db, lesson_id)):
+        rail_material = (
+            await db.execute(
+                select(Material).where(Material.lessonId == lesson_id, Material.materialType == "text").order_by(Material.position).limit(1)
+            )
+        ).scalar_one_or_none()
+        # The rail creates this row as soon as its tab is merely opened, so
+        # wait for real content before putting it on the learner's route.
+        has_content = rail_material is not None and (
+            await db.scalar(select(MaterialBlock.id).where(MaterialBlock.materialId == rail_material.id).limit(1))
+        ) is not None
+        if has_content and rail_material.id not in referenced:
+            await _append_node(db, lesson.courseId, lesson_id, "material", ref_id=rail_material.id)
+            changed = True
+
+    for block in blocks:
+        if block.id not in referenced and block.stage in _BLOCK_STAGES:
+            await _append_node(db, lesson.courseId, lesson_id, block.stage, ref_id=block.id)
+            changed = True
+
+    if changed:
+        await db.commit()
+
+
+async def set_first_node_media(db: AsyncSession, lesson: CourseLesson, kind: str, url: str | None) -> None:
+    """The rail's single video/audio slot for a converted lesson: writes the
+    first node of that type (creating one at the end of the route when
+    there is none and a file is being set). Commits."""
+    node = await first_node_of_type(db, lesson.id, kind)
+    if node is None:
+        if url is None:
+            return
+        await _append_node(db, lesson.courseId, lesson.id, kind, media_url=url)
+    else:
+        node.mediaUrl = url
+    await db.commit()
+
+
+async def set_first_node_media_translation(db: AsyncSession, lesson: CourseLesson, kind: str, locale: str, url: str | None) -> None:
+    node = await first_node_of_type(db, lesson.id, kind)
+    if node is None:
+        if url is None:
+            return
+        node = await _append_node(db, lesson.courseId, lesson.id, kind)
+        await db.commit()
+    await set_node_media_translation(db, lesson.id, node.id, locale, url)

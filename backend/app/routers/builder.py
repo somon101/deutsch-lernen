@@ -18,6 +18,7 @@ from app.schemas.course import (
 )
 from app.schemas.vocabulary import VocabularyImportPayload, VocabularyLinkInput, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
 from app.services import courses as svc
+from app.services.lesson_graph import sync_graph_with_content
 from app.services.content import DuplicateWordError
 from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
 from app.services.vocabulary import delete_word_globally, list_categories, list_dictionary_words
@@ -380,6 +381,7 @@ async def add_vocabulary(course_id: str, lesson_id: str, body: VocabularyWordInp
         raise ApiError(409, str(e))
     if not result:
         raise ApiError(404, "Урок не найден")
+    await sync_graph_with_content(db, lesson_id, words_changed=True)
     return result
 
 
@@ -391,6 +393,7 @@ async def link_vocabulary(course_id: str, lesson_id: str, body: VocabularyLinkIn
     result = await svc.link_existing_word_to_lesson(db, course_id, lesson_id, body.wordId)
     if not result:
         raise ApiError(404, "Слово не найдено")
+    await sync_graph_with_content(db, lesson_id, words_changed=True)
     return result
 
 
@@ -502,6 +505,7 @@ async def import_vocabulary(course_id: str, lesson_id: str, body: VocabularyImpo
         raise ApiError(409, str(e))
     if result is None:
         raise ApiError(404, "Урок не найден")
+    await sync_graph_with_content(db, lesson_id, words_changed=True)
     return result
 
 
@@ -531,6 +535,7 @@ async def create_block(course_id: str, lesson_id: str, body: BlockInput, db: Asy
     result = await svc.create_block(db, course_id, lesson_id, body.stage, body.title)
     if not result:
         raise ApiError(404, "Урок не найден")
+    await sync_graph_with_content(db, lesson_id)
     return result
 
 
@@ -557,6 +562,7 @@ async def delete_block(course_id: str, lesson_id: str, block_id: str, db: AsyncS
     result = await svc.delete_block(db, course_id, lesson_id, block_id)
     if not result:
         raise ApiError(404, "Блок не найден")
+    await sync_graph_with_content(db, lesson_id)
     return result
 
 

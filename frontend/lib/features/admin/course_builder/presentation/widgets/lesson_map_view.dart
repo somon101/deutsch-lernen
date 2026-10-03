@@ -288,6 +288,8 @@ const _kindLabels = {
   'scramble': 'Собери фразу',
   'match': 'Сопоставление',
   'auto_blank': 'Пропущенное слово (авто)',
+  'auto_translate': 'Переведи слово (авто)',
+  'auto_match': 'Сопоставление (авто)',
 };
 
 class _QuestionRow extends StatelessWidget {

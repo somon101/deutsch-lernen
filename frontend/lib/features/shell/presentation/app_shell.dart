@@ -151,7 +151,7 @@ class _NavRail extends ConsumerWidget {
           children: [
             const SizedBox(height: 24),
             const Text(
-              'Deutsch\nLernen',
+              'Payroha',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13, height: 1.25),
             ),
