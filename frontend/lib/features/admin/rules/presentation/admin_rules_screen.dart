@@ -22,7 +22,12 @@ const _pageSize = 30;
 /// rule sentence. One list per studied language, manual add/edit and a
 /// JSON import (pasted or loaded from a file).
 class AdminRulesScreen extends ConsumerStatefulWidget {
-  const AdminRulesScreen({super.key});
+  const AdminRulesScreen({super.key, this.languageId});
+
+  /// When set, the screen is embedded in a language workspace: this
+  /// language is fixed (no language picker anywhere) and there is no back
+  /// arrow of its own.
+  final String? languageId;
 
   @override
   ConsumerState<AdminRulesScreen> createState() => _AdminRulesScreenState();
@@ -57,8 +62,9 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
       final languages = await ref.read(builderRepositoryProvider).listLanguages();
       if (!mounted) return;
       setState(() {
-        _languages = languages;
-        _languageId = languages.isNotEmpty ? languages.first.id : null;
+        final fixed = widget.languageId;
+        _languages = fixed == null ? languages : [for (final l in languages) if (l.id == fixed) l];
+        _languageId = fixed ?? (languages.isNotEmpty ? languages.first.id : null);
       });
       await _load(reset: true);
     } catch (e) {
@@ -157,7 +163,8 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
             foregroundColor: AdminColors.text,
             elevation: 0,
             title: Text('Правила', style: AdminTypography.pageTitle),
-            leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
+            automaticallyImplyLeading: false,
+            leading: widget.languageId != null ? null : IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
             actions: [
               TextButton.icon(onPressed: _openImport, style: AdminButtonStyles.text(), icon: const Icon(Icons.upload_file, size: 18), label: const Text('Импорт JSON')),
               TextButton.icon(onPressed: () => _openEditor(), style: AdminButtonStyles.text(), icon: const Icon(Icons.add, size: 18), label: const Text('Новое правило')),
@@ -172,7 +179,7 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
                   padding: const EdgeInsets.fromLTRB(16, AdminMetrics.cardGap, 16, 8),
                   child: Row(
                     children: [
-                      if (_languages.isNotEmpty) ...[
+                      if (widget.languageId == null && _languages.isNotEmpty) ...[
                         SizedBox(
                           width: 200,
                           child: DropdownButtonFormField<String>(
@@ -303,7 +310,7 @@ class _RuleDialogState extends ConsumerState<_RuleDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (widget.rule == null && widget.languages.isNotEmpty) ...[
+            if (widget.rule == null && widget.languages.length > 1) ...[
               DropdownButtonFormField<String>(
                 initialValue: _languageId,
                 decoration: adminInputDecoration(label: 'Изучаемый язык'),
@@ -420,7 +427,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (widget.languages.isNotEmpty) ...[
+              if (widget.languages.length > 1) ...[
                 DropdownButtonFormField<String>(
                   initialValue: _languageId,
                   decoration: adminInputDecoration(label: 'Для какого языка импортируем'),

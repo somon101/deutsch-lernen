@@ -16,6 +16,7 @@ from app.services.schema_bootstrap import (
     ensure_ai_tables,
     ensure_content_locale_tables,
     ensure_daily_goal_tables,
+    ensure_language_status_columns,
     ensure_lesson_graph_tables,
     ensure_lesson_reminder_tables,
     ensure_lesson_vocabulary_link_table,
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
         await ensure_streak_reminder_table(session)
         await ensure_ai_tables(session)
         await ensure_rule_table(session)
+        await ensure_language_status_columns(session)
         await backfill_word_language(session)
         await ensure_admin_exists(session)
     yield

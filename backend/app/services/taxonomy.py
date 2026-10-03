@@ -43,7 +43,7 @@ async def list_languages(db: AsyncSession, with_courses_only: bool = False) -> l
         select(Language)
         .join(Level, Level.languageId == Language.id)
         .join(Course, Course.levelId == Level.id)
-        .where(Course.status == CourseStatus.PUBLISHED)
+        .where(Course.status == CourseStatus.PUBLISHED, Language.status == "PUBLISHED")
         .distinct()
         .order_by(Language.name)
     )
@@ -776,3 +776,89 @@ async def remove_placement(db: AsyncSession, placement_id: str) -> bool:
 
 def pass_threshold() -> int:
     return settings.pass_threshold_percent
+
+
+
+# ---------------------------------------------------------------------------
+# Language workspace («Языки»): status, alphabet, counts, guarded delete
+# ---------------------------------------------------------------------------
+
+
+async def language_counts(db: AsyncSession) -> dict[str, dict[str, int]]:
+    """Per language: courses (through their level), words, phrases, rules."""
+    from app.models.phrase import Phrase
+    from app.models.rule import Rule
+    from app.models.vocabulary_item import VocabularyItem
+
+    out: dict[str, dict[str, int]] = {}
+
+    def put(rows, key):
+        for language_id, n in rows:
+            if language_id:
+                out.setdefault(language_id, {"courses": 0, "words": 0, "phrases": 0, "rules": 0})[key] = n
+
+    put((await db.execute(select(Level.languageId, func.count(Course.id)).join(Course, Course.levelId == Level.id).group_by(Level.languageId))).all(), "courses")
+    put((await db.execute(select(VocabularyItem.languageId, func.count()).group_by(VocabularyItem.languageId))).all(), "words")
+    put((await db.execute(select(Phrase.languageId, func.count()).group_by(Phrase.languageId))).all(), "phrases")
+    put((await db.execute(select(Rule.languageId, func.count()).group_by(Rule.languageId))).all(), "rules")
+    return out
+
+
+def language_dto(language: Language, counts: dict[str, int] | None = None) -> dict:
+    c = counts or {}
+    return {
+        "id": language.id,
+        "name": language.name,
+        "status": language.status or "PUBLISHED",
+        "alphabet": language.alphabet,
+        "courseCount": c.get("courses", 0),
+        "wordCount": c.get("words", 0),
+        "phraseCount": c.get("phrases", 0),
+        "ruleCount": c.get("rules", 0),
+    }
+
+
+async def update_language(db: AsyncSession, language_id: str, changes: dict) -> Language | None:
+    language = await db.get(Language, language_id)
+    if not language:
+        return None
+    if changes.get("name") is not None:
+        language.name = changes["name"].strip()
+    if changes.get("status") is not None:
+        language.status = changes["status"]
+    if "alphabet" in changes:
+        language.alphabet = (changes["alphabet"] or "").strip() or None
+    await db.commit()
+    await db.refresh(language)
+    return language
+
+
+async def delete_language(db: AsyncSession, language_id: str) -> bool:
+    """Refuses (409) while anything still belongs to the language, naming
+    what is there, so nothing is lost by accident."""
+    language = await db.get(Language, language_id)
+    if not language:
+        return False
+    c = (await language_counts(db)).get(language_id, {})
+    parts = [
+        f"курсов: {c['courses']}" if c.get("courses") else None,
+        f"слов: {c['words']}" if c.get("words") else None,
+        f"фраз: {c['phrases']}" if c.get("phrases") else None,
+        f"правил: {c['rules']}" if c.get("rules") else None,
+    ]
+    parts = [p for p in parts if p]
+    if parts:
+        raise ApiError(409, "Язык не пустой — сначала удалите его содержимое (" + ", ".join(parts) + ").")
+    for level in (await db.execute(select(Level).where(Level.languageId == language_id))).scalars().all():
+        await db.delete(level)
+    for topic in (await db.execute(select(Topic).where(Topic.languageId == language_id))).scalars().all():
+        await db.delete(topic)
+    await db.delete(language)
+    await db.commit()
+    return True
+
+
+async def draft_level_ids(db: AsyncSession) -> set[str]:
+    """Levels of languages in DRAFT — their courses are hidden from learners."""
+    rows = (await db.execute(select(Level.id).join(Language, Language.id == Level.languageId).where(Language.status == "DRAFT"))).scalars().all()
+    return set(rows)

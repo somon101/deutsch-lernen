@@ -7,6 +7,7 @@ from app.auth.deps import require_auth, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.material import Material
+from app.models.enums import Role
 from app.models.user import User
 from app.schemas.block import QuestionTranslationInput
 from app.schemas.lesson_state import ActivityTimeInput, DailyActivityInput
@@ -15,6 +16,7 @@ from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
 from app.schemas.taxonomy import (
     AnswerSubmitInput,
     LanguageInput,
+    LanguageUpdateInput,
     MaterialBlockInput,
     MaterialBlockReorderInput,
     MaterialBlockTranslationInput,
@@ -102,13 +104,30 @@ async def list_languages(
     withCourses: bool = Query(default=False), user: User = Depends(require_auth), db: AsyncSession = Depends(get_db)
 ):
     languages = await svc.list_languages(db, with_courses_only=withCourses)
-    return {"languages": [{"id": lang.id, "name": lang.name} for lang in languages]}
+    counts = await svc.language_counts(db) if user.role in (Role.ADMIN, Role.TEACHER) else {}
+    return {"languages": [svc.language_dto(lang, counts.get(lang.id)) for lang in languages]}
+
+
+@router.patch("/languages/{language_id}")
+async def update_language(language_id: str, body: LanguageUpdateInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    language = await svc.update_language(db, language_id, body.model_dump(exclude_unset=True))
+    if not language:
+        raise ApiError(404, "Язык не найден")
+    counts = await svc.language_counts(db)
+    return {"language": svc.language_dto(language, counts.get(language.id))}
+
+
+@router.delete("/languages/{language_id}")
+async def delete_language(language_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    if not await svc.delete_language(db, language_id):
+        raise ApiError(404, "Язык не найден")
+    return {"ok": True}
 
 
 @router.post("/languages", status_code=201)
 async def create_language(body: LanguageInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
     language, existing = await svc.create_language(db, body)
-    return {"language": {"id": language.id, "name": language.name}, "existing": existing}
+    return {"language": svc.language_dto(language), "existing": existing}
 
 
 @router.get("/levels")

@@ -44,7 +44,12 @@ final _levelsProvider = FutureProvider.autoDispose<List<AdminLevel>>(
 /// to /admin/courses/legacy) plus every builder course, with reorder/
 /// delete/create.
 class AdminCoursesHubScreen extends ConsumerWidget {
-  const AdminCoursesHubScreen({super.key});
+  const AdminCoursesHubScreen({super.key, this.languageId, this.languageName});
+
+  /// When set, the hub is embedded in a language workspace and lists only
+  /// this language's courses (through Course.levelId -> Level.languageId).
+  final String? languageId;
+  final String? languageName;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -52,6 +57,10 @@ class AdminCoursesHubScreen extends ConsumerWidget {
     final languages = ref.watch(_languagesProvider).value ?? const [];
     final levels = ref.watch(_levelsProvider).value ?? const [];
     final legacyCount = ref.watch(_legacyLessonCountProvider).value;
+    final fixedLanguage = languageId;
+    final languageLevelIds = {for (final l in levels) if (l.languageId == fixedLanguage) l.id};
+    // The old file-based course «Немецкий с нуля» belongs to German.
+    final showLegacy = fixedLanguage == null || (languageName ?? '').trim().toLowerCase() == 'немецкий';
 
     return BackGuard(
       fallbackPath: '/',
@@ -74,10 +83,13 @@ class AdminCoursesHubScreen extends ConsumerWidget {
         foregroundColor: AdminColors.text,
         elevation: 0,
         title: Text('Курсы', style: AdminTypography.pageTitle),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
-        ),
+        automaticallyImplyLeading: false,
+        leading: fixedLanguage != null
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.go('/'),
+              ),
         // §9 of the course-builder redesign, 2026-09-01: course list moves
         // to the top of the page, "+ Новый курс" becomes a header button
         // (form opens in a bottom sheet) and notification settings move
@@ -111,17 +123,26 @@ class AdminCoursesHubScreen extends ConsumerWidget {
             // list, styled identically to a real course row — no separate
             // frame of its own (§9: "остаётся первой карточкой списка ...
             // без отдельной рамки").
-            _LegacyCourseRow(legacyCount: legacyCount),
-            const SizedBox(height: 8),
+            if (showLegacy) ...[
+              _LegacyCourseRow(legacyCount: legacyCount),
+              const SizedBox(height: 8),
+            ],
             courses.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, st) => Text(
                 'Не удалось загрузить курсы: $err',
                 style: AdminTypography.body,
               ),
-              data: (list) => Column(
-                children: _groupedCourseWidgets(list, languages, levels),
-              ),
+              data: (list) {
+                final visible = fixedLanguage == null ? list : [for (final c in list) if (languageLevelIds.contains(c.levelId)) c];
+                if (fixedLanguage != null && visible.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Text('В этом языке пока нет курсов. Нажмите «Новый курс» и выберите уровень этого языка.', style: AdminTypography.body),
+                  );
+                }
+                return Column(children: _groupedCourseWidgets(visible, languages, levels));
+              },
             ),
           ],
         ),

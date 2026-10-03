@@ -22,6 +22,15 @@ final builderCourseProvider = FutureProvider.autoDispose.family<AdminCourse, Str
   (ref, courseId) => ref.watch(builderRepositoryProvider).getCourse(courseId),
 );
 
+/// Where "back" from a course goes: its language's workspace (courses tab),
+/// or the language list when the course has no level yet.
+final _courseBackPathProvider = FutureProvider.autoDispose.family<String, String?>((ref, levelId) async {
+  if (levelId == null) return '/admin/courses';
+  final levels = await ref.watch(builderRepositoryProvider).listLevels();
+  final match = levels.where((l) => l.id == levelId);
+  return match.isEmpty ? '/admin/courses' : '/admin/languages/${Uri.encodeComponent(match.first.languageId)}';
+});
+
 int _wordCount(AdminCourse c) =>
     c.lessons.fold(0, (sum, l) => sum + l.vocabulary.length);
 int _questionCount(AdminCourse c) => c.lessons.fold(
@@ -46,9 +55,10 @@ class BuilderCourseEditScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final course = ref.watch(builderCourseProvider(courseId));
+    final backPath = ref.watch(_courseBackPathProvider(course.value?.levelId)).value ?? '/admin/courses';
 
     return BackGuard(
-      fallbackPath: '/admin/courses',
+      fallbackPath: backPath,
       // Forces this fixed-light-palette screen family's unstyled defaults
       // (e.g. a plain TextField's own text color) to match, regardless of
       // the app's dark-mode toggle — see the matching fix + full
@@ -68,7 +78,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/admin/courses'),
+          onPressed: () => context.go(backPath),
         ),
       ),
       body: course.when(
@@ -88,7 +98,7 @@ class BuilderCourseEditScreen extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: GestureDetector(
-                  onTap: () => context.go('/admin/courses'),
+                  onTap: () => context.go(backPath),
                   child: Text('Курсы →', style: AdminTypography.caption),
                 ),
               ),

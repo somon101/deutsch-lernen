@@ -187,3 +187,9 @@ class AnswerSubmitInput(BaseModel):
     placementId: str | None = None
     answerData: dict | list
     correct: bool
+
+
+class LanguageUpdateInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    status: Literal["DRAFT", "PUBLISHED"] | None = None
+    alphabet: str | None = Field(default=None, max_length=1000)

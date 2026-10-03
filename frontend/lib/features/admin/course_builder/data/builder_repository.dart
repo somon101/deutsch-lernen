@@ -563,6 +563,19 @@ class BuilderRepository {
     return (AdminLanguage.fromJson(res['language'] as Map<String, dynamic>), res['existing'] as bool);
   }
 
+  Future<AdminLanguage> updateLanguage(String id, {String? name, String? status, String? alphabet}) async {
+    final res = await _api.patch('/api/languages/${Uri.encodeComponent(id)}', body: {
+      'name': ?name,
+      'status': ?status,
+      'alphabet': ?alphabet,
+    });
+    return AdminLanguage.fromJson(res['language'] as Map<String, dynamic>);
+  }
+
+  /// Fails with 409 (and a message naming what's inside) unless the
+  /// language has no courses, words, phrases or rules.
+  Future<void> deleteLanguage(String id) => _api.delete('/api/languages/${Uri.encodeComponent(id)}');
+
   Future<List<AdminLevel>> listLevels({String? languageId}) async {
     final res = await _api.get('/api/levels', query: {'languageId': ?languageId});
     return (res['levels'] as List<dynamic>).map((l) => AdminLevel.fromJson(l as Map<String, dynamic>)).toList();

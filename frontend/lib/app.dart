@@ -13,7 +13,6 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'core/widgets/app_lifecycle_heartbeat.dart';
 import 'l10n/app_localizations.dart';
-import 'features/admin/course_builder/presentation/admin_courses_hub_screen.dart';
 import 'features/admin/course_builder/presentation/builder_course_edit_screen.dart';
 import 'features/admin/course_builder/presentation/builder_lesson_edit_screen.dart';
 import 'features/admin/legacy_lessons/presentation/admin_lesson_edit_screen.dart';
@@ -41,6 +40,8 @@ import 'features/vocabulary/presentation/my_words_screen.dart';
 import 'features/admin/ai/presentation/admin_ai_settings_screen.dart';
 import 'features/admin/phrases/presentation/admin_phrases_screen.dart';
 import 'features/admin/rules/presentation/admin_rules_screen.dart';
+import 'features/admin/languages/presentation/admin_languages_screen.dart';
+import 'features/admin/languages/presentation/admin_language_workspace_screen.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
 /// (src/components/ProtectedRoute.tsx) is given per-route in App.tsx — kept
@@ -102,7 +103,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/leaderboard', builder: (context, state) => const LeaderboardScreen()),
           GoRoute(path: '/admin', builder: (context, state) => const AdminUsersScreen()),
           GoRoute(path: '/admin/users/all', builder: (context, state) => const AdminUsersAllScreen()),
-          GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
+          GoRoute(path: '/admin/courses', builder: (context, state) => const AdminLanguagesScreen()),
+          GoRoute(
+            path: '/admin/languages/:id',
+            builder: (context, state) => AdminLanguageWorkspaceScreen(
+              languageId: state.pathParameters['id']!,
+              initialTab: state.uri.queryParameters['tab'],
+            ),
+          ),
           GoRoute(path: '/admin/vocabulary', builder: (context, state) => const AdminVocabularyScreen()),
           GoRoute(path: '/admin/phrases', builder: (context, state) => const AdminPhrasesScreen()),
           GoRoute(path: '/admin/rules', builder: (context, state) => const AdminRulesScreen()),

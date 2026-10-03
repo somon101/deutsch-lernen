@@ -564,3 +564,19 @@ async def ensure_rule_table(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_rule_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+_LANGUAGE_STATUS_STATEMENTS = (
+    """ALTER TABLE "Language" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'PUBLISHED'""",
+    'ALTER TABLE "Language" ADD COLUMN IF NOT EXISTS "alphabet" TEXT',
+)
+
+
+async def ensure_language_status_columns(db: AsyncSession) -> None:
+    for statement in _LANGUAGE_STATUS_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_language_status_columns: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

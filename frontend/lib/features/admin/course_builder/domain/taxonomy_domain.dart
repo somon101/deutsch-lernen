@@ -6,10 +6,37 @@ import 'block_question.dart';
 /// LessonQuestion, all untouched and still fully working).
 
 class AdminLanguage {
-  const AdminLanguage({required this.id, required this.name});
-  factory AdminLanguage.fromJson(Map<String, dynamic> json) => AdminLanguage(id: json['id'] as String, name: json['name'] as String);
+  const AdminLanguage({
+    required this.id,
+    required this.name,
+    this.status = 'PUBLISHED',
+    this.alphabet,
+    this.courseCount = 0,
+    this.wordCount = 0,
+    this.phraseCount = 0,
+    this.ruleCount = 0,
+  });
+  factory AdminLanguage.fromJson(Map<String, dynamic> json) => AdminLanguage(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        status: json['status'] as String? ?? 'PUBLISHED',
+        alphabet: json['alphabet'] as String?,
+        courseCount: (json['courseCount'] as num?)?.toInt() ?? 0,
+        wordCount: (json['wordCount'] as num?)?.toInt() ?? 0,
+        phraseCount: (json['phraseCount'] as num?)?.toInt() ?? 0,
+        ruleCount: (json['ruleCount'] as num?)?.toInt() ?? 0,
+      );
   final String id;
   final String name;
+  /// DRAFT hides the language and its courses from learners.
+  final String status;
+  final String? alphabet;
+  final int courseCount;
+  final int wordCount;
+  final int phraseCount;
+  final int ruleCount;
+
+  bool get isPublished => status == 'PUBLISHED';
 }
 
 class AdminLevel {

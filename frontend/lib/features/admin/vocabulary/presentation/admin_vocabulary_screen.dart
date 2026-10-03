@@ -35,7 +35,12 @@ const _pageSize = 30;
 /// dictionary entirely, which the per-lesson editor deliberately can't do
 /// once a word is reused elsewhere.
 class AdminVocabularyScreen extends ConsumerStatefulWidget {
-  const AdminVocabularyScreen({super.key});
+  const AdminVocabularyScreen({super.key, this.languageId});
+
+  /// When set, the screen is embedded in a language workspace: this
+  /// language is fixed (no language picker anywhere) and there is no back
+  /// arrow of its own.
+  final String? languageId;
 
   @override
   ConsumerState<AdminVocabularyScreen> createState() => _AdminVocabularyScreenState();
@@ -64,8 +69,9 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
       final languages = await ref.read(builderRepositoryProvider).listLanguages();
       if (!mounted) return;
       setState(() {
-        _languages = languages;
-        _languageId = languages.isNotEmpty ? languages.first.id : null;
+        final fixed = widget.languageId;
+        _languages = fixed == null ? languages : [for (final l in languages) if (l.id == fixed) l];
+        _languageId = fixed ?? (languages.isNotEmpty ? languages.first.id : null);
       });
     } catch (_) {
       // Without the language list the dictionary still loads, just unfiltered.
@@ -206,7 +212,8 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
             foregroundColor: AdminColors.text,
             elevation: 0,
             title: Text('Словарь', style: AdminTypography.pageTitle),
-            leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
+            automaticallyImplyLeading: false,
+            leading: widget.languageId != null ? null : IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
             actions: [
               TextButton.icon(
                 onPressed: _openImportSheet,
@@ -231,7 +238,7 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
                   padding: const EdgeInsets.fromLTRB(16, AdminMetrics.cardGap, 16, 8),
                   child: Row(
                     children: [
-                      if (_languages.isNotEmpty) ...[
+                      if (widget.languageId == null && _languages.isNotEmpty) ...[
                         SizedBox(
                           width: 170,
                           child: DropdownButtonFormField<String>(
@@ -551,7 +558,7 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
           const SizedBox(height: 4),
           Text('Слово попадёт в словарь выбранного языка. В урок его можно добавить потом из конструктора.', style: AdminTypography.caption),
           const SizedBox(height: AdminMetrics.fieldGap),
-          if (widget.languages.isNotEmpty) ...[
+          if (widget.languages.length > 1) ...[
             DropdownButtonFormField<String>(
               initialValue: _languageId,
               decoration: adminInputDecoration(label: 'Изучаемый язык'),
@@ -882,7 +889,7 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
         children: [
           Text('Импорт слов из JSON', style: AdminTypography.cardTitle),
           const SizedBox(height: AdminMetrics.fieldGap),
-          if (widget.languages.isNotEmpty) ...[
+          if (widget.languages.length > 1) ...[
             DropdownButtonFormField<String>(
               initialValue: _languageId,
               decoration: adminInputDecoration(label: 'Для какого языка импортируем'),

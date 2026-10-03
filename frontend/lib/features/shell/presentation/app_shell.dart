@@ -75,9 +75,6 @@ class _NavItem {
 const _navItems = [
   _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Главная', path: '/'),
   _NavItem(icon: Icons.edit_note_outlined, activeIcon: Icons.edit_note, label: 'Конструктор курсов', path: '/admin/courses'),
-  _NavItem(icon: Icons.menu_book_outlined, activeIcon: Icons.menu_book, label: 'Словарь', path: '/admin/vocabulary'),
-  _NavItem(icon: Icons.chat_bubble_outline, activeIcon: Icons.chat_bubble, label: 'Фразы', path: '/admin/phrases'),
-  _NavItem(icon: Icons.rule_outlined, activeIcon: Icons.rule, label: 'Правила', path: '/admin/rules'),
   _NavItem(icon: Icons.auto_awesome_outlined, activeIcon: Icons.auto_awesome, label: 'ИИ', path: '/admin/ai-settings'),
   _NavItem(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Пользователи', path: '/admin'),
   _NavItem(icon: Icons.person_outline, activeIcon: Icons.person, label: 'Профиль', path: '/profile'),
@@ -104,7 +101,7 @@ bool _visibleFor(_NavItem item, AppUser? user) {
 /// /admin/builder and /admin/lessons but are part of "Конструктор курсов"
 /// (§ builder full-width layout, 2026-09-02).
 const _sectionAliases = <String, List<String>>{
-  '/admin/courses': ['/admin/builder', '/admin/lessons'],
+  '/admin/courses': ['/admin/builder', '/admin/lessons', '/admin/languages', '/admin/vocabulary', '/admin/phrases', '/admin/rules'],
 };
 
 bool _isActive(_NavItem item, String currentPath) {

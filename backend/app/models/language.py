@@ -22,6 +22,11 @@ class Language(Base):
     # human-meaningful set.
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
+    # DRAFT hides the language and all its courses from learners; staff
+    # still see everything. Existing rows default to PUBLISHED.
+    status: Mapped[str] = mapped_column(String, nullable=False, default="PUBLISHED", server_default="PUBLISHED")
+    # Letters for future letter-based exercises; only stored for now.
+    alphabet: Mapped[str | None] = mapped_column(String, nullable=True)
 
     levels: Mapped[list["Level"]] = relationship(back_populates="language")
     topics: Mapped[list["Topic"]] = relationship(back_populates="language")

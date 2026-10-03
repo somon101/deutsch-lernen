@@ -6,6 +6,7 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
 from app.services import courses as svc
+from app.services import taxonomy as taxonomy_svc
 from app.services.content_locale import DEFAULT_CONTENT_LOCALE
 
 router = APIRouter(prefix="/api/courses", tags=["learner-courses"], dependencies=[Depends(require_auth)])
@@ -14,7 +15,8 @@ router = APIRouter(prefix="/api/courses", tags=["learner-courses"], dependencies
 @router.get("/")
 async def list_published_courses(languageId: str | None = Query(default=None), db: AsyncSession = Depends(get_db)):
     all_courses = await svc.list_courses(db, language_id=languageId)
-    return {"courses": [c for c in all_courses if c["status"] == "PUBLISHED"]}
+    hidden_levels = await taxonomy_svc.draft_level_ids(db)
+    return {"courses": [c for c in all_courses if c["status"] == "PUBLISHED" and c.get("levelId") not in hidden_levels]}
 
 
 @router.get("/{course_id}")
@@ -26,7 +28,7 @@ async def get_published_course(course_id: str, user: User = Depends(require_auth
     # app/services/content_locale.py's module docstring for why this never
     # derives from anything else, including a system-language header.
     course = await svc.get_course(db, course_id, locale=user.contentLocale or DEFAULT_CONTENT_LOCALE)
-    if not course or course["status"] != "PUBLISHED":
+    if not course or course["status"] != "PUBLISHED" or course.get("levelId") in await taxonomy_svc.draft_level_ids(db):
         raise ApiError(404, "Курс не найден")
     return {"course": course}
 
@@ -39,6 +41,6 @@ async def get_published_course_version(course_id: str, user: User = Depends(requ
     full fetch: a draft course's version isn't distinguishable from a
     nonexistent one."""
     course = await svc.get_course(db, course_id)
-    if not course or course["status"] != "PUBLISHED":
+    if not course or course["status"] != "PUBLISHED" or course.get("levelId") in await taxonomy_svc.draft_level_ids(db):
         raise ApiError(404, "Курс не найден")
     return {"version": await svc.get_course_version(db, course_id)}
