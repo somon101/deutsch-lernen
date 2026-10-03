@@ -81,6 +81,42 @@ class _AdminAiSettingsScreenState extends ConsumerState<AdminAiSettingsScreen> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                settings.maybeWhen(
+                  data: (s) => s.availableModels.isEmpty
+                      ? const SizedBox.shrink()
+                      : Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: AdminCard(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Модель', style: AdminTypography.cardTitle),
+                                const SizedBox(height: 4),
+                                Text('Выбор влияет на все следующие генерации уроков. Меняется сразу после выбора.', style: AdminTypography.caption),
+                                for (final option in s.availableModels)
+                                  ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    enabled: !_busy,
+                                    onTap: option.id == s.model || _busy
+                                        ? null
+                                        : () => _run(
+                                              () => ref.read(aiRepositoryProvider).saveModel(option.id),
+                                              'Не удалось сменить модель',
+                                              success: 'Модель: ${option.label}',
+                                            ),
+                                    leading: Icon(
+                                      option.id == s.model ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                                      color: option.id == s.model ? AdminColors.accent : AdminColors.text,
+                                    ),
+                                    title: Text(option.label, style: AdminTypography.body),
+                                    subtitle: Text(option.description, style: AdminTypography.caption),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                  orElse: () => const SizedBox.shrink(),
+                ),
                 AdminCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

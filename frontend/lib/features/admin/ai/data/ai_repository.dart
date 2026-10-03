@@ -83,16 +83,33 @@ class AiRepository {
   }
 }
 
+class AiModelOption {
+  const AiModelOption({required this.id, required this.label, required this.description});
+  factory AiModelOption.fromJson(Map<String, dynamic> json) => AiModelOption(
+        id: json['id'] as String,
+        label: json['label'] as String,
+        description: json['description'] as String? ?? '',
+      );
+  final String id;
+  final String label;
+  final String description;
+}
+
 class AiSettings {
-  const AiSettings({required this.model, required this.hasKey, this.keyHint});
+  const AiSettings({required this.model, required this.hasKey, required this.availableModels, this.keyHint});
   factory AiSettings.fromJson(Map<String, dynamic> json) => AiSettings(
         model: json['model'] as String? ?? 'deepseek-chat',
         hasKey: json['hasKey'] as bool? ?? false,
         keyHint: json['keyHint'] as String?,
+        availableModels: [
+          for (final m in (json['availableModels'] as List<dynamic>? ?? const []))
+            AiModelOption.fromJson(m as Map<String, dynamic>),
+        ],
       );
   final String model;
   final bool hasKey;
   final String? keyHint;
+  final List<AiModelOption> availableModels;
 }
 
 class AiLessonPreview {

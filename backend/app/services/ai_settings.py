@@ -12,7 +12,25 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.errors import ApiError
 from app.models.ai_settings import AiSettings
+
+# The model list is curated here, not free text: a typo would otherwise be
+# saved and only fail later, inside a generation the admin is waiting on.
+# Descriptions are shown in the admin UI next to the choice.
+AVAILABLE_MODELS = [
+    {
+        "id": "deepseek-chat",
+        "label": "DeepSeek Chat",
+        "description": "Быстрая универсальная модель. Рекомендуется для генерации уроков: быстро отвечает и уверенно работает с JSON-форматом.",
+    },
+    {
+        "id": "deepseek-reasoner",
+        "label": "DeepSeek Reasoner",
+        "description": "Модель с пошаговым рассуждением. Дольше отвечает и обычно дороже. Для уроков может не подойти — после смены проверьте кнопкой «Проверить подключение» и пробной генерацией.",
+    },
+]
+AVAILABLE_MODEL_IDS = {m["id"] for m in AVAILABLE_MODELS}
 
 
 def _fernet() -> Fernet:
@@ -54,7 +72,10 @@ async def update_ai_settings(db: AsyncSession, *, api_key: str | None = None, mo
         api_key = api_key.strip()
         row.apiKeyEncrypted = _fernet().encrypt(api_key.encode()).decode() if api_key else None
     if model is not None and model.strip():
-        row.model = model.strip()
+        model = model.strip()
+        if model not in AVAILABLE_MODEL_IDS:
+            raise ApiError(400, f"Неизвестная модель «{model}». Выберите из списка.")
+        row.model = model
     await db.commit()
     await db.refresh(row)
     return row
@@ -65,6 +86,7 @@ def settings_dto(row: AiSettings) -> dict:
     return {
         "provider": row.provider,
         "model": row.model,
+        "availableModels": AVAILABLE_MODELS,
         "hasKey": key is not None,
         "keyHint": key[-4:] if key and len(key) >= 8 else None,
     }
