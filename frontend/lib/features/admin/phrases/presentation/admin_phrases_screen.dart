@@ -381,6 +381,10 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
 
   Future<void> _import() async {
     List<Map<String, dynamic>> items;
+    if (_json.text.trim().isEmpty) {
+      setState(() => _error = 'Вставьте JSON или загрузите файл .json');
+      return;
+    }
     try {
       final decoded = jsonDecode(_json.text);
       if (decoded is! List) throw const FormatException('ожидается список [...]');

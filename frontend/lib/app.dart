@@ -40,6 +40,7 @@ import 'features/social/presentation/user_profile_screen.dart';
 import 'features/vocabulary/presentation/my_words_screen.dart';
 import 'features/admin/ai/presentation/admin_ai_settings_screen.dart';
 import 'features/admin/phrases/presentation/admin_phrases_screen.dart';
+import 'features/admin/rules/presentation/admin_rules_screen.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
 /// (src/components/ProtectedRoute.tsx) is given per-route in App.tsx — kept
@@ -104,6 +105,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
           GoRoute(path: '/admin/vocabulary', builder: (context, state) => const AdminVocabularyScreen()),
           GoRoute(path: '/admin/phrases', builder: (context, state) => const AdminPhrasesScreen()),
+          GoRoute(path: '/admin/rules', builder: (context, state) => const AdminRulesScreen()),
           GoRoute(path: '/admin/ai-settings', builder: (context, state) => const AdminAiSettingsScreen()),
           GoRoute(path: '/admin/courses/legacy', builder: (context, state) => const AdminLegacyLessonsScreen()),
           GoRoute(

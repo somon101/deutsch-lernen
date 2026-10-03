@@ -533,3 +533,34 @@ async def backfill_word_language(db: AsyncSession) -> None:
     except Exception as exc:  # noqa: BLE001 — startup must survive anything here
         await db.rollback()
         print(f"backfill_word_language: не удалось ({type(exc).__name__}: {exc})")
+
+
+_RULE_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "Rule" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "languageId" TEXT NOT NULL,
+        "text" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    'CREATE INDEX IF NOT EXISTS "Rule_languageId_idx" ON "Rule"("languageId")',
+    'CREATE UNIQUE INDEX IF NOT EXISTS "Rule_languageId_text_key" ON "Rule"("languageId", lower("text"))',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "Rule" ADD CONSTRAINT "Rule_languageId_fkey"
+            FOREIGN KEY ("languageId") REFERENCES "Language"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+)
+
+
+async def ensure_rule_table(db: AsyncSession) -> None:
+    for statement in _RULE_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_rule_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
