@@ -12,20 +12,21 @@ import 'dart:convert';
 /// already here, before any request is sent.
 
 /// The required fields, mapped to what to call them in a message a teacher
-/// reads. All three are mandatory — the same rule the per-word form already
-/// enforces, so a word that couldn't be typed by hand can't slip in through
-/// the import either.
+/// reads: the word plus its Russian and Tajik translations.
 const requiredImportFields = {
   'original': 'слово',
-  'transcription': 'транскрипция',
-  'translation': 'перевод',
+  'translation': 'перевод на русский',
+  'translation_tg': 'перевод на таджикский',
 };
+
+/// Accepted when present, never required.
+const optionalImportFields = {'transcription'};
 
 /// Shown above the input, and kept in one place so the example a teacher
 /// copies can never drift from the fields actually required.
 const vocabularyImportExample = '[\n'
-    '  {"original": "der Tisch", "transcription": "дер тиш", "translation": "стол"},\n'
-    '  {"original": "der Stuhl", "transcription": "дер штуль", "translation": "стул"}\n'
+    '  {"original": "der Tisch", "translation": "стол", "translation_tg": "миз"},\n'
+    '  {"original": "der Stuhl", "translation": "стул", "translation_tg": "курсӣ"}\n'
     ']';
 
 /// Either the words ready to send, or a message explaining what to fix —
@@ -64,7 +65,7 @@ VocabularyImportParse parseVocabularyImport(String source) {
     final at = 'Слово №${i + 1}';
 
     if (item is! Map) {
-      problems.add('$at: должно быть объектом вида {"original": …, "transcription": …, "translation": …}');
+      problems.add('$at: должно быть объектом вида {"original": …, "translation": …, "translation_tg": …}');
       continue;
     }
 
@@ -74,6 +75,10 @@ VocabularyImportParse parseVocabularyImport(String source) {
     final missing = requiredImportFields.entries.where((e) => word[e.key]!.isEmpty).map((e) => e.value).toList();
 
     if (missing.isEmpty) {
+      for (final field in optionalImportFields) {
+        final value = (item[field] ?? '').toString().trim();
+        if (value.isNotEmpty) word[field] = value;
+      }
       words.add(word);
       continue;
     }
@@ -84,11 +89,11 @@ VocabularyImportParse parseVocabularyImport(String source) {
     // key, so "no known keys at all" is too narrow a condition to hang the
     // hint on: the teacher needs to see the unrecognised name whenever there
     // is one.
-    final unknown = item.keys.where((k) => !requiredImportFields.containsKey(k)).toList();
+    final unknown = item.keys.where((k) => !requiredImportFields.containsKey(k) && !optionalImportFields.contains(k)).toList();
     final buffer = StringBuffer('$at: не заполнено — ${missing.join(', ')}');
     if (unknown.isNotEmpty) {
       buffer.write('. Поля ${unknown.take(4).map((k) => '"$k"').join(', ')} не используются; '
-          'ожидаются "original", "transcription", "translation"');
+          'ожидаются "original", "translation", "translation_tg"');
     }
     problems.add(buffer.toString());
   }

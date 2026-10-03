@@ -116,11 +116,11 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
   Future<void> _openEditor([AdminPhrase? phrase]) async {
     final languageId = _languageId;
     if (languageId == null) return;
-    final saved = await showDialog<bool>(
+    final savedLanguageId = await showDialog<String>(
       context: context,
-      builder: (_) => Theme(data: lightTheme, child: _PhraseDialog(languageId: languageId, phrase: phrase)),
+      builder: (_) => Theme(data: lightTheme, child: _PhraseDialog(languages: _languages, languageId: languageId, phrase: phrase)),
     );
-    if (saved == true) await _load(reset: true);
+    await _afterSave(savedLanguageId);
   }
 
   Future<void> _delete(AdminPhrase phrase) async {
@@ -137,11 +137,19 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
   Future<void> _openImport() async {
     final languageId = _languageId;
     if (languageId == null) return;
-    final imported = await showDialog<bool>(
+    final importedLanguageId = await showDialog<String>(
       context: context,
-      builder: (_) => Theme(data: lightTheme, child: _ImportDialog(languageId: languageId)),
+      builder: (_) => Theme(data: lightTheme, child: _ImportDialog(languages: _languages, languageId: languageId)),
     );
-    if (imported == true) await _load(reset: true);
+    await _afterSave(importedLanguageId);
+  }
+
+  /// Shows the language the phrases were just saved into, so they are
+  /// visible right away even if a different language was picked in the dialog.
+  Future<void> _afterSave(String? languageId) async {
+    if (languageId == null) return;
+    if (languageId != _languageId) setState(() => _languageId = languageId);
+    await _load(reset: true);
   }
 
   @override
@@ -172,12 +180,13 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
                   padding: const EdgeInsets.fromLTRB(16, AdminMetrics.cardGap, 16, 8),
                   child: Row(
                     children: [
-                      if (_languages.length > 1) ...[
+                      if (_languages.isNotEmpty) ...[
                         SizedBox(
                           width: 200,
                           child: DropdownButtonFormField<String>(
+                            key: ValueKey(_languageId),
                             initialValue: _languageId,
-                            decoration: adminInputDecoration(label: 'Язык'),
+                            decoration: adminInputDecoration(label: 'Изучаемый язык'),
                             items: [for (final l in _languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
                             onChanged: (v) {
                               setState(() => _languageId = v);
@@ -266,7 +275,8 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
 }
 
 class _PhraseDialog extends ConsumerStatefulWidget {
-  const _PhraseDialog({required this.languageId, this.phrase});
+  const _PhraseDialog({required this.languages, required this.languageId, this.phrase});
+  final List<AdminLanguage> languages;
   final String languageId;
   final AdminPhrase? phrase;
 
@@ -278,7 +288,10 @@ class _PhraseDialogState extends ConsumerState<_PhraseDialog> {
   late final _text = TextEditingController(text: widget.phrase?.text ?? '');
   late final _ru = TextEditingController(text: widget.phrase?.translation ?? '');
   late final _tg = TextEditingController(text: widget.phrase?.translationTg ?? '');
+  late String _languageId = widget.languageId;
   bool _busy = false;
+
+  bool get _canSave => _text.text.trim().isNotEmpty && _ru.text.trim().isNotEmpty && _tg.text.trim().isNotEmpty;
 
   @override
   void dispose() {
@@ -289,17 +302,17 @@ class _PhraseDialogState extends ConsumerState<_PhraseDialog> {
   }
 
   Future<void> _save() async {
-    if (_text.text.trim().isEmpty) return;
+    if (!_canSave) return;
     setState(() => _busy = true);
     try {
       final repo = ref.read(aiRepositoryProvider);
       final phrase = widget.phrase;
       if (phrase == null) {
-        await repo.createPhrase(languageId: widget.languageId, text: _text.text.trim(), translation: _ru.text.trim(), translationTg: _tg.text.trim());
+        await repo.createPhrase(languageId: _languageId, text: _text.text.trim(), translation: _ru.text.trim(), translationTg: _tg.text.trim());
       } else {
         await repo.updatePhrase(phrase.id, text: _text.text.trim(), translation: _ru.text.trim(), translationTg: _tg.text.trim());
       }
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) Navigator.of(context).pop(_languageId);
     } catch (e) {
       if (mounted) showErrorSnack(context, e, 'Не удалось сохранить фразу');
     } finally {
@@ -316,24 +329,35 @@ class _PhraseDialogState extends ConsumerState<_PhraseDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: _text, autofocus: true, decoration: adminInputDecoration(label: 'Фраза (на изучаемом языке)')),
+            // A saved phrase keeps its language; only a new one picks it.
+            if (widget.phrase == null && widget.languages.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _languageId,
+                decoration: adminInputDecoration(label: 'Изучаемый язык'),
+                items: [for (final l in widget.languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
+                onChanged: _busy ? null : (v) => setState(() => _languageId = v ?? _languageId),
+              ),
+              const SizedBox(height: AdminMetrics.fieldGap),
+            ],
+            TextField(controller: _text, autofocus: true, decoration: adminInputDecoration(label: 'Фраза (на изучаемом языке)'), onChanged: (_) => setState(() {})),
             const SizedBox(height: AdminMetrics.fieldGap),
-            TextField(controller: _ru, decoration: adminInputDecoration(label: 'Перевод (русский)')),
+            TextField(controller: _ru, decoration: adminInputDecoration(label: 'Перевод (русский)'), onChanged: (_) => setState(() {})),
             const SizedBox(height: AdminMetrics.fieldGap),
-            TextField(controller: _tg, decoration: adminInputDecoration(label: 'Перевод (тоҷикӣ)')),
+            TextField(controller: _tg, decoration: adminInputDecoration(label: 'Перевод (тоҷикӣ)'), onChanged: (_) => setState(() {})),
           ],
         ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Отмена')),
-        FilledButton(onPressed: _busy ? null : _save, style: AdminButtonStyles.primary(), child: const Text('Сохранить')),
+        FilledButton(onPressed: _busy || !_canSave ? null : _save, style: AdminButtonStyles.primary(), child: const Text('Сохранить')),
       ],
     );
   }
 }
 
 class _ImportDialog extends ConsumerStatefulWidget {
-  const _ImportDialog({required this.languageId});
+  const _ImportDialog({required this.languages, required this.languageId});
+  final List<AdminLanguage> languages;
   final String languageId;
 
   @override
@@ -342,6 +366,7 @@ class _ImportDialog extends ConsumerStatefulWidget {
 
 class _ImportDialogState extends ConsumerState<_ImportDialog> {
   final _json = TextEditingController();
+  late String _languageId = widget.languageId;
   String? _error;
   bool _busy = false;
 
@@ -363,15 +388,26 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
       setState(() => _error = 'Неверный JSON: $e');
       return;
     }
+    const required = {'text': 'фраза', 'translation': 'перевод на русский', 'translation_tg': 'перевод на таджикский'};
+    final problems = <String>[];
+    for (var i = 0; i < items.length; i++) {
+      final missing = required.entries.where((e) => (items[i][e.key] ?? '').toString().trim().isEmpty).map((e) => e.value).toList();
+      if (missing.isNotEmpty) problems.add('Фраза №${i + 1}: не заполнено — ${missing.join(', ')}');
+    }
+    if (problems.isNotEmpty) {
+      final rest = problems.length - 5;
+      setState(() => _error = problems.take(5).join('\n') + (rest > 0 ? '\n…и ещё $rest' : ''));
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final result = await ref.read(aiRepositoryProvider).importPhrases(widget.languageId, items);
+      final result = await ref.read(aiRepositoryProvider).importPhrases(_languageId, items);
       if (!mounted) return;
       showSuccessSnack(context, 'Добавлено: ${result.added}, пропущено (уже есть): ${result.skipped}');
-      Navigator.of(context).pop(true);
+      Navigator.of(context).pop(_languageId);
     } catch (e) {
       if (mounted) setState(() => _error = adminErrorMessage(e, 'Не удалось импортировать'));
     } finally {
@@ -389,7 +425,20 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Вставьте список фраз в формате JSON. Фразы, которые уже есть, будут пропущены.', style: AdminTypography.caption),
+            if (widget.languages.isNotEmpty) ...[
+              DropdownButtonFormField<String>(
+                initialValue: _languageId,
+                decoration: adminInputDecoration(label: 'Для какого языка импортируем'),
+                items: [for (final l in widget.languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
+                onChanged: _busy ? null : (v) => setState(() => _languageId = v ?? _languageId),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              'Вставьте список фраз в формате JSON. Обязательны "text", "translation" (русский) и "translation_tg" (тоҷикӣ); '
+              '"topic" — по желанию. Фразы, которые уже есть, будут пропущены.',
+              style: AdminTypography.caption,
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: _json,

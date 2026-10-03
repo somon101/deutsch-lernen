@@ -510,3 +510,26 @@ async def ensure_ai_tables(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_ai_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# JSON-imported words used to be saved without a languageId, which hid them
+# from the per-language dictionary filter and from the AI lesson generator.
+# Idempotent: only touches rows still missing it whose course has a level.
+_WORD_LANGUAGE_BACKFILL = """
+    UPDATE "VocabularyItem" AS v
+    SET "languageId" = l."languageId"
+    FROM "Course" AS c
+    JOIN "Level" AS l ON l."id" = c."levelId"
+    WHERE v."languageId" IS NULL AND v."courseId" = c."id"
+"""
+
+
+async def backfill_word_language(db: AsyncSession) -> None:
+    try:
+        result = await db.execute(text(_WORD_LANGUAGE_BACKFILL))
+        await db.commit()
+        if result.rowcount:
+            print(f"backfill_word_language: язык проставлен для {result.rowcount} слов")
+    except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+        await db.rollback()
+        print(f"backfill_word_language: не удалось ({type(exc).__name__}: {exc})")

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PhraseInput(BaseModel):
@@ -17,9 +17,11 @@ class PhraseUpdateInput(BaseModel):
 
 
 class PhraseImportItem(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     text: str = Field(min_length=1, max_length=500)
-    translation: str = Field(default="", max_length=1000)
-    translation_tg: str | None = Field(default=None, max_length=1000)
+    translation: str = Field(min_length=1, max_length=1000)
+    translation_tg: str = Field(min_length=1, max_length=1000)
     topic: str | None = Field(default=None, max_length=100)
 
 

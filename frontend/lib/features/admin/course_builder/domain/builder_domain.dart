@@ -433,6 +433,7 @@ class DictionaryWord {
     required this.wordId,
     required this.word,
     required this.translation,
+    this.translationTg,
     this.pronunciation,
     this.audioUrl,
     this.imageUrl,
@@ -448,6 +449,7 @@ class DictionaryWord {
         wordId: json['wordId'] as String,
         word: json['word'] as String,
         translation: json['translation'] as String,
+        translationTg: json['translationTg'] as String?,
         pronunciation: json['pronunciation'] as String?,
         audioUrl: json['audioUrl'] as String?,
         imageUrl: json['imageUrl'] as String?,
@@ -462,6 +464,7 @@ class DictionaryWord {
   final String wordId;
   final String word;
   final String translation;
+  final String? translationTg;
   final String? pronunciation;
   final String? audioUrl;
   final String? imageUrl;

@@ -56,8 +56,9 @@ class VocabularyWordUpdateInput(BaseModel):
 
 class VocabularyImportWordInput(BaseModel):
     original: str = Field(min_length=1)
-    transcription: str = Field(min_length=1)
     translation: str = Field(min_length=1)
+    translation_tg: str = Field(min_length=1)
+    transcription: str = ""
 
     @field_validator("original")
     @classmethod
@@ -70,9 +71,14 @@ class VocabularyImportWordInput(BaseModel):
     @field_validator("transcription")
     @classmethod
     def _transcription(cls, v: str) -> str:
+        return v.strip()
+
+    @field_validator("translation_tg")
+    @classmethod
+    def _translation_tg(cls, v: str) -> str:
         v = v.strip()
         if not v:
-            raise ValueError("Поле transcription не может быть пустым")
+            raise ValueError("Поле translation_tg не может быть пустым")
         return v
 
     @field_validator("translation")

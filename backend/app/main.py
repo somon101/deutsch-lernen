@@ -12,6 +12,7 @@ from app.errors import ApiError
 from app.routers import admin, ai, auth, auto_blank, auto_match, auto_translate, builder, content, cron, daily_goal, leaderboard, learner_courses, lesson_graph, me, notifications, phrases, preferences, social, taxonomy, words
 from app.services.bootstrap import ensure_admin_exists
 from app.services.schema_bootstrap import (
+    backfill_word_language,
     ensure_ai_tables,
     ensure_content_locale_tables,
     ensure_daily_goal_tables,
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
         await ensure_lesson_vocabulary_link_table(session)
         await ensure_streak_reminder_table(session)
         await ensure_ai_tables(session)
+        await backfill_word_language(session)
         await ensure_admin_exists(session)
     yield
 

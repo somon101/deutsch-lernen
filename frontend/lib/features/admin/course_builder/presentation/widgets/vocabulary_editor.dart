@@ -408,6 +408,7 @@ class _NewWordRow extends ConsumerStatefulWidget {
 class _NewWordRowState extends ConsumerState<_NewWordRow> {
   final _german = TextEditingController();
   final _translation = TextEditingController();
+  final _translationTg = TextEditingController();
   final _pronunciation = TextEditingController();
   bool _busy = false;
   List<WordLibraryEntry>? _suggestions;
@@ -416,12 +417,14 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
   bool get _canSubmit =>
       _german.text.trim().isNotEmpty &&
       _translation.text.trim().isNotEmpty &&
+      _translationTg.text.trim().isNotEmpty &&
       _pronunciation.text.trim().isNotEmpty;
 
   @override
   void dispose() {
     _german.dispose();
     _translation.dispose();
+    _translationTg.dispose();
     _pronunciation.dispose();
     _debounce?.cancel();
     super.dispose();
@@ -476,17 +479,18 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
     if (!_canSubmit) return;
     setState(() => _busy = true);
     try {
-      await ref
-          .read(builderRepositoryProvider)
-          .addWord(
-            widget.courseId,
-            widget.lessonId,
-            german: _german.text.trim(),
-            translation: _translation.text.trim(),
-            pronunciation: _pronunciation.text.trim(),
-          );
+      final repo = ref.read(builderRepositoryProvider);
+      final wordId = await repo.addWord(
+        widget.courseId,
+        widget.lessonId,
+        german: _german.text.trim(),
+        translation: _translation.text.trim(),
+        pronunciation: _pronunciation.text.trim(),
+      );
+      await repo.setVocabularyTranslation(widget.courseId, widget.lessonId, wordId, 'tg', _translationTg.text.trim());
       _german.clear();
       _translation.clear();
+      _translationTg.clear();
       _pronunciation.clear();
       widget.onChanged();
     } catch (e) {
@@ -515,7 +519,15 @@ class _NewWordRowState extends ConsumerState<_NewWordRow> {
             Expanded(
               child: TextField(
                 controller: _translation,
-                decoration: adminInputDecoration(label: 'Перевод'),
+                decoration: adminInputDecoration(label: 'Перевод (рус.)'),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: TextField(
+                controller: _translationTg,
+                decoration: adminInputDecoration(label: 'Перевод (тоҷ.)'),
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -691,7 +703,7 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Все три поля обязательны:', style: AdminTypography.fieldLabel),
+                Text('Обязательны слово, перевод на русский и на таджикский; "transcription" можно добавить по желанию:', style: AdminTypography.fieldLabel),
                 const SizedBox(height: 6),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -706,7 +718,7 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
             maxLines: 8,
             style: AdminTypography.mono,
             decoration: adminInputDecoration(
-              hint: '[{"original":"Hallo","transcription":"халло","translation":"привет"}]',
+              hint: '[{"original":"Hallo","translation":"привет","translation_tg":"салом"}]',
             ),
           ),
           const SizedBox(height: AdminMetrics.fieldGap),

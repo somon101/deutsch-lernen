@@ -29,6 +29,7 @@ from app.models.category import Category
 from app.models.lesson_vocabulary_link import LessonVocabularyLink
 from app.models.user_word_progress import UserWordProgress
 from app.models.vocabulary_item import VocabularyItem
+from app.models.vocabulary_translation import VocabularyTranslation
 from app.services.content import normalize_word
 
 
@@ -272,10 +273,22 @@ async def list_dictionary_words(
         ).all()
         link_counts = dict(rows)
 
+    tg_translations: dict[str, str] = {}
+    if word_ids:
+        rows = (
+            await db.execute(
+                select(VocabularyTranslation.vocabularyItemId, VocabularyTranslation.translation).where(
+                    VocabularyTranslation.vocabularyItemId.in_(word_ids), VocabularyTranslation.locale == "tg"
+                )
+            )
+        ).all()
+        tg_translations = dict(rows)
+
     words = []
     for item in items:
         dto = _word_card_dto(item, categories.get(item.categoryId))
         dto["usedInLessonsCount"] = 1 + link_counts.get(item.id, 0)  # native lesson + every link
+        dto["translationTg"] = tg_translations.get(item.id)
         words.append(dto)
 
     return {"words": words, "total": total or 0}

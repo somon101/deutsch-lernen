@@ -16,6 +16,7 @@ import '../../admin_widgets.dart';
 import '../../widgets/admin_feedback.dart';
 import '../../course_builder/data/builder_repository.dart';
 import '../../course_builder/domain/builder_domain.dart';
+import '../../course_builder/domain/taxonomy_domain.dart';
 
 const _pageSize = 30;
 
@@ -47,11 +48,27 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
+  List<AdminLanguage> _languages = const [];
+  String? _languageId;
 
   @override
   void initState() {
     super.initState();
-    _load(reset: true);
+    _init();
+  }
+
+  Future<void> _init() async {
+    try {
+      final languages = await ref.read(builderRepositoryProvider).listLanguages();
+      if (!mounted) return;
+      setState(() {
+        _languages = languages;
+        _languageId = languages.isNotEmpty ? languages.first.id : null;
+      });
+    } catch (_) {
+      // Without the language list the dictionary still loads, just unfiltered.
+    }
+    await _load(reset: true);
   }
 
   @override
@@ -73,6 +90,7 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
     try {
       final page = await ref.read(builderRepositoryProvider).listDictionaryWords(
             query: _query.isEmpty ? null : _query,
+            languageId: _languageId,
             limit: _pageSize,
             offset: reset ? 0 : _words.length,
           );
@@ -106,7 +124,7 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
         data: lightTheme,
         child: Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
-          child: const _CreateWordSheet(),
+          child: _CreateWordSheet(languages: _languages, initialLanguageId: _languageId),
         ),
       ),
     );
@@ -184,12 +202,35 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, AdminMetrics.cardGap, 16, 8),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: _onSearchChanged,
-                    decoration: adminInputDecoration(hint: 'Поиск по немецкому слову или переводу…').copyWith(
-                      prefixIcon: const Icon(Icons.search, size: 18),
-                    ),
+                  child: Row(
+                    children: [
+                      if (_languages.isNotEmpty) ...[
+                        SizedBox(
+                          width: 170,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _languageId,
+                            isExpanded: true,
+                            decoration: adminInputDecoration(label: 'Изучаемый язык'),
+                            items: [for (final l in _languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
+                            onChanged: (v) {
+                              if (v == null || v == _languageId) return;
+                              setState(() => _languageId = v);
+                              _load(reset: true);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: _onSearchChanged,
+                          decoration: adminInputDecoration(hint: 'Поиск по слову или переводу…').copyWith(
+                            prefixIcon: const Icon(Icons.search, size: 18),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 if (!_loading && _error == null)
@@ -393,7 +434,9 @@ class _CategoryFieldState extends ConsumerState<_CategoryField> {
 /// immediately reusable elsewhere via the constructor's "выбрать
 /// существующее слово" search once created.
 class _CreateWordSheet extends ConsumerStatefulWidget {
-  const _CreateWordSheet();
+  const _CreateWordSheet({required this.languages, this.initialLanguageId});
+  final List<AdminLanguage> languages;
+  final String? initialLanguageId;
   @override
   ConsumerState<_CreateWordSheet> createState() => _CreateWordSheetState();
 }
@@ -401,9 +444,12 @@ class _CreateWordSheet extends ConsumerStatefulWidget {
 class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
   final _german = TextEditingController();
   final _translation = TextEditingController();
+  final _translationTg = TextEditingController();
   final _pronunciation = TextEditingController();
   final _category = TextEditingController();
+  List<AdminCourseSummary>? _allCourses;
   List<AdminCourseSummary>? _courses;
+  String? _languageId;
   List<AdminLesson>? _lessons;
   String? _courseId;
   String? _lessonId;
@@ -415,17 +461,46 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
   @override
   void initState() {
     super.initState();
+    _languageId = widget.initialLanguageId;
     ref.read(builderRepositoryProvider).listCourses().then((c) {
-      if (mounted) setState(() => _courses = c);
+      _allCourses = c;
+      _applyLanguage();
     }).catchError((_) {
       if (mounted) setState(() => _courses = const []);
     });
+  }
+
+  /// Only courses of the chosen studied language: a word's language comes
+  /// from its course (course -> level -> language), so this is what makes
+  /// the choice real rather than just a label.
+  Future<void> _applyLanguage() async {
+    final all = _allCourses;
+    if (all == null) return;
+    setState(() {
+      _courses = null;
+      _courseId = null;
+      _lessonId = null;
+      _lessons = null;
+    });
+    var filtered = all;
+    final languageId = _languageId;
+    if (languageId != null) {
+      try {
+        final levels = await ref.read(builderRepositoryProvider).listLevels(languageId: languageId);
+        final levelIds = {for (final l in levels) l.id};
+        filtered = [for (final c in all) if (c.levelId != null && levelIds.contains(c.levelId)) c];
+      } catch (_) {
+        filtered = all;
+      }
+    }
+    if (mounted) setState(() => _courses = filtered);
   }
 
   @override
   void dispose() {
     _german.dispose();
     _translation.dispose();
+    _translationTg.dispose();
     _pronunciation.dispose();
     _category.dispose();
     super.dispose();
@@ -457,7 +532,12 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
   }
 
   bool get _canSubmit =>
-      _german.text.trim().isNotEmpty && _translation.text.trim().isNotEmpty && _pronunciation.text.trim().isNotEmpty && _courseId != null && _lessonId != null;
+      _german.text.trim().isNotEmpty &&
+      _translation.text.trim().isNotEmpty &&
+      _translationTg.text.trim().isNotEmpty &&
+      _pronunciation.text.trim().isNotEmpty &&
+      _courseId != null &&
+      _lessonId != null;
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
@@ -475,6 +555,7 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
         pronunciation: _pronunciation.text.trim(),
         categoryName: _category.text.trim().isEmpty ? null : _category.text.trim(),
       );
+      await repo.setVocabularyTranslation(_courseId!, _lessonId!, wordId, 'tg', _translationTg.text.trim());
       if (_imageBytes != null && _imageFilename != null) {
         await repo.uploadWordImage(_courseId!, _lessonId!, wordId, bytes: _imageBytes!, filename: _imageFilename!);
       }
@@ -496,11 +577,28 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
         children: [
           Text('Новое слово', style: AdminTypography.cardTitle),
           const SizedBox(height: AdminMetrics.fieldGap),
+          if (widget.languages.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _languageId,
+              decoration: adminInputDecoration(label: 'Изучаемый язык'),
+              items: [for (final l in widget.languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
+              onChanged: _busy
+                  ? null
+                  : (v) {
+                      if (v == null || v == _languageId) return;
+                      _languageId = v;
+                      _applyLanguage();
+                    },
+            ),
+            const SizedBox(height: AdminMetrics.fieldGap),
+          ],
+          TextField(controller: _german, decoration: adminInputDecoration(label: 'Слово'), onChanged: (_) => setState(() {})),
+          const SizedBox(height: AdminMetrics.fieldGap),
           Row(
             children: [
-              Expanded(child: TextField(controller: _german, decoration: adminInputDecoration(label: 'Немецкий'), onChanged: (_) => setState(() {}))),
+              Expanded(child: TextField(controller: _translation, decoration: adminInputDecoration(label: 'Перевод (русский)'), onChanged: (_) => setState(() {}))),
               const SizedBox(width: 6),
-              Expanded(child: TextField(controller: _translation, decoration: adminInputDecoration(label: 'Перевод'), onChanged: (_) => setState(() {}))),
+              Expanded(child: TextField(controller: _translationTg, decoration: adminInputDecoration(label: 'Перевод (тоҷикӣ)'), onChanged: (_) => setState(() {}))),
             ],
           ),
           const SizedBox(height: AdminMetrics.fieldGap),
@@ -512,6 +610,8 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
           const SizedBox(height: 6),
           if (courses == null)
             const Center(child: CircularProgressIndicator())
+          else if (courses.isEmpty)
+            Text('Нет курсов с этим языком — сначала создайте курс и выберите ему уровень этого языка.', style: AdminTypography.caption)
           else
             Row(
               children: [
@@ -586,6 +686,7 @@ class _EditWordSheet extends ConsumerStatefulWidget {
 class _EditWordSheetState extends ConsumerState<_EditWordSheet> {
   late final _german = TextEditingController(text: widget.word.word);
   late final _translation = TextEditingController(text: widget.word.translation);
+  late final _translationTg = TextEditingController(text: widget.word.translationTg ?? '');
   late final _pronunciation = TextEditingController(text: widget.word.pronunciation ?? '');
   late final _category = TextEditingController(text: widget.word.categoryName ?? '');
   bool _busy = false;
@@ -604,6 +705,7 @@ class _EditWordSheetState extends ConsumerState<_EditWordSheet> {
   void dispose() {
     _german.dispose();
     _translation.dispose();
+    _translationTg.dispose();
     _pronunciation.dispose();
     _category.dispose();
     super.dispose();
@@ -628,6 +730,10 @@ class _EditWordSheetState extends ConsumerState<_EditWordSheet> {
             pronunciation: _pronunciation.text.trim(),
             categoryName: _category.text.trim().isEmpty ? null : _category.text.trim(),
           );
+      final tg = _translationTg.text.trim();
+      if (tg.isNotEmpty && tg != (widget.word.translationTg ?? '')) {
+        await ref.read(builderRepositoryProvider).setVocabularyTranslation(_courseId, _lessonId, _wordId, 'tg', tg);
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       setState(() => _error = adminErrorMessage(e, 'Не удалось сохранить слово'));
@@ -710,11 +816,13 @@ class _EditWordSheetState extends ConsumerState<_EditWordSheet> {
             style: AdminTypography.caption,
           ),
           const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(controller: _german, decoration: adminInputDecoration(label: 'Слово'), enabled: !_busy),
+          const SizedBox(height: AdminMetrics.fieldGap),
           Row(
             children: [
-              Expanded(child: TextField(controller: _german, decoration: adminInputDecoration(label: 'Немецкий'), enabled: !_busy)),
+              Expanded(child: TextField(controller: _translation, decoration: adminInputDecoration(label: 'Перевод (русский)'), enabled: !_busy)),
               const SizedBox(width: 6),
-              Expanded(child: TextField(controller: _translation, decoration: adminInputDecoration(label: 'Перевод'), enabled: !_busy)),
+              Expanded(child: TextField(controller: _translationTg, decoration: adminInputDecoration(label: 'Перевод (тоҷикӣ)'), enabled: !_busy)),
             ],
           ),
           const SizedBox(height: AdminMetrics.fieldGap),

@@ -1236,20 +1236,27 @@ async def import_vocabulary_words(db: AsyncSession, course_id: str, lesson_id: s
         last = await db.scalar(select(VocabularyItem.position).where(VocabularyItem.lessonId == lesson_id).order_by(VocabularyItem.position.desc()).limit(1))
         start_position = (last if last is not None else -1) + 1
 
+        language_id = await derive_language_id(db, course_id)
+        new_rows: list[tuple[VocabularyItem, dict]] = []
         for i, item in enumerate(to_insert):
             w = words[item["index"]]
-            db.add(
-                VocabularyItem(
-                    courseId=course_id,
-                    lessonId=lesson_id,
-                    german=w["original"],
-                    translation=w["translation"],
-                    pronunciation=w["transcription"],
-                    position=start_position + i,
-                    germanKey=normalize_word(w["original"]),
-                )
+            row = VocabularyItem(
+                courseId=course_id,
+                lessonId=lesson_id,
+                german=w["original"],
+                translation=w["translation"],
+                pronunciation=w.get("transcription") or None,
+                position=start_position + i,
+                germanKey=normalize_word(w["original"]),
+                languageId=language_id,
             )
+            db.add(row)
+            new_rows.append((row, w))
         try:
+            await db.flush()
+            for row, w in new_rows:
+                if w.get("translation_tg"):
+                    db.add(VocabularyTranslation(vocabularyItemId=row.id, locale="tg", translation=w["translation_tg"]))
             await db.commit()
         except IntegrityError as e:
             await db.rollback()
