@@ -10,6 +10,7 @@ import '../../../../../core/widgets/word_audio_button.dart';
 import '../../../admin_tokens.dart';
 import '../../../admin_widgets.dart';
 import '../../../widgets/admin_feedback.dart';
+import '../../../widgets/json_file_button.dart';
 import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
 import '../../domain/vocabulary_import.dart';
@@ -713,6 +714,19 @@ class _JsonImportPanelState extends ConsumerState<_JsonImportPanel> {
             ),
           ),
           const SizedBox(height: AdminMetrics.fieldGap),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: JsonFileButton(
+              enabled: !_busy,
+              onLoaded: (text) => setState(() {
+                _text.text = text;
+                _error = null;
+                _preview = null;
+                _result = null;
+              }),
+            ),
+          ),
+          const SizedBox(height: 8),
           TextField(
             controller: _text,
             maxLines: 8,

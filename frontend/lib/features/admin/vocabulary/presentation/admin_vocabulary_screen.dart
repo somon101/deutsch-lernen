@@ -14,9 +14,11 @@ import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
 import '../../admin_widgets.dart';
 import '../../widgets/admin_feedback.dart';
+import '../../widgets/json_file_button.dart';
 import '../../course_builder/data/builder_repository.dart';
 import '../../course_builder/domain/builder_domain.dart';
 import '../../course_builder/domain/taxonomy_domain.dart';
+import '../../course_builder/domain/vocabulary_import.dart';
 
 const _pageSize = 30;
 
@@ -131,6 +133,25 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
     if (created == true) _load(reset: true);
   }
 
+  Future<void> _openImportSheet() async {
+    final languageId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AdminColors.bg,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (sheetContext) => Theme(
+        data: lightTheme,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: _ImportWordsSheet(languages: _languages, initialLanguageId: _languageId),
+        ),
+      ),
+    );
+    if (languageId == null) return;
+    if (languageId != _languageId) setState(() => _languageId = languageId);
+    _load(reset: true);
+  }
+
   Future<void> _openEditSheet(DictionaryWord word) async {
     final changed = await showModalBottomSheet<bool>(
       context: context,
@@ -188,6 +209,12 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
             leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
             actions: [
               TextButton.icon(
+                onPressed: _openImportSheet,
+                style: AdminButtonStyles.text(),
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: const Text('Импорт JSON'),
+              ),
+              TextButton.icon(
                 onPressed: _openCreateSheet,
                 style: AdminButtonStyles.text(),
                 icon: const Icon(Icons.add, size: 18),
@@ -208,6 +235,7 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
                         SizedBox(
                           width: 170,
                           child: DropdownButtonFormField<String>(
+                            key: ValueKey(_languageId),
                             initialValue: _languageId,
                             isExpanded: true,
                             decoration: adminInputDecoration(label: 'Изучаемый язык'),
@@ -864,6 +892,214 @@ class _EditWordSheetState extends ConsumerState<_EditWordSheet> {
               onPressed: _busy ? null : _save,
               style: AdminButtonStyles.primary(),
               child: Text(_busy ? 'Сохраняем…' : 'Сохранить'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+/// "Импорт JSON" on the dictionary screen. Words still need a native
+/// lesson (every VocabularyItem has one), so the admin picks language ->
+/// course -> lesson, then pastes or loads a .json file. Goes through the
+/// same client-side parse and the same /vocabulary/import endpoint as the
+/// lesson editor's own import panel. Pops the language id on success.
+class _ImportWordsSheet extends ConsumerStatefulWidget {
+  const _ImportWordsSheet({required this.languages, this.initialLanguageId});
+  final List<AdminLanguage> languages;
+  final String? initialLanguageId;
+
+  @override
+  ConsumerState<_ImportWordsSheet> createState() => _ImportWordsSheetState();
+}
+
+class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
+  final _json = TextEditingController();
+  List<AdminCourseSummary>? _allCourses;
+  List<AdminCourseSummary>? _courses;
+  List<AdminLesson>? _lessons;
+  String? _languageId;
+  String? _courseId;
+  String? _lessonId;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _languageId = widget.initialLanguageId;
+    ref.read(builderRepositoryProvider).listCourses().then((c) {
+      _allCourses = c;
+      _applyLanguage();
+    }).catchError((_) {
+      if (mounted) setState(() => _courses = const []);
+    });
+  }
+
+  @override
+  void dispose() {
+    _json.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applyLanguage() async {
+    final all = _allCourses;
+    if (all == null) return;
+    setState(() {
+      _courses = null;
+      _courseId = null;
+      _lessonId = null;
+      _lessons = null;
+    });
+    var filtered = all;
+    final languageId = _languageId;
+    if (languageId != null) {
+      try {
+        final levels = await ref.read(builderRepositoryProvider).listLevels(languageId: languageId);
+        final levelIds = {for (final l in levels) l.id};
+        filtered = [for (final c in all) if (c.levelId != null && levelIds.contains(c.levelId)) c];
+      } catch (_) {
+        filtered = all;
+      }
+    }
+    if (mounted) setState(() => _courses = filtered);
+  }
+
+  Future<void> _onCourseChanged(String? courseId) async {
+    setState(() {
+      _courseId = courseId;
+      _lessonId = null;
+      _lessons = null;
+    });
+    if (courseId == null) return;
+    try {
+      final course = await ref.read(builderRepositoryProvider).getCourse(courseId);
+      if (mounted) setState(() => _lessons = course.lessons);
+    } catch (_) {
+      if (mounted) setState(() => _lessons = const []);
+    }
+  }
+
+  Future<void> _import() async {
+    final parse = parseVocabularyImport(_json.text);
+    if (parse.error != null) {
+      setState(() => _error = parse.error);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final result = await ref.read(builderRepositoryProvider).importVocabulary(_courseId!, _lessonId!, parse.words);
+      if (!mounted) return;
+      showSuccessSnack(context, 'Добавлено: ${result.addedCount}, пропущено (уже есть): ${result.skipped.length}');
+      Navigator.pop(context, _languageId ?? '');
+    } catch (e) {
+      if (mounted) setState(() => _error = adminErrorMessage(e, 'Не удалось импортировать слова'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  bool get _canImport => !_busy && _courseId != null && _lessonId != null && _json.text.trim().isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final courses = _courses;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Импорт слов из JSON', style: AdminTypography.cardTitle),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          if (widget.languages.isNotEmpty) ...[
+            DropdownButtonFormField<String>(
+              initialValue: _languageId,
+              decoration: adminInputDecoration(label: 'Для какого языка импортируем'),
+              items: [for (final l in widget.languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
+              onChanged: _busy
+                  ? null
+                  : (v) {
+                      if (v == null || v == _languageId) return;
+                      _languageId = v;
+                      _applyLanguage();
+                    },
+            ),
+            const SizedBox(height: AdminMetrics.fieldGap),
+          ],
+          Text('Урок, к которому привяжутся слова (потом их можно переиспользовать в других уроках):', style: AdminTypography.fieldLabel),
+          const SizedBox(height: 6),
+          if (courses == null)
+            const Center(child: CircularProgressIndicator())
+          else if (courses.isEmpty)
+            Text('Нет курсов с этим языком — сначала создайте курс и выберите ему уровень этого языка.', style: AdminTypography.caption)
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _courseId,
+                    isExpanded: true,
+                    decoration: adminInputDecoration(label: 'Курс'),
+                    items: [for (final c in courses) DropdownMenuItem(value: c.id, child: Text(c.title, overflow: TextOverflow.ellipsis))],
+                    onChanged: _busy ? null : _onCourseChanged,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(_courseId),
+                    initialValue: _lessonId,
+                    isExpanded: true,
+                    decoration: adminInputDecoration(label: 'Урок'),
+                    items: [for (final l in _lessons ?? const <AdminLesson>[]) DropdownMenuItem(value: l.id, child: Text(l.title, overflow: TextOverflow.ellipsis))],
+                    onChanged: _busy || _lessons == null ? null : (v) => setState(() => _lessonId = v),
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Text(
+            'Обязательны "original", "translation" (русский) и "translation_tg" (тоҷикӣ); "transcription" — по желанию. '
+            'Слова, которые уже есть в этом курсе, будут пропущены.',
+            style: AdminTypography.caption,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: JsonFileButton(
+              enabled: !_busy,
+              onLoaded: (text) => setState(() {
+                _json.text = text;
+                _error = null;
+              }),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _json,
+            minLines: 6,
+            maxLines: 14,
+            style: AdminTypography.mono,
+            onChanged: (_) => setState(() {}),
+            decoration: adminInputDecoration(hint: vocabularyImportExample),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_error!, style: const TextStyle(color: AdminColors.danger, fontSize: 12)),
+            ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _canImport ? _import : null,
+              style: AdminButtonStyles.primary(),
+              child: Text(_busy ? 'Импортируем…' : 'Импортировать'),
             ),
           ),
         ],

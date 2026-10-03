@@ -14,6 +14,7 @@ import '../../ai/data/ai_repository.dart';
 import '../../course_builder/data/builder_repository.dart';
 import '../../course_builder/domain/taxonomy_domain.dart';
 import '../../widgets/admin_feedback.dart';
+import '../../widgets/json_file_button.dart';
 
 const _pageSize = 30;
 
@@ -438,6 +439,14 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
               'Вставьте список фраз в формате JSON. Обязательны "text", "translation" (русский) и "translation_tg" (тоҷикӣ); '
               '"topic" — по желанию. Фразы, которые уже есть, будут пропущены.',
               style: AdminTypography.caption,
+            ),
+            const SizedBox(height: 8),
+            JsonFileButton(
+              enabled: !_busy,
+              onLoaded: (text) => setState(() {
+                _json.text = text;
+                _error = null;
+              }),
             ),
             const SizedBox(height: 8),
             TextField(
