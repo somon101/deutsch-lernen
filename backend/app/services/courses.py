@@ -38,7 +38,7 @@ from app.models.vocabulary_item import VocabularyItem
 from app.models.vocabulary_translation import VocabularyTranslation
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
 from app.services.content_locale import DEFAULT_CONTENT_LOCALE, SUPPORTED_CONTENT_LOCALES, translations_by_locale
-from app.services.lesson_graph import bulk_graphs_for_lessons
+from app.services.lesson_graph import bulk_graphs_for_lessons, is_converted, set_first_node_media, set_first_node_media_translation
 from app.services.material import filter_new_vocabulary, get_new_material_blocks, get_pool_questions_for_lesson_blocks, parse_material, to_question_dto
 from app.services.vocabulary import get_linked_items_by_lesson, get_or_create_category
 from app.utils import to_iso_z, utcnow
@@ -212,6 +212,16 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
     pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks], locale)
     graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids, locale)
 
+    def _first_graph_media(lesson_id: str, kind: str, fallback: str | None) -> str | None:
+        """A converted lesson's video/audio IS its first such graph node
+        (already locale-resolved by bulk_graphs_for_lessons) — the same file
+        the learner plays and the linear rail edits (§ linear view editable
+        after conversion, 2026-10-03). Unconverted lessons keep `fallback`."""
+        graph = graphs_by_lesson.get(lesson_id)
+        if graph is None:
+            return fallback
+        return next((n["mediaUrl"] for n in graph["nodes"] if n["type"] == kind), None)
+
     def lesson_dto(lesson: CourseLesson) -> dict:
         lesson_words = words_by_lesson.get(lesson.id, [])
         lesson_questions = [q for q in questions if q.lessonId == lesson.id]
@@ -265,8 +275,8 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
             "contentLocaleComplete": (locale == DEFAULT_CONTENT_LOCALE or resolved is not None) if locale else None,
             "material": new_blocks if new_blocks is not None else parsed_material["blocks"],
             "phrases": parsed_material["phrases"],
-            "videoUrl": lesson_media_by_lesson_type.get((lesson.id, "video"), lesson.videoUrl),
-            "audioUrl": lesson_media_by_lesson_type.get((lesson.id, "audio"), lesson.audioUrl),
+            "videoUrl": _first_graph_media(lesson.id, "video", lesson_media_by_lesson_type.get((lesson.id, "video"), lesson.videoUrl)),
+            "audioUrl": _first_graph_media(lesson.id, "audio", lesson_media_by_lesson_type.get((lesson.id, "audio"), lesson.audioUrl)),
             "position": lesson.position,
             # None means this lesson is still on the old fixed 8-stage chain
             # (never converted) — the client's existing Stage-enum runner and
@@ -647,6 +657,12 @@ async def set_lesson_media(db: AsyncSession, course_id: str, lesson_id: str, kin
     lesson = result.scalar_one_or_none()
     if not lesson:
         return None
+    if await is_converted(db, lesson_id):
+        # A converted lesson plays its graph's video/audio nodes, not these
+        # columns — the linear rail's single slot edits the first such node
+        # (§ linear view editable after conversion, 2026-10-03).
+        await set_first_node_media(db, lesson, kind, url)
+        return await get_course(db, course_id)
     if kind == "video":
         lesson.videoUrl = url
     else:
@@ -668,6 +684,9 @@ async def set_lesson_media_translation(
     ).scalar_one_or_none()
     if not lesson:
         return None
+    if await is_converted(db, lesson_id):
+        await set_first_node_media_translation(db, lesson, kind, locale, url)
+        return await get_course(db, course_id)
     existing = (
         await db.execute(
             select(CourseLessonMedia).where(
@@ -785,9 +804,16 @@ async def media_url_still_in_use(db: AsyncSession, url: str, course_lesson_id: s
     if legacy_lesson_id:
         content_query = content_query.where(LessonContent.lessonId != legacy_lesson_id)
 
+    # Graph video/audio nodes hold their own files (§ lesson graph) — a file
+    # still played by any node, or any node's per-locale variant, stays.
+    node_query = select(func.count()).select_from(LessonNode).where(LessonNode.mediaUrl == url)
+    node_media_query = select(func.count()).select_from(LessonNodeMedia).where(LessonNodeMedia.mediaUrl == url)
+
     lesson_count = await db.scalar(lesson_query)
     content_count = await db.scalar(content_query)
-    return (lesson_count or 0) + (content_count or 0) > 0
+    node_count = await db.scalar(node_query)
+    node_media_count = await db.scalar(node_media_query)
+    return (lesson_count or 0) + (content_count or 0) + (node_count or 0) + (node_media_count or 0) > 0
 
 
 # ---------------------------------------------------------------------------
