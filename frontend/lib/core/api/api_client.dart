@@ -174,6 +174,13 @@ class ApiClient {
         return res.data ?? {};
       });
 
+  /// [post] with a longer response timeout, for the few requests that
+  /// legitimately take minutes on the server (AI lesson generation).
+  Future<Map<String, dynamic>> postSlow(String path, {Object? body, Duration timeout = const Duration(minutes: 5)}) => _unwrap(() async {
+        final res = await _dio.post<Map<String, dynamic>>(path, data: body ?? {}, options: Options(receiveTimeout: timeout));
+        return res.data ?? {};
+      });
+
   Future<Map<String, dynamic>> put(String path, {Object? body}) => _unwrap(() async {
         final res = await _dio.put<Map<String, dynamic>>(path, data: body ?? {});
         return res.data ?? {};

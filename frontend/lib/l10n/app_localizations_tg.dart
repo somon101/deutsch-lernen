@@ -838,6 +838,12 @@ class AppLocalizationsTg extends AppLocalizations {
       'Сабтро гӯш кунед ва талаффузи ибораҳои дарсро мустаҳкам кунед.';
 
   @override
+  String get audioStageShowTranslation => 'Тарҷумаро нишон диҳед';
+
+  @override
+  String get audioStageHideTranslation => 'Тарҷумаро пинҳон кунед';
+
+  @override
   String get audioStageFinished => '✓ Сабт гӯш карда шуд';
 
   @override

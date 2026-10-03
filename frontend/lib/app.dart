@@ -38,6 +38,8 @@ import 'features/social/data/social_repository.dart';
 import 'features/social/presentation/follow_list_screen.dart';
 import 'features/social/presentation/user_profile_screen.dart';
 import 'features/vocabulary/presentation/my_words_screen.dart';
+import 'features/admin/ai/presentation/admin_ai_settings_screen.dart';
+import 'features/admin/phrases/presentation/admin_phrases_screen.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
 /// (src/components/ProtectedRoute.tsx) is given per-route in App.tsx — kept
@@ -48,7 +50,7 @@ enum _Access { public, any, staffOnly, adminOnly }
 
 _Access _accessFor(String path) {
   if (path == '/login' || path == '/403') return _Access.public;
-  if (path == '/admin' || path.startsWith('/admin/users/')) return _Access.adminOnly;
+  if (path == '/admin' || path.startsWith('/admin/users/') || path == '/admin/ai-settings') return _Access.adminOnly;
   if (path.startsWith('/admin/')) return _Access.staffOnly;
   return _Access.any;
 }
@@ -101,6 +103,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/admin/users/all', builder: (context, state) => const AdminUsersAllScreen()),
           GoRoute(path: '/admin/courses', builder: (context, state) => const AdminCoursesHubScreen()),
           GoRoute(path: '/admin/vocabulary', builder: (context, state) => const AdminVocabularyScreen()),
+          GoRoute(path: '/admin/phrases', builder: (context, state) => const AdminPhrasesScreen()),
+          GoRoute(path: '/admin/ai-settings', builder: (context, state) => const AdminAiSettingsScreen()),
           GoRoute(path: '/admin/courses/legacy', builder: (context, state) => const AdminLegacyLessonsScreen()),
           GoRoute(
             path: '/admin/lessons/:lessonId',

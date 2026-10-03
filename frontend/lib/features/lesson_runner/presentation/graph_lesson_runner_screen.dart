@@ -205,6 +205,8 @@ class _GraphNodeBody extends ConsumerWidget {
           onComplete: onComplete,
           graphNodeMediaUrl: true,
           mediaUrlOverride: node.mediaUrl,
+          transcript: node.transcript,
+          transcriptTranslations: node.transcriptTranslations,
           nextLabel: _nextLabel(l10n),
         );
       case 'material':

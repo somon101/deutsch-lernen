@@ -74,6 +74,10 @@ def node_dto(node: LessonNode, media_override: str | None = None) -> dict:
         "title": node.title or DEFAULT_TITLES.get(node.type, node.type),
         "posX": node.posX,
         "posY": node.posY,
+        # Audio nodes only (§ AI lesson generator, 2026-10-03): the
+        # recording's text and its per-locale translations.
+        "transcript": node.transcript,
+        "transcriptTranslations": node.transcriptTranslations or {},
     }
 
 
@@ -320,6 +324,14 @@ async def update_node(db: AsyncSession, lesson_id: str, node_id: str, changes: d
     for field in ("posX", "posY", "title"):
         if field in changes:
             setattr(node, field, changes[field])
+    if "transcript" in changes or "transcriptTranslations" in changes:
+        if node.type != "audio":
+            raise ApiError(400, "Текст аудио есть только у блока «Аудио»")
+        if "transcript" in changes:
+            node.transcript = (changes["transcript"] or "").strip() or None
+        if "transcriptTranslations" in changes:
+            cleaned = {k: v.strip() for k, v in (changes["transcriptTranslations"] or {}).items() if isinstance(v, str) and v.strip()}
+            node.transcriptTranslations = cleaned or None
     await db.commit()
     await db.refresh(node)
     return node_dto(node)

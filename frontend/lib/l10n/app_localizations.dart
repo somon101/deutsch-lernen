@@ -1580,6 +1580,18 @@ abstract class AppLocalizations {
   /// **'Послушайте запись и закрепите произношение фраз из урока.'**
   String get audioStageListenHint;
 
+  /// No description provided for @audioStageShowTranslation.
+  ///
+  /// In ru, this message translates to:
+  /// **'Показать перевод'**
+  String get audioStageShowTranslation;
+
+  /// No description provided for @audioStageHideTranslation.
+  ///
+  /// In ru, this message translates to:
+  /// **'Скрыть перевод'**
+  String get audioStageHideTranslation;
+
   /// No description provided for @audioStageFinished.
   ///
   /// In ru, this message translates to:

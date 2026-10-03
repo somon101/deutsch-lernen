@@ -554,7 +554,9 @@ async def reorder_courses(db: AsyncSession, ids: list[str]) -> None:
     await db.commit()
 
 
-async def create_lesson(db: AsyncSession, course_id: str, title: str, description: str | None, material_text: str | None) -> dict | None:
+async def create_lesson(
+    db: AsyncSession, course_id: str, title: str, description: str | None, material_text: str | None, *, notify: bool = True
+) -> dict | None:
     course = await db.get(Course, course_id)
     if not course:
         return None
@@ -575,7 +577,9 @@ async def create_lesson(db: AsyncSession, course_id: str, title: str, descriptio
     # nothing to notify about yet. Never allowed to break lesson creation
     # itself: send_notification() already swallows its own errors, this
     # try/except is only for the settings lookup around it.
-    if course.status == CourseStatus.PUBLISHED:
+    # `notify=False`: the AI lesson generator creates lessons in bulk for
+    # review first (§ AI lesson generator, 2026-10-03) — never a push per lesson.
+    if notify and course.status == CourseStatus.PUBLISHED:
         try:
             from app.services import push as push_svc
 

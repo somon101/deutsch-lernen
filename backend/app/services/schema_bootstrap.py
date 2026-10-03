@@ -442,3 +442,71 @@ async def ensure_streak_reminder_table(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_streak_reminder_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+# § AI lesson generator + phrase base, 2026-10-03 — same idempotent
+# CREATE ... IF NOT EXISTS / ADD COLUMN IF NOT EXISTS shape as the blocks
+# above, safe to run on every boot.
+_AI_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "AiSettings" (
+        "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'singleton',
+        "provider" TEXT NOT NULL DEFAULT 'deepseek',
+        "model" TEXT NOT NULL DEFAULT 'deepseek-chat',
+        "apiKeyEncrypted" TEXT,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS "Phrase" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "languageId" TEXT NOT NULL,
+        "text" TEXT NOT NULL,
+        "translation" TEXT NOT NULL DEFAULT '',
+        "topicId" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    'CREATE INDEX IF NOT EXISTS "Phrase_languageId_idx" ON "Phrase"("languageId")',
+    'CREATE UNIQUE INDEX IF NOT EXISTS "Phrase_languageId_text_key" ON "Phrase"("languageId", lower("text"))',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "Phrase" ADD CONSTRAINT "Phrase_languageId_fkey"
+            FOREIGN KEY ("languageId") REFERENCES "Language"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+    """
+    DO $$ BEGIN
+        ALTER TABLE "Phrase" ADD CONSTRAINT "Phrase_topicId_fkey"
+            FOREIGN KEY ("topicId") REFERENCES "Topic"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS "PhraseTranslation" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "phraseId" TEXT NOT NULL,
+        "locale" TEXT NOT NULL,
+        "translation" TEXT NOT NULL
+    )
+    """,
+    'CREATE UNIQUE INDEX IF NOT EXISTS "PhraseTranslation_phraseId_locale_key" ON "PhraseTranslation"("phraseId", "locale")',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "PhraseTranslation" ADD CONSTRAINT "PhraseTranslation_phraseId_fkey"
+            FOREIGN KEY ("phraseId") REFERENCES "Phrase"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+    'ALTER TABLE "LessonNode" ADD COLUMN IF NOT EXISTS "transcript" TEXT',
+    'ALTER TABLE "LessonNode" ADD COLUMN IF NOT EXISTS "transcriptTranslations" JSONB',
+)
+
+
+async def ensure_ai_tables(db: AsyncSession) -> None:
+    for statement in _AI_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_ai_tables: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Float, Index, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -30,6 +31,12 @@ class LessonNode(Base):
     refId: Mapped[str | None] = mapped_column(String, nullable=True)
     mediaUrl: Mapped[str | None] = mapped_column(String, nullable=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Audio nodes only (§ AI lesson generator, 2026-10-03): the text of the
+    # recording in the studied language, and its translations by content
+    # locale ({"ru": ..., "tg": ...}). The AI writes the text before any
+    # file exists; the admin records and uploads the audio from it.
+    transcript: Mapped[str | None] = mapped_column(String, nullable=True)
+    transcriptTranslations: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     posX: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     posY: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     createdAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, server_default="now()")

@@ -323,6 +323,8 @@
   "audioStageNotUploaded": "Для этого урока не загружена аудиозапись.",
   "audioStageListen": "Прослушайте аудио",
   "audioStageListenHint": "Послушайте запись и закрепите произношение фраз из урока.",
+  "audioStageShowTranslation": "Показать перевод",
+  "audioStageHideTranslation": "Скрыть перевод",
   "audioStageFinished": "✓ Запись прослушана",
   "audioStageListenToContinue": "Прослушайте запись до конца, чтобы продолжить",
   "audioStageDefaultNextPractice": "Перейти к практике →",

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # left unset, the endpoint refuses every request rather than running
     # with no auth at all.
     cron_secret: str = ""
+    # Chat-completions endpoint for the AI lesson generator; overridable so a
+    # local stub can stand in for DeepSeek in tests and demos.
+    deepseek_url: str = "https://api.deepseek.com/chat/completions"
 
     @property
     def cors_origins_list(self) -> list[str]:

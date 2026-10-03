@@ -288,6 +288,8 @@
   "audioStageNotUploaded": "Барои ин дарс сабти аудио бор карда нашудааст.",
   "audioStageListen": "Аудиоро гӯш кунед",
   "audioStageListenHint": "Сабтро гӯш кунед ва талаффузи ибораҳои дарсро мустаҳкам кунед.",
+  "audioStageShowTranslation": "Тарҷумаро нишон диҳед",
+  "audioStageHideTranslation": "Тарҷумаро пинҳон кунед",
   "audioStageFinished": "✓ Сабт гӯш карда шуд",
   "audioStageListenToContinue": "Барои идома додан сабтро то охир гӯш кунед",
   "audioStageDefaultNextPractice": "Гузаштан ба машқ →",

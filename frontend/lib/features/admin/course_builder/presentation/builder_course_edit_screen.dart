@@ -1,3 +1,4 @@
+import '../../ai/presentation/ai_lesson_generator_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -101,13 +102,29 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text('Структура курса', style: AdminTypography.cardTitle),
-                        if (c.lessons.isNotEmpty)
-                          TextButton.icon(
-                            onPressed: () => showCourseConnectionsMap(context, courseId: courseId, courseTitle: c.title),
-                            style: AdminButtonStyles.text(),
-                            icon: const Icon(Icons.hub_outlined, size: 16),
-                            label: const Text('Карта курса'),
-                          ),
+                        Wrap(
+                          spacing: 4,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () async {
+                                final saved = await Navigator.of(context).push<bool>(
+                                  MaterialPageRoute(builder: (_) => AiLessonGeneratorScreen(courseId: courseId, courseTitle: c.title)),
+                                );
+                                if (saved == true) ref.invalidate(builderCourseProvider(courseId));
+                              },
+                              style: AdminButtonStyles.text(),
+                              icon: const Icon(Icons.auto_awesome, size: 16),
+                              label: const Text('Создать уроки с ИИ'),
+                            ),
+                            if (c.lessons.isNotEmpty)
+                              TextButton.icon(
+                                onPressed: () => showCourseConnectionsMap(context, courseId: courseId, courseTitle: c.title),
+                                style: AdminButtonStyles.text(),
+                                icon: const Icon(Icons.hub_outlined, size: 16),
+                                label: const Text('Карта курса'),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
                     Text(
