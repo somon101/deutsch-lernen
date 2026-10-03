@@ -475,12 +475,7 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
   final _translationTg = TextEditingController();
   final _pronunciation = TextEditingController();
   final _category = TextEditingController();
-  List<AdminCourseSummary>? _allCourses;
-  List<AdminCourseSummary>? _courses;
   String? _languageId;
-  List<AdminLesson>? _lessons;
-  String? _courseId;
-  String? _lessonId;
   Uint8List? _imageBytes;
   String? _imageFilename;
   bool _busy = false;
@@ -490,38 +485,6 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
   void initState() {
     super.initState();
     _languageId = widget.initialLanguageId;
-    ref.read(builderRepositoryProvider).listCourses().then((c) {
-      _allCourses = c;
-      _applyLanguage();
-    }).catchError((_) {
-      if (mounted) setState(() => _courses = const []);
-    });
-  }
-
-  /// Only courses of the chosen studied language: a word's language comes
-  /// from its course (course -> level -> language), so this is what makes
-  /// the choice real rather than just a label.
-  Future<void> _applyLanguage() async {
-    final all = _allCourses;
-    if (all == null) return;
-    setState(() {
-      _courses = null;
-      _courseId = null;
-      _lessonId = null;
-      _lessons = null;
-    });
-    var filtered = all;
-    final languageId = _languageId;
-    if (languageId != null) {
-      try {
-        final levels = await ref.read(builderRepositoryProvider).listLevels(languageId: languageId);
-        final levelIds = {for (final l in levels) l.id};
-        filtered = [for (final c in all) if (c.levelId != null && levelIds.contains(c.levelId)) c];
-      } catch (_) {
-        filtered = all;
-      }
-    }
-    if (mounted) setState(() => _courses = filtered);
   }
 
   @override
@@ -532,21 +495,6 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
     _pronunciation.dispose();
     _category.dispose();
     super.dispose();
-  }
-
-  Future<void> _onCourseChanged(String? courseId) async {
-    setState(() {
-      _courseId = courseId;
-      _lessonId = null;
-      _lessons = null;
-    });
-    if (courseId == null) return;
-    try {
-      final course = await ref.read(builderRepositoryProvider).getCourse(courseId);
-      if (mounted) setState(() => _lessons = course.lessons);
-    } catch (_) {
-      if (mounted) setState(() => _lessons = const []);
-    }
   }
 
   Future<void> _pickImage() async {
@@ -563,9 +511,7 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
       _german.text.trim().isNotEmpty &&
       _translation.text.trim().isNotEmpty &&
       _translationTg.text.trim().isNotEmpty &&
-      _pronunciation.text.trim().isNotEmpty &&
-      _courseId != null &&
-      _lessonId != null;
+      _languageId != null;
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
@@ -575,17 +521,16 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
     });
     try {
       final repo = ref.read(builderRepositoryProvider);
-      final wordId = await repo.addWord(
-        _courseId!,
-        _lessonId!,
+      final created = await repo.addDictionaryWord(
+        languageId: _languageId!,
         german: _german.text.trim(),
         translation: _translation.text.trim(),
+        translationTg: _translationTg.text.trim(),
         pronunciation: _pronunciation.text.trim(),
         categoryName: _category.text.trim().isEmpty ? null : _category.text.trim(),
       );
-      await repo.setVocabularyTranslation(_courseId!, _lessonId!, wordId, 'tg', _translationTg.text.trim());
       if (_imageBytes != null && _imageFilename != null) {
-        await repo.uploadWordImage(_courseId!, _lessonId!, wordId, bytes: _imageBytes!, filename: _imageFilename!);
+        await repo.uploadWordImage(created.courseId, created.lessonId, created.id, bytes: _imageBytes!, filename: _imageFilename!);
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -597,13 +542,14 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final courses = _courses;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Новое слово', style: AdminTypography.cardTitle),
+          const SizedBox(height: 4),
+          Text('Слово попадёт в словарь выбранного языка. В урок его можно добавить потом из конструктора.', style: AdminTypography.caption),
           const SizedBox(height: AdminMetrics.fieldGap),
           if (widget.languages.isNotEmpty) ...[
             DropdownButtonFormField<String>(
@@ -613,9 +559,7 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
               onChanged: _busy
                   ? null
                   : (v) {
-                      if (v == null || v == _languageId) return;
-                      _languageId = v;
-                      _applyLanguage();
+                      if (v != null) setState(() => _languageId = v);
                     },
             ),
             const SizedBox(height: AdminMetrics.fieldGap),
@@ -630,38 +574,9 @@ class _CreateWordSheetState extends ConsumerState<_CreateWordSheet> {
             ],
           ),
           const SizedBox(height: AdminMetrics.fieldGap),
-          TextField(controller: _pronunciation, decoration: adminInputDecoration(label: 'Транскрипция'), onChanged: (_) => setState(() {})),
+          TextField(controller: _pronunciation, decoration: adminInputDecoration(label: 'Транскрипция (необязательно)'), onChanged: (_) => setState(() {})),
           const SizedBox(height: AdminMetrics.fieldGap),
           _CategoryField(controller: _category),
-          const SizedBox(height: AdminMetrics.fieldGap),
-          Text('Куда добавить (выбранный урок станет "родным" для слова):', style: AdminTypography.fieldLabel),
-          const SizedBox(height: 6),
-          if (courses == null)
-            const Center(child: CircularProgressIndicator())
-          else if (courses.isEmpty)
-            Text('Нет курсов с этим языком — сначала создайте курс и выберите ему уровень этого языка.', style: AdminTypography.caption)
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _courseId,
-                    decoration: adminInputDecoration(label: 'Курс'),
-                    items: [for (final c in courses) DropdownMenuItem(value: c.id, child: Text(c.title, overflow: TextOverflow.ellipsis))],
-                    onChanged: (_busy) ? null : _onCourseChanged,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _lessonId,
-                    decoration: adminInputDecoration(label: 'Урок'),
-                    items: [for (final l in _lessons ?? const <AdminLesson>[]) DropdownMenuItem(value: l.id, child: Text(l.title, overflow: TextOverflow.ellipsis))],
-                    onChanged: _busy || _lessons == null ? null : (v) => setState(() => _lessonId = v),
-                  ),
-                ),
-              ],
-            ),
           const SizedBox(height: AdminMetrics.fieldGap),
           Row(
             children: [
@@ -901,11 +816,10 @@ class _EditWordSheetState extends ConsumerState<_EditWordSheet> {
 }
 
 
-/// "Импорт JSON" on the dictionary screen. Words still need a native
-/// lesson (every VocabularyItem has one), so the admin picks language ->
-/// course -> lesson, then pastes or loads a .json file. Goes through the
-/// same client-side parse and the same /vocabulary/import endpoint as the
-/// lesson editor's own import panel. Pops the language id on success.
+/// "Импорт JSON" on the dictionary screen: pick the studied language, paste
+/// or load a .json file. Words go straight into that language's dictionary
+/// (no course or lesson); ones already there are skipped. Pops the
+/// language id on success.
 class _ImportWordsSheet extends ConsumerStatefulWidget {
   const _ImportWordsSheet({required this.languages, this.initialLanguageId});
   final List<AdminLanguage> languages;
@@ -917,12 +831,7 @@ class _ImportWordsSheet extends ConsumerStatefulWidget {
 
 class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
   final _json = TextEditingController();
-  List<AdminCourseSummary>? _allCourses;
-  List<AdminCourseSummary>? _courses;
-  List<AdminLesson>? _lessons;
   String? _languageId;
-  String? _courseId;
-  String? _lessonId;
   bool _busy = false;
   String? _error;
 
@@ -930,12 +839,6 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
   void initState() {
     super.initState();
     _languageId = widget.initialLanguageId;
-    ref.read(builderRepositoryProvider).listCourses().then((c) {
-      _allCourses = c;
-      _applyLanguage();
-    }).catchError((_) {
-      if (mounted) setState(() => _courses = const []);
-    });
   }
 
   @override
@@ -944,45 +847,11 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
     super.dispose();
   }
 
-  Future<void> _applyLanguage() async {
-    final all = _allCourses;
-    if (all == null) return;
-    setState(() {
-      _courses = null;
-      _courseId = null;
-      _lessonId = null;
-      _lessons = null;
-    });
-    var filtered = all;
-    final languageId = _languageId;
-    if (languageId != null) {
-      try {
-        final levels = await ref.read(builderRepositoryProvider).listLevels(languageId: languageId);
-        final levelIds = {for (final l in levels) l.id};
-        filtered = [for (final c in all) if (c.levelId != null && levelIds.contains(c.levelId)) c];
-      } catch (_) {
-        filtered = all;
-      }
-    }
-    if (mounted) setState(() => _courses = filtered);
-  }
-
-  Future<void> _onCourseChanged(String? courseId) async {
-    setState(() {
-      _courseId = courseId;
-      _lessonId = null;
-      _lessons = null;
-    });
-    if (courseId == null) return;
-    try {
-      final course = await ref.read(builderRepositoryProvider).getCourse(courseId);
-      if (mounted) setState(() => _lessons = course.lessons);
-    } catch (_) {
-      if (mounted) setState(() => _lessons = const []);
-    }
-  }
-
   Future<void> _import() async {
+    if (_json.text.trim().isEmpty) {
+      setState(() => _error = 'Вставьте JSON или загрузите файл .json');
+      return;
+    }
     final parse = parseVocabularyImport(_json.text);
     if (parse.error != null) {
       setState(() => _error = parse.error);
@@ -993,10 +862,10 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
       _error = null;
     });
     try {
-      final result = await ref.read(builderRepositoryProvider).importVocabulary(_courseId!, _lessonId!, parse.words);
+      final result = await ref.read(builderRepositoryProvider).importDictionaryWords(_languageId!, parse.words);
       if (!mounted) return;
       showSuccessSnack(context, 'Добавлено: ${result.addedCount}, пропущено (уже есть): ${result.skipped.length}');
-      Navigator.pop(context, _languageId ?? '');
+      Navigator.pop(context, _languageId);
     } catch (e) {
       if (mounted) setState(() => _error = adminErrorMessage(e, 'Не удалось импортировать слова'));
     } finally {
@@ -1004,11 +873,8 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
     }
   }
 
-  bool get _canImport => !_busy && _courseId != null && _lessonId != null && _json.text.trim().isNotEmpty;
-
   @override
   Widget build(BuildContext context) {
-    final courses = _courses;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1021,51 +887,13 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
               initialValue: _languageId,
               decoration: adminInputDecoration(label: 'Для какого языка импортируем'),
               items: [for (final l in widget.languages) DropdownMenuItem(value: l.id, child: Text(l.name))],
-              onChanged: _busy
-                  ? null
-                  : (v) {
-                      if (v == null || v == _languageId) return;
-                      _languageId = v;
-                      _applyLanguage();
-                    },
+              onChanged: _busy ? null : (v) => setState(() => _languageId = v ?? _languageId),
             ),
             const SizedBox(height: AdminMetrics.fieldGap),
           ],
-          Text('Урок, к которому привяжутся слова (потом их можно переиспользовать в других уроках):', style: AdminTypography.fieldLabel),
-          const SizedBox(height: 6),
-          if (courses == null)
-            const Center(child: CircularProgressIndicator())
-          else if (courses.isEmpty)
-            Text('Нет курсов с этим языком — сначала создайте курс и выберите ему уровень этого языка.', style: AdminTypography.caption)
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _courseId,
-                    isExpanded: true,
-                    decoration: adminInputDecoration(label: 'Курс'),
-                    items: [for (final c in courses) DropdownMenuItem(value: c.id, child: Text(c.title, overflow: TextOverflow.ellipsis))],
-                    onChanged: _busy ? null : _onCourseChanged,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey(_courseId),
-                    initialValue: _lessonId,
-                    isExpanded: true,
-                    decoration: adminInputDecoration(label: 'Урок'),
-                    items: [for (final l in _lessons ?? const <AdminLesson>[]) DropdownMenuItem(value: l.id, child: Text(l.title, overflow: TextOverflow.ellipsis))],
-                    onChanged: _busy || _lessons == null ? null : (v) => setState(() => _lessonId = v),
-                  ),
-                ),
-              ],
-            ),
-          const SizedBox(height: AdminMetrics.fieldGap),
           Text(
             'Обязательны "original", "translation" (русский) и "translation_tg" (тоҷикӣ); "transcription" — по желанию. '
-            'Слова, которые уже есть в этом курсе, будут пропущены.',
+            'Слова, которые уже есть в словаре этого языка, будут пропущены.',
             style: AdminTypography.caption,
           ),
           const SizedBox(height: 8),
@@ -1097,7 +925,7 @@ class _ImportWordsSheetState extends ConsumerState<_ImportWordsSheet> {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
-              onPressed: _canImport ? _import : null,
+              onPressed: _busy || _languageId == null ? null : _import,
               style: AdminButtonStyles.primary(),
               child: Text(_busy ? 'Импортируем…' : 'Импортировать'),
             ),

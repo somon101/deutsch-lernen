@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import ConfigDict, BaseModel, Field, field_validator
 
 
 class VocabularyWordInput(BaseModel):
@@ -115,3 +115,22 @@ class VocabularyTranslationInput(BaseModel):
         if not v:
             raise ValueError("Перевод не может быть пустым")
         return v
+
+
+class DictionaryWordInput(BaseModel):
+    """A word added straight to the «Словарь» of one studied language,
+    without a course or lesson."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    languageId: str
+    german: str = Field(min_length=1)
+    translation: str = Field(min_length=1)
+    translationTg: str = Field(min_length=1)
+    pronunciation: str = ""
+    categoryName: str | None = None
+
+
+class DictionaryImportPayload(BaseModel):
+    languageId: str
+    words: list[VocabularyImportWordInput] = Field(min_length=1, max_length=5000)

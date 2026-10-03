@@ -16,7 +16,7 @@ from app.schemas.course import (
     MediaReuseInput,
     ReorderInput,
 )
-from app.schemas.vocabulary import VocabularyImportPayload, VocabularyLinkInput, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
+from app.schemas.vocabulary import DictionaryImportPayload, DictionaryWordInput, VocabularyImportPayload, VocabularyLinkInput, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
 from app.services import courses as svc
 from app.services.lesson_graph import sync_graph_with_content
 from app.services.content import DuplicateWordError
@@ -318,6 +318,30 @@ async def list_vocabulary(
     db: AsyncSession = Depends(get_db),
 ):
     return await list_dictionary_words(db, query=q, language_id=languageId, category_id=categoryId, limit=limit, offset=offset)
+
+
+@router.post("/vocabulary", status_code=201)
+async def create_dictionary_word(body: DictionaryWordInput, db: AsyncSession = Depends(get_db)):
+    try:
+        return await svc.add_dictionary_word(
+            db,
+            language_id=body.languageId,
+            german=body.german,
+            translation=body.translation,
+            translation_tg=body.translationTg,
+            pronunciation=body.pronunciation,
+            category_name=body.categoryName,
+        )
+    except DuplicateWordError as e:
+        raise ApiError(409, str(e))
+
+
+@router.post("/vocabulary/import")
+async def import_dictionary(body: DictionaryImportPayload, db: AsyncSession = Depends(get_db)):
+    try:
+        return await svc.import_dictionary_words(db, body.languageId, [w.model_dump() for w in body.words])
+    except DuplicateWordError as e:
+        raise ApiError(409, str(e))
 
 
 @router.delete("/vocabulary/{word_id}")

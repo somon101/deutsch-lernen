@@ -929,6 +929,8 @@ async def search_word_library(db: AsyncSession, query: str) -> list[dict]:
         lesson_titles = dict(rows)
 
     def location_label(item: VocabularyItem) -> str:
+        if is_dictionary_scope(item.courseId):
+            return "Словарь"
         if item.courseId == LEGACY_COURSE_ID:
             return f"Немецкий с нуля — {lesson_label(item.lessonId)}"
         course_title = course_titles.get(item.courseId, "курс")
@@ -956,7 +958,130 @@ async def derive_language_id(db: AsyncSession, course_id: str) -> str | None:
     languageId the same way, not left null just because it's new."""
     if course_id == LEGACY_COURSE_ID:
         return await db.scalar(select(Language.id).where(func.lower(func.trim(Language.name)) == "немецкий"))
+    if is_dictionary_scope(course_id):
+        return course_id[len(DICTIONARY_SCOPE_PREFIX):]
     return await db.scalar(select(Level.languageId).join(Course, Course.levelId == Level.id).where(Course.id == course_id))
+
+
+# Words added straight to the «Словарь» belong to no course or lesson. They
+# get this scope as both courseId and lessonId instead (the same sentinel
+# idea as LEGACY_COURSE_ID): the columns stay NOT NULL, no real lesson ever
+# matches it, and the existing (courseId, germanKey) unique index keeps
+# each such word once per language. Lessons use them through
+# LessonVocabularyLink, like any reused word.
+DICTIONARY_SCOPE_PREFIX = "dictionary-"
+
+
+def dictionary_scope(language_id: str) -> str:
+    return f"{DICTIONARY_SCOPE_PREFIX}{language_id}"
+
+
+def is_dictionary_scope(course_id: str | None) -> bool:
+    return bool(course_id) and course_id.startswith(DICTIONARY_SCOPE_PREFIX)
+
+
+async def _language_word_keys(db: AsyncSession, language_id: str) -> set[str]:
+    """Every word key already present for this language, in any course or
+    in the dictionary itself — what "already in the dictionary" means."""
+    return set((await db.execute(select(VocabularyItem.germanKey).where(VocabularyItem.languageId == language_id))).scalars().all())
+
+
+async def add_dictionary_word(
+    db: AsyncSession,
+    *,
+    language_id: str,
+    german: str,
+    translation: str,
+    translation_tg: str | None,
+    pronunciation: str | None,
+    category_name: str | None,
+) -> dict:
+    if not await db.get(Language, language_id):
+        raise ApiError(404, "Язык не найден")
+    key = normalize_word(german)
+    if key in await _language_word_keys(db, language_id):
+        raise DuplicateWordError("Такое слово уже есть в словаре этого языка.")
+    scope = dictionary_scope(language_id)
+    last = await db.scalar(select(VocabularyItem.position).where(VocabularyItem.lessonId == scope).order_by(VocabularyItem.position.desc()).limit(1))
+    word = VocabularyItem(
+        courseId=scope,
+        lessonId=scope,
+        german=german,
+        translation=translation,
+        pronunciation=pronunciation or None,
+        position=(last if last is not None else -1) + 1,
+        germanKey=key,
+        languageId=language_id,
+        categoryId=(await get_or_create_category(db, category_name)).id if category_name else None,
+    )
+    db.add(word)
+    try:
+        await db.flush()
+        if translation_tg:
+            db.add(VocabularyTranslation(vocabularyItemId=word.id, locale="tg", translation=translation_tg))
+        await db.commit()
+    except IntegrityError as e:
+        await db.rollback()
+        if not _is_unique_violation(e):
+            raise
+        raise DuplicateWordError("Такое слово уже есть в словаре этого языка.")
+    return {"ok": True, "id": word.id, "courseId": scope, "lessonId": scope}
+
+
+async def import_dictionary_words(db: AsyncSession, language_id: str, words: list[dict]) -> dict:
+    """Adds only words whose key isn't already anywhere in this language
+    (and isn't repeated earlier in the same file); existing words are left
+    untouched."""
+    if not await db.get(Language, language_id):
+        raise ApiError(404, "Язык не найден")
+    existing = await _language_word_keys(db, language_id)
+    to_insert: list[dict] = []
+    skipped: list[dict] = []
+    seen: dict[str, int] = {}
+    for index, w in enumerate(words):
+        key = normalize_word(w["original"])
+        if key in seen:
+            skipped.append({"index": index, "original": w["original"], "status": "duplicate-in-json",
+                            "message": f"Слово «{w['original']}» повторяется в этом же файле (строка {seen[key] + 1})."})
+            continue
+        seen[key] = index
+        if key in existing:
+            skipped.append({"index": index, "original": w["original"], "status": "duplicate-in-dictionary",
+                            "message": f"Слово «{w['original']}» уже есть в словаре этого языка."})
+            continue
+        to_insert.append({"index": index, "word": w, "key": key})
+
+    if to_insert:
+        scope = dictionary_scope(language_id)
+        last = await db.scalar(select(VocabularyItem.position).where(VocabularyItem.lessonId == scope).order_by(VocabularyItem.position.desc()).limit(1))
+        start = (last if last is not None else -1) + 1
+        rows: list[tuple[VocabularyItem, dict]] = []
+        for i, item in enumerate(to_insert):
+            w = item["word"]
+            row = VocabularyItem(
+                courseId=scope,
+                lessonId=scope,
+                german=w["original"],
+                translation=w["translation"],
+                pronunciation=w.get("transcription") or None,
+                position=start + i,
+                germanKey=item["key"],
+                languageId=language_id,
+            )
+            db.add(row)
+            rows.append((row, w))
+        try:
+            await db.flush()
+            for row, w in rows:
+                if w.get("translation_tg"):
+                    db.add(VocabularyTranslation(vocabularyItemId=row.id, locale="tg", translation=w["translation_tg"]))
+            await db.commit()
+        except IntegrityError as e:
+            await db.rollback()
+            if not _is_unique_violation(e):
+                raise
+            raise DuplicateWordError("Часть слов только что добавили параллельно — повторите импорт, уже существующие будут пропущены.")
+    return {"addedCount": len(to_insert), "skipped": skipped}
 
 
 async def link_existing_word_to_lesson(db: AsyncSession, course_id: str, lesson_id: str, word_id: str) -> dict | None:

@@ -327,6 +327,36 @@ class BuilderRepository {
     );
   }
 
+  /// A word added straight to the «Словарь» of a studied language, with no
+  /// course or lesson. Returns its id and the scope to use as course/lesson
+  /// for its own edit/photo/audio endpoints.
+  Future<({String id, String courseId, String lessonId})> addDictionaryWord({
+    required String languageId,
+    required String german,
+    required String translation,
+    required String translationTg,
+    String pronunciation = '',
+    String? categoryName,
+  }) async {
+    final res = await _api.post('/api/builder/vocabulary', body: {
+      'languageId': languageId,
+      'german': german,
+      'translation': translation,
+      'translationTg': translationTg,
+      'pronunciation': pronunciation,
+      'categoryName': ?categoryName,
+    });
+    return (id: res['id'] as String, courseId: res['courseId'] as String, lessonId: res['lessonId'] as String);
+  }
+
+  /// Bulk add to the «Словарь» of a language; words already present in that
+  /// language (or repeated in the file) are skipped, never overwritten.
+  Future<({int addedCount, List<ImportPreviewItem> skipped})> importDictionaryWords(String languageId, List<Map<String, String>> words) async {
+    final res = await _api.post('/api/builder/vocabulary/import', body: {'languageId': languageId, 'words': words});
+    final skipped = (res['skipped'] as List<dynamic>).map((s) => ImportPreviewItem.fromJson(s as Map<String, dynamic>)).toList();
+    return (addedCount: res['addedCount'] as int, skipped: skipped);
+  }
+
   /// Every word in the system, browsable/searchable regardless of which
   /// lesson it lives in (§ shared dictionary, 2026-09-14) — the admin
   /// "Словарь" screen's data source.

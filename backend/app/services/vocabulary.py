@@ -287,7 +287,8 @@ async def list_dictionary_words(
     words = []
     for item in items:
         dto = _word_card_dto(item, categories.get(item.categoryId))
-        dto["usedInLessonsCount"] = 1 + link_counts.get(item.id, 0)  # native lesson + every link
+        native = 0 if item.courseId.startswith("dictionary-") else 1  # dictionary-only words have no native lesson
+        dto["usedInLessonsCount"] = native + link_counts.get(item.id, 0)
         dto["translationTg"] = tg_translations.get(item.id)
         words.append(dto)
 
