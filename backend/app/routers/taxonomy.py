@@ -7,7 +7,10 @@ from app.auth.deps import require_auth, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.material import Material
+from pydantic import BaseModel, Field
+
 from app.models.enums import Role
+from app.services import api_keys as api_keys_svc
 from app.models.user import User
 from app.schemas.block import QuestionTranslationInput
 from app.schemas.lesson_state import ActivityTimeInput, DailyActivityInput
@@ -115,6 +118,28 @@ async def update_language(language_id: str, body: LanguageUpdateInput, admin: Us
         raise ApiError(404, "Язык не найден")
     counts = await svc.language_counts(db)
     return {"language": svc.language_dto(language, counts.get(language.id))}
+
+
+class ApiKeyCreateInput(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+@router.get("/languages/{language_id}/api-keys")
+async def list_api_keys(language_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    return {"keys": await api_keys_svc.list_keys(db, language_id)}
+
+
+@router.post("/languages/{language_id}/api-keys", status_code=201)
+async def create_api_key(language_id: str, body: ApiKeyCreateInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    """The full key is in this response only — it is never shown again."""
+    return {"key": await api_keys_svc.create_key(db, language_id, body.name)}
+
+
+@router.delete("/languages/{language_id}/api-keys/{key_id}")
+async def revoke_api_key(language_id: str, key_id: str, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    if not await api_keys_svc.revoke_key(db, language_id, key_id):
+        raise ApiError(404, "Ключ не найден")
+    return {"ok": True}
 
 
 @router.delete("/languages/{language_id}")

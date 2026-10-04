@@ -10,8 +10,9 @@ import '../../phrases/presentation/admin_phrases_screen.dart';
 import '../../rules/presentation/admin_rules_screen.dart';
 import '../../vocabulary/presentation/admin_vocabulary_screen.dart';
 import 'admin_languages_screen.dart';
+import 'language_api_tab.dart';
 
-const workspaceTabs = ['courses', 'vocabulary', 'phrases', 'rules'];
+const workspaceTabs = ['courses', 'vocabulary', 'phrases', 'rules', 'api'];
 
 /// One language's workspace: its courses, dictionary, phrases and rules,
 /// each the existing screen locked to this language.
@@ -64,7 +65,7 @@ class AdminLanguageWorkspaceScreen extends ConsumerWidget {
               bottom: const TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                tabs: [Tab(text: 'Курсы'), Tab(text: 'Словарь'), Tab(text: 'Фразы'), Tab(text: 'Правила')],
+                tabs: [Tab(text: 'Курсы'), Tab(text: 'Словарь'), Tab(text: 'Фразы'), Tab(text: 'Правила'), Tab(text: 'API')],
               ),
             ),
             body: TabBarView(
@@ -74,6 +75,7 @@ class AdminLanguageWorkspaceScreen extends ConsumerWidget {
                 AdminVocabularyScreen(languageId: languageId),
                 AdminPhrasesScreen(languageId: languageId),
                 AdminRulesScreen(languageId: languageId),
+                LanguageApiTab(languageId: languageId),
               ],
             ),
           ),

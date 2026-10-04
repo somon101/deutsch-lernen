@@ -580,3 +580,36 @@ async def ensure_language_status_columns(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_language_status_columns: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+_API_KEY_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "ApiKey" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "languageId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "keyHash" TEXT NOT NULL,
+        "prefix" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lastUsedAt" TIMESTAMP(3)
+    )
+    """,
+    'CREATE INDEX IF NOT EXISTS "ApiKey_languageId_idx" ON "ApiKey"("languageId")',
+    'CREATE UNIQUE INDEX IF NOT EXISTS "ApiKey_keyHash_key" ON "ApiKey"("keyHash")',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "ApiKey" ADD CONSTRAINT "ApiKey_languageId_fkey"
+            FOREIGN KEY ("languageId") REFERENCES "Language"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+)
+
+
+async def ensure_api_key_table(db: AsyncSession) -> None:
+    for statement in _API_KEY_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_api_key_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
