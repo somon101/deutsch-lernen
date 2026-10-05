@@ -131,9 +131,11 @@ async def _word_dto(db: AsyncSession, word: VocabularyItem) -> dict:
 
 
 @router.get("/words")
-async def list_words(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("words:read")), db: AsyncSession = Depends(get_db)):
-    page = await list_dictionary_words(db, query=q, language_id=key.languageId, limit=_limit(limit), offset=offset)
-    return {"words": [_word_out(w) for w in page["words"]], "total": page["total"]}
+async def list_words(
+    q: str | None = None, used: bool | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("words:read")), db: AsyncSession = Depends(get_db)
+):
+    page = await list_dictionary_words(db, query=q, language_id=key.languageId, limit=_limit(limit), offset=offset, used=used)
+    return {"words": [_word_out(w) for w in page["words"]], "total": page["total"], "usedCount": page["usedCount"], "unusedCount": page["unusedCount"]}
 
 
 @router.get("/words/{word_id}")
@@ -222,9 +224,11 @@ async def _own_phrase(db: AsyncSession, key: ApiKey, phrase_id: str) -> Phrase:
 
 
 @router.get("/phrases")
-async def list_phrases(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("phrases:read")), db: AsyncSession = Depends(get_db)):
-    page = await phrases_svc.list_phrases(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset)
-    return {"phrases": [_phrase_out(p) for p in page["phrases"]], "total": page["total"]}
+async def list_phrases(
+    q: str | None = None, used: bool | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("phrases:read")), db: AsyncSession = Depends(get_db)
+):
+    page = await phrases_svc.list_phrases(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset, used=used)
+    return {"phrases": [_phrase_out(p) for p in page["phrases"]], "total": page["total"], "usedCount": page["usedCount"], "unusedCount": page["unusedCount"]}
 
 
 @router.get("/phrases/{phrase_id}")

@@ -352,11 +352,12 @@ async def list_vocabulary(
     q: str | None = None,
     languageId: str | None = None,
     categoryId: str | None = None,
+    used: bool | None = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
-    return await list_dictionary_words(db, query=q, language_id=languageId, category_id=categoryId, limit=limit, offset=offset)
+    return await list_dictionary_words(db, query=q, language_id=languageId, category_id=categoryId, limit=limit, offset=offset, used=used)
 
 
 @router.post("/vocabulary", status_code=201)

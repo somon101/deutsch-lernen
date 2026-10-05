@@ -21,7 +21,7 @@ on top of the same VocabularyItem rows.
 
 import random
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -227,8 +227,24 @@ async def get_random_learned_words(db: AsyncSession, user_id: str, count: int, l
 # ---------------------------------------------------------------------------
 
 
+def word_is_used():
+    """A word is used when a lesson teaches it: it was created in a lesson
+    (not dictionary-only) or is attached to one by reuse."""
+    return or_(
+        ~VocabularyItem.courseId.like("dictionary-%"),
+        exists().where(LessonVocabularyLink.wordId == VocabularyItem.id),
+    )
+
+
 async def list_dictionary_words(
-    db: AsyncSession, *, query: str | None = None, language_id: str | None = None, category_id: str | None = None, limit: int = 50, offset: int = 0
+    db: AsyncSession,
+    *,
+    query: str | None = None,
+    language_id: str | None = None,
+    category_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    used: bool | None = None,
 ) -> dict:
     """The admin "Словарь" screen's one and only data source. No new
     storage: a plain filtered/paginated read over the same VocabularyItem
@@ -244,12 +260,21 @@ async def list_dictionary_words(
         filters.append(VocabularyItem.categoryId == category_id)
 
     count_query = select(func.count()).select_from(VocabularyItem)
-    list_query = select(VocabularyItem).order_by(VocabularyItem.german)
     for f in filters:
         count_query = count_query.where(f)
+    # Counts for the «Используются / Не используются» chips — same search,
+    # whatever `used` is.
+    all_count = await db.scalar(count_query) or 0
+    used_count = await db.scalar(count_query.where(word_is_used())) or 0
+    if used is True:
+        filters.append(word_is_used())
+    elif used is False:
+        filters.append(~word_is_used())
+    list_query = select(VocabularyItem).order_by(VocabularyItem.german)
+    for f in filters:
         list_query = list_query.where(f)
 
-    total = await db.scalar(count_query)
+    total = used_count if used is True else (all_count - used_count if used is False else all_count)
     items = (await db.execute(list_query.limit(limit).offset(offset))).scalars().all()
 
     category_ids = {i.categoryId for i in items if i.categoryId}
@@ -292,7 +317,7 @@ async def list_dictionary_words(
         dto["translationTg"] = tg_translations.get(item.id)
         words.append(dto)
 
-    return {"words": words, "total": total or 0}
+    return {"words": words, "total": total or 0, "usedCount": used_count, "unusedCount": all_count - used_count}
 
 
 async def get_word_usage(db: AsyncSession, word_id: str) -> dict | None:

@@ -13,6 +13,7 @@ import '../../../../core/widgets/word_audio_button.dart';
 import '../../../profile/presentation/profile_tokens.dart';
 import '../../admin_tokens.dart';
 import '../../admin_widgets.dart';
+import '../../widgets/used_filter_chips.dart';
 import '../../widgets/admin_feedback.dart';
 import '../../widgets/json_file_button.dart';
 import '../../course_builder/data/builder_repository.dart';
@@ -52,6 +53,10 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
   String _query = '';
   List<DictionaryWord> _words = const [];
   int _total = 0;
+  int _usedCount = 0;
+  int _unusedCount = 0;
+  // null = all, true = used in lessons, false = not used.
+  bool? _used;
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
@@ -99,6 +104,7 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
       final page = await ref.read(builderRepositoryProvider).listDictionaryWords(
             query: _query.isEmpty ? null : _query,
             languageId: _languageId,
+            used: _used,
             limit: _pageSize,
             offset: reset ? 0 : _words.length,
           );
@@ -106,6 +112,8 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
       setState(() {
         _words = reset ? page.words : [..._words, ...page.words];
         _total = page.total;
+        _usedCount = page.usedCount;
+        _unusedCount = page.unusedCount;
       });
     } catch (e) {
       if (mounted && reset) setState(() => _error = adminErrorMessage(e, 'Не удалось загрузить словарь'));
@@ -268,12 +276,24 @@ class _AdminVocabularyScreenState extends ConsumerState<AdminVocabularyScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: UsedFilterChips(
+                    value: _used,
+                    usedCount: _usedCount,
+                    unusedCount: _unusedCount,
+                    onChanged: (v) {
+                      setState(() => _used = v);
+                      _load(reset: true);
+                    },
+                  ),
+                ),
                 if (!_loading && _error == null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('Всего слов: $_total', style: AdminTypography.caption),
+                      child: Text('Показано слов: $_total', style: AdminTypography.caption),
                     ),
                   ),
                 Expanded(

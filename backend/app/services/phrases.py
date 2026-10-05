@@ -46,7 +46,19 @@ async def _dtos(db: AsyncSession, phrases: list[Phrase]) -> list[dict]:
     return [phrase_dto(p, translations.get(p.id), topics.get(p.topicId) if p.topicId else None) for p in phrases]
 
 
-async def list_phrases(db: AsyncSession, *, language_id: str | None = None, query: str | None = None, limit: int = 50, offset: int = 0) -> dict:
+async def used_phrase_ids(db: AsyncSession) -> set[str]:
+    """Phrases placed in at least one lesson's «Фразы» step."""
+    from app.models.lesson_node import LessonNode
+
+    rows = (await db.execute(select(LessonNode.phraseIds).where(LessonNode.type == "phrases"))).scalars().all()
+    return {pid for ids in rows for pid in (ids or []) if isinstance(pid, str)}
+
+
+async def list_phrases(
+    db: AsyncSession, *, language_id: str | None = None, query: str | None = None, limit: int = 50, offset: int = 0, used: bool | None = None
+) -> dict:
+    """`used`: True = only phrases placed in some lesson, False = only the
+    rest, None = all; usedCount/unusedCount ignore `used` (for the chips)."""
     filters = []
     if language_id:
         filters.append(Phrase.languageId == language_id)
@@ -54,13 +66,22 @@ async def list_phrases(db: AsyncSession, *, language_id: str | None = None, quer
         q = f"%{query.strip()}%"
         filters.append(or_(Phrase.text.ilike(q), Phrase.translation.ilike(q)))
     count_query = select(func.count()).select_from(Phrase)
-    list_query = select(Phrase).order_by(Phrase.text)
     for f in filters:
         count_query = count_query.where(f)
+    in_lessons = await used_phrase_ids(db)
+    used_filter = Phrase.id.in_(in_lessons) if in_lessons else Phrase.id.is_(None)
+    all_count = await db.scalar(count_query) or 0
+    used_count = await db.scalar(count_query.where(used_filter)) or 0
+    if used is True:
+        filters.append(used_filter)
+    elif used is False:
+        filters.append(~used_filter)
+    list_query = select(Phrase).order_by(Phrase.text)
+    for f in filters:
         list_query = list_query.where(f)
-    total = await db.scalar(count_query)
+    total = used_count if used is True else (all_count - used_count if used is False else all_count)
     phrases = (await db.execute(list_query.limit(limit).offset(offset))).scalars().all()
-    return {"phrases": await _dtos(db, list(phrases)), "total": total or 0}
+    return {"phrases": await _dtos(db, list(phrases)), "total": total, "usedCount": used_count, "unusedCount": all_count - used_count}
 
 
 async def get_phrases_by_ids(db: AsyncSession, ids: list[str]) -> list[Phrase]:

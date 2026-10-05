@@ -47,9 +47,11 @@ class AiRepository {
 
   // ---- Phrase base ----
 
-  Future<PhrasePage> listPhrases({String? languageId, String? query, int limit = 30, int offset = 0}) async {
+  /// `used`: true = only phrases placed in a lesson, false = the rest.
+  Future<PhrasePage> listPhrases({String? languageId, String? query, bool? used, int limit = 30, int offset = 0}) async {
     final res = await _api.get('/api/builder/phrases', query: {
       'languageId': ?languageId,
+      if (used != null) 'used': '$used',
       if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
       'limit': limit,
       'offset': offset,
@@ -57,6 +59,8 @@ class AiRepository {
     return PhrasePage(
       phrases: ((res['phrases'] as List?) ?? const []).map((e) => AdminPhrase.fromJson(e as Map<String, dynamic>)).toList(),
       total: (res['total'] as num?)?.toInt() ?? 0,
+      usedCount: (res['usedCount'] as num?)?.toInt() ?? 0,
+      unusedCount: (res['unusedCount'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -160,9 +164,11 @@ class AdminPhrase {
 }
 
 class PhrasePage {
-  const PhrasePage({required this.phrases, required this.total});
+  const PhrasePage({required this.phrases, required this.total, this.usedCount = 0, this.unusedCount = 0});
   final List<AdminPhrase> phrases;
   final int total;
+  final int usedCount;
+  final int unusedCount;
 }
 
 final aiRepositoryProvider = Provider<AiRepository>((ref) => AiRepository(ref.watch(apiClientProvider)));

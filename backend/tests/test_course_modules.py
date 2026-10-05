@@ -346,6 +346,19 @@ async def main():
         r = (await c.get("/api/v1/topics", headers=H, params={"used": "false"})).json()
         check("public API topics filter", [t["id"] for t in r.get("topics", [])] == ["t2"], r)
 
+        # ---------------- words / phrases filter: used / unused
+        wu = (await c.get("/api/builder/vocabulary", params={"languageId": "en", "used": "true"})).json()
+        wn = (await c.get("/api/builder/vocabulary", params={"languageId": "en", "used": "false"})).json()
+        check("words filter: used / unused",
+              sorted(w["wordId"] for w in wu["words"]) == ["w0", "w1", "w4", "w5"] and [w["wordId"] for w in wn["words"]] == ["w3"]
+              and wu["usedCount"] == 4 and wu["unusedCount"] == 1, (wu.get("usedCount"), [w["wordId"] for w in wn["words"]]))
+        pu = (await c.get("/api/builder/phrases", params={"languageId": "en", "used": "true"})).json()
+        pn = (await c.get("/api/builder/phrases", params={"languageId": "en", "used": "false"})).json()
+        check("phrases filter: used / unused",
+              sorted(x["id"] for x in pu["phrases"]) == ["p1", "p2"] and pn["phrases"] == [] and pn["usedCount"] == 2 and pn["unusedCount"] == 0, (pu, pn))
+        r = (await c.get("/api/v1/words", headers=H, params={"used": "false"})).json()
+        check("public API words filter", [w["id"] for w in r.get("words", [])] == ["w3"], r)
+
         # ---------------- «Сбросить заполнение ИИ»
         r = await c.post(f"/api/builder/courses/{cid}/lessons/{la['id']}/ai/reset", json={"nodeId": pra.id})
         check("reset one step", r.status_code == 200 and r.json()["reset"] == 1, r.text)

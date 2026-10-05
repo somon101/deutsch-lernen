@@ -13,6 +13,7 @@ import '../../admin_widgets.dart';
 import '../../ai/data/ai_repository.dart';
 import '../../course_builder/data/builder_repository.dart';
 import '../../course_builder/domain/taxonomy_domain.dart';
+import '../../widgets/used_filter_chips.dart';
 import '../../widgets/admin_feedback.dart';
 import '../../widgets/json_file_button.dart';
 
@@ -41,6 +42,10 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
   String? _languageId;
   List<AdminPhrase> _phrases = const [];
   int _total = 0;
+  int _usedCount = 0;
+  int _unusedCount = 0;
+  // null = all, true = used in lessons, false = not used.
+  bool? _used;
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
@@ -94,6 +99,7 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
       final page = await ref.read(aiRepositoryProvider).listPhrases(
             languageId: _languageId,
             query: _searchController.text,
+            used: _used,
             limit: _pageSize,
             offset: reset ? 0 : _phrases.length,
           );
@@ -101,6 +107,8 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
       setState(() {
         _phrases = reset ? page.phrases : [..._phrases, ...page.phrases];
         _total = page.total;
+        _usedCount = page.usedCount;
+        _unusedCount = page.unusedCount;
         _error = null;
       });
     } catch (e) {
@@ -214,10 +222,22 @@ class _AdminPhrasesScreenState extends ConsumerState<AdminPhrasesScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: UsedFilterChips(
+                    value: _used,
+                    usedCount: _usedCount,
+                    unusedCount: _unusedCount,
+                    onChanged: (v) {
+                      setState(() => _used = v);
+                      _load(reset: true);
+                    },
+                  ),
+                ),
                 if (!_loading && _error == null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Align(alignment: Alignment.centerLeft, child: Text('Всего фраз: $_total', style: AdminTypography.caption)),
+                    child: Align(alignment: Alignment.centerLeft, child: Text('Показано фраз: $_total', style: AdminTypography.caption)),
                   ),
                 Expanded(
                   child: _loading

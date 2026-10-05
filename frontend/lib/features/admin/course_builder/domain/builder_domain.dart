@@ -549,13 +549,18 @@ class DictionaryWord {
 
 /// One page of the "Словарь" screen's list (§ shared dictionary, 2026-09-14).
 class DictionaryPage {
-  const DictionaryPage({required this.words, required this.total});
+  const DictionaryPage({required this.words, required this.total, this.usedCount = 0, this.unusedCount = 0});
   factory DictionaryPage.fromJson(Map<String, dynamic> json) => DictionaryPage(
         words: (json['words'] as List<dynamic>).map((w) => DictionaryWord.fromJson(w as Map<String, dynamic>)).toList(),
         total: json['total'] as int,
+        usedCount: (json['usedCount'] as num?)?.toInt() ?? 0,
+        unusedCount: (json['unusedCount'] as num?)?.toInt() ?? 0,
       );
   final List<DictionaryWord> words;
   final int total;
+  /// Words in at least one lesson / in none (same search, any filter).
+  final int usedCount;
+  final int unusedCount;
 }
 
 class MediaLibraryEntry {

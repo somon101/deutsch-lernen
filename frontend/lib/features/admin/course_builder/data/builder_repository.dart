@@ -426,6 +426,7 @@ class BuilderRepository {
     String? query,
     String? languageId,
     String? categoryId,
+    bool? used,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -433,6 +434,7 @@ class BuilderRepository {
       '/api/builder/vocabulary',
       query: {
         'q': ?query,
+        if (used != null) 'used': '$used',
         'languageId': ?languageId,
         'categoryId': ?categoryId,
         'limit': '$limit',

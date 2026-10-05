@@ -11,8 +11,10 @@ router = APIRouter(prefix="/api/builder/phrases", tags=["phrases"], dependencies
 
 
 @router.get("")
-async def list_phrases(languageId: str | None = None, q: str | None = None, limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)):
-    return await svc.list_phrases(db, language_id=languageId, query=q, limit=max(1, min(limit, 200)), offset=max(0, offset))
+async def list_phrases(
+    languageId: str | None = None, q: str | None = None, used: bool | None = None, limit: int = 50, offset: int = 0, db: AsyncSession = Depends(get_db)
+):
+    return await svc.list_phrases(db, language_id=languageId, query=q, limit=max(1, min(limit, 200)), offset=max(0, offset), used=used)
 
 
 @router.post("", status_code=201)
