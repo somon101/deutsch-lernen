@@ -785,9 +785,8 @@ def pass_threshold() -> int:
 
 
 async def language_counts(db: AsyncSession) -> dict[str, dict[str, int]]:
-    """Per language: courses (through their level), words, phrases, rules."""
+    """Per language: courses (through their level), words, phrases, topics."""
     from app.models.phrase import Phrase
-    from app.models.rule import Rule
     from app.models.vocabulary_item import VocabularyItem
 
     out: dict[str, dict[str, int]] = {}
@@ -795,12 +794,12 @@ async def language_counts(db: AsyncSession) -> dict[str, dict[str, int]]:
     def put(rows, key):
         for language_id, n in rows:
             if language_id:
-                out.setdefault(language_id, {"courses": 0, "words": 0, "phrases": 0, "rules": 0})[key] = n
+                out.setdefault(language_id, {"courses": 0, "words": 0, "phrases": 0, "topics": 0})[key] = n
 
     put((await db.execute(select(Level.languageId, func.count(Course.id)).join(Course, Course.levelId == Level.id).group_by(Level.languageId))).all(), "courses")
     put((await db.execute(select(VocabularyItem.languageId, func.count()).group_by(VocabularyItem.languageId))).all(), "words")
     put((await db.execute(select(Phrase.languageId, func.count()).group_by(Phrase.languageId))).all(), "phrases")
-    put((await db.execute(select(Rule.languageId, func.count()).group_by(Rule.languageId))).all(), "rules")
+    put((await db.execute(select(Topic.languageId, func.count()).group_by(Topic.languageId))).all(), "topics")
     return out
 
 
@@ -814,7 +813,7 @@ def language_dto(language: Language, counts: dict[str, int] | None = None) -> di
         "courseCount": c.get("courses", 0),
         "wordCount": c.get("words", 0),
         "phraseCount": c.get("phrases", 0),
-        "ruleCount": c.get("rules", 0),
+        "topicCount": c.get("topics", 0),
     }
 
 
@@ -844,7 +843,7 @@ async def delete_language(db: AsyncSession, language_id: str) -> bool:
         f"курсов: {c['courses']}" if c.get("courses") else None,
         f"слов: {c['words']}" if c.get("words") else None,
         f"фраз: {c['phrases']}" if c.get("phrases") else None,
-        f"правил: {c['rules']}" if c.get("rules") else None,
+        f"тем: {c['topics']}" if c.get("topics") else None,
     ]
     parts = [p for p in parts if p]
     if parts:

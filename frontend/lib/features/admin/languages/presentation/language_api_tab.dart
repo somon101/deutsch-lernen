@@ -143,7 +143,7 @@ class LanguageApiTab extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Ключ даёт внешней программе доступ на чтение, добавление, изменение и удаление слов, фраз и правил '
+                  'Ключ даёт внешней программе доступ на чтение, добавление, изменение и удаление слов, фраз и тем '
                   'только этого языка. К курсам и пользователям доступа нет.',
                   style: AdminTypography.caption,
                 ),
@@ -196,10 +196,10 @@ class LanguageApiTab extends ConsumerWidget {
                   'PATCH  /phrases/{id}  ·  DELETE /phrases/{id}\n'
                   'POST   /phrases/import                   {"phrases":[{"text","translation","translation_tg"}]}\n'
                   '\n'
-                  'GET    /rules  ·  /rules/{id}\n'
-                  'POST   /rules                            {"text"}\n'
-                  'PATCH  /rules/{id}  ·  DELETE /rules/{id}\n'
-                  'POST   /rules/import                     {"rules":[{"text"}]}\n'
+                  'GET    /topics  ·  /topics/{id}\n'
+                  'POST   /topics                           {"name"}\n'
+                  'PATCH  /topics/{id}  ·  DELETE /topics/{id}\n'
+                  'POST   /topics/import                    {"topics":[{"name"}]}\n'
                   '\n'
                   'GET    /language                         проверить ключ: к какому языку он относится',
                   style: AdminTypography.mono,

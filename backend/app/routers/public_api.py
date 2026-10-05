@@ -1,4 +1,4 @@
-"""Public API for external programs: words, phrases and rules of the ONE
+"""Public API for external programs: words, phrases and topics of the ONE
 language an API key belongs to. Auth: header `X-API-Key`. Anything with an
 id from another language answers 404, exactly like a missing id."""
 
@@ -11,15 +11,14 @@ from app.db import get_db
 from app.errors import ApiError
 from app.models.api_key import ApiKey
 from app.models.phrase import Phrase
-from app.models.rule import Rule
+from app.models.topic import Topic
 from app.models.vocabulary_item import VocabularyItem
 from app.models.vocabulary_translation import VocabularyTranslation
 from app.schemas.phrase import PhraseImportItem
-from app.schemas.rule import RuleImportItem
 from app.schemas.vocabulary import VocabularyImportWordInput
 from app.services import courses as courses_svc
 from app.services import phrases as phrases_svc
-from app.services import rules as rules_svc
+from app.services import topics_admin as topics_svc
 from app.services.api_keys import require_api_key
 from app.services.content import DuplicateWordError
 from app.services.vocabulary import delete_word_globally, list_dictionary_words
@@ -61,8 +60,8 @@ class PhraseUpdate(_Strict):
     topic: str | None = Field(default=None, max_length=100)
 
 
-class RuleBody(_Strict):
-    text: str = Field(min_length=1, max_length=2000)
+class TopicBody(_Strict):
+    name: str = Field(min_length=1, max_length=200)
 
 
 class WordsImport(BaseModel):
@@ -73,8 +72,8 @@ class PhrasesImport(BaseModel):
     phrases: list[PhraseImportItem] = Field(min_length=1, max_length=5000)
 
 
-class RulesImport(BaseModel):
-    rules: list[RuleImportItem] = Field(min_length=1, max_length=5000)
+class TopicsImport(BaseModel):
+    topics: list[TopicBody] = Field(min_length=1, max_length=5000)
 
 
 def _limit(limit: int) -> int:
@@ -266,49 +265,49 @@ async def import_phrases(body: PhrasesImport, key: ApiKey = Depends(require_api_
     return await phrases_svc.import_phrases(db, key.languageId, [p.model_dump() for p in body.phrases])
 
 
-# ------------------------------------------------------------------- rules
+# ------------------------------------------------------------------ topics
 
 
-async def _own_rule(db: AsyncSession, key: ApiKey, rule_id: str) -> Rule:
-    rule = await db.get(Rule, rule_id)
-    if not rule or rule.languageId != key.languageId:
-        raise ApiError(404, "Правило не найдено")
-    return rule
+async def _own_topic(db: AsyncSession, key: ApiKey, topic_id: str) -> Topic:
+    topic = await db.get(Topic, topic_id)
+    if not topic or topic.languageId != key.languageId:
+        raise ApiError(404, "Тема не найдена")
+    return topic
 
 
-def _rule_out(r: dict) -> dict:
-    return {"id": r["id"], "text": r["text"]}
+def _topic_out(t: dict) -> dict:
+    return {"id": t["id"], "name": t["name"], "usage": t.get("usage", 0)}
 
 
-@router.get("/rules")
-async def list_rules(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
-    page = await rules_svc.list_rules(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset)
-    return {"rules": [_rule_out(r) for r in page["rules"]], "total": page["total"]}
+@router.get("/topics")
+async def list_topics(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+    page = await topics_svc.list_topics_page(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset)
+    return {"topics": [_topic_out(t) for t in page["topics"]], "total": page["total"]}
 
 
-@router.get("/rules/{rule_id}")
-async def get_rule(rule_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
-    return {"rule": _rule_out(rules_svc.rule_dto(await _own_rule(db, key, rule_id)))}
+@router.get("/topics/{topic_id}")
+async def get_topic(topic_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+    return {"topic": _topic_out(topics_svc.topic_dto(await _own_topic(db, key, topic_id)))}
 
 
-@router.post("/rules", status_code=201)
-async def create_rule(body: RuleBody, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
-    return {"rule": _rule_out(await rules_svc.create_rule(db, language_id=key.languageId, text=body.text))}
+@router.post("/topics", status_code=201)
+async def create_topic(body: TopicBody, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+    return {"topic": _topic_out(await topics_svc.create_topic(db, key.languageId, body.name))}
 
 
-@router.patch("/rules/{rule_id}")
-async def update_rule(rule_id: str, body: RuleBody, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
-    await _own_rule(db, key, rule_id)
-    return {"rule": _rule_out(await rules_svc.update_rule(db, rule_id, body.text))}
+@router.patch("/topics/{topic_id}")
+async def rename_topic(topic_id: str, body: TopicBody, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+    await _own_topic(db, key, topic_id)
+    return {"topic": _topic_out(await topics_svc.rename_topic(db, topic_id, body.name))}
 
 
-@router.delete("/rules/{rule_id}")
-async def delete_rule(rule_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
-    await _own_rule(db, key, rule_id)
-    await rules_svc.delete_rule(db, rule_id)
+@router.delete("/topics/{topic_id}")
+async def delete_topic(topic_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+    await _own_topic(db, key, topic_id)
+    await topics_svc.delete_topic(db, topic_id)
     return {"ok": True}
 
 
-@router.post("/rules/import")
-async def import_rules(body: RulesImport, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
-    return await rules_svc.import_rules(db, key.languageId, [r.text for r in body.rules])
+@router.post("/topics/import")
+async def import_topics(body: TopicsImport, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+    return await topics_svc.import_topics(db, key.languageId, [t.name for t in body.topics])

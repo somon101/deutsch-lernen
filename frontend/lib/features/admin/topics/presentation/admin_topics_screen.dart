@@ -14,15 +14,16 @@ import '../../course_builder/data/builder_repository.dart';
 import '../../course_builder/domain/taxonomy_domain.dart';
 import '../../widgets/admin_feedback.dart';
 import '../../widgets/json_file_button.dart';
-import '../data/rules_repository.dart';
+import '../data/topics_repository.dart';
 
 const _pageSize = 30;
 
-/// The admin «Правила» screen — like «Фразы», but each entry is a single
-/// rule sentence. One list per studied language, manual add/edit and a
+/// The «Темы» tab of a language: the topics lessons are tagged with (the
+/// same list the lesson editor's topic picker shows) — create, rename,
+/// delete, search and a
 /// JSON import (pasted or loaded from a file).
-class AdminRulesScreen extends ConsumerStatefulWidget {
-  const AdminRulesScreen({super.key, this.languageId});
+class AdminTopicsScreen extends ConsumerStatefulWidget {
+  const AdminTopicsScreen({super.key, this.languageId});
 
   /// When set, the screen is embedded in a language workspace: this
   /// language is fixed (no language picker anywhere) and there is no back
@@ -30,15 +31,15 @@ class AdminRulesScreen extends ConsumerStatefulWidget {
   final String? languageId;
 
   @override
-  ConsumerState<AdminRulesScreen> createState() => _AdminRulesScreenState();
+  ConsumerState<AdminTopicsScreen> createState() => _AdminTopicsScreenState();
 }
 
-class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
+class _AdminTopicsScreenState extends ConsumerState<AdminTopicsScreen> {
   final _searchController = TextEditingController();
   Timer? _debounce;
   List<AdminLanguage> _languages = const [];
   String? _languageId;
-  List<AdminRule> _rules = const [];
+  List<AdminTopicEntry> _topics = const [];
   int _total = 0;
   bool _loading = true;
   bool _loadingMore = false;
@@ -84,20 +85,20 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
     }
     setState(() => reset ? _loading = true : _loadingMore = true);
     try {
-      final page = await ref.read(rulesRepositoryProvider).listRules(
+      final page = await ref.read(topicsRepositoryProvider).listTopics(
             languageId: _languageId,
             query: _searchController.text,
             limit: _pageSize,
-            offset: reset ? 0 : _rules.length,
+            offset: reset ? 0 : _topics.length,
           );
       if (!mounted) return;
       setState(() {
-        _rules = reset ? page.rules : [..._rules, ...page.rules];
+        _topics = reset ? page.topics : [..._topics, ...page.topics];
         _total = page.total;
         _error = null;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = adminErrorMessage(e, 'Не удалось загрузить правила'));
+      if (mounted) setState(() => _error = adminErrorMessage(e, 'Не удалось загрузить темы'));
     } finally {
       if (mounted) {
         setState(() {
@@ -119,12 +120,12 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
     await _load(reset: true);
   }
 
-  Future<void> _openEditor([AdminRule? rule]) async {
+  Future<void> _openEditor([AdminTopicEntry? topic]) async {
     final languageId = _languageId;
     if (languageId == null) return;
     final saved = await showDialog<String>(
       context: context,
-      builder: (_) => Theme(data: lightTheme, child: _RuleDialog(languages: _languages, languageId: languageId, rule: rule)),
+      builder: (_) => Theme(data: lightTheme, child: _TopicDialog(languages: _languages, languageId: languageId, topic: topic)),
     );
     await _afterSave(saved);
   }
@@ -139,14 +140,14 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
     await _afterSave(imported);
   }
 
-  Future<void> _delete(AdminRule rule) async {
-    final ok = await confirmDialog(context, title: 'Удалить правило?', message: '«${rule.text}» будет удалено.', confirmLabel: 'Удалить');
+  Future<void> _delete(AdminTopicEntry topic) async {
+    final ok = await confirmDialog(context, title: 'Удалить тему «${topic.name}»?', message: topic.usage > 0 ? 'Тема снимется с ${topic.usage} материалов/вопросов/фраз, сами они останутся.' : 'Тема не используется.', confirmLabel: 'Удалить');
     if (!ok) return;
     try {
-      await ref.read(rulesRepositoryProvider).deleteRule(rule.id);
+      await ref.read(topicsRepositoryProvider).deleteTopic(topic.id);
       await _load(reset: true);
     } catch (e) {
-      if (mounted) showErrorSnack(context, e, 'Не удалось удалить правило');
+      if (mounted) showErrorSnack(context, e, 'Не удалось удалить тему');
     }
   }
 
@@ -162,12 +163,12 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
             backgroundColor: AdminColors.card,
             foregroundColor: AdminColors.text,
             elevation: 0,
-            title: Text('Правила', style: AdminTypography.pageTitle),
+            title: Text('Темы', style: AdminTypography.pageTitle),
             automaticallyImplyLeading: false,
             leading: widget.languageId != null ? null : IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
             actions: [
               TextButton.icon(onPressed: _openImport, style: AdminButtonStyles.text(), icon: const Icon(Icons.upload_file, size: 18), label: const Text('Импорт JSON')),
-              TextButton.icon(onPressed: () => _openEditor(), style: AdminButtonStyles.text(), icon: const Icon(Icons.add, size: 18), label: const Text('Новое правило')),
+              TextButton.icon(onPressed: () => _openEditor(), style: AdminButtonStyles.text(), icon: const Icon(Icons.add, size: 18), label: const Text('Новая тема')),
               const SizedBox(width: 4),
             ],
           ),
@@ -199,7 +200,7 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
                         child: TextField(
                           controller: _searchController,
                           onChanged: _onSearchChanged,
-                          decoration: adminInputDecoration(hint: 'Поиск по правилу…').copyWith(prefixIcon: const Icon(Icons.search, size: 18)),
+                          decoration: adminInputDecoration(hint: 'Поиск по теме…').copyWith(prefixIcon: const Icon(Icons.search, size: 18)),
                         ),
                       ),
                     ],
@@ -208,7 +209,7 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
                 if (!_loading && _error == null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Align(alignment: Alignment.centerLeft, child: Text('Всего правил: $_total', style: AdminTypography.caption)),
+                    child: Align(alignment: Alignment.centerLeft, child: Text('Всего тем: $_total', style: AdminTypography.caption)),
                   ),
                 Expanded(
                   child: _loading
@@ -217,14 +218,14 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
                           ? Center(child: Text(_error!, style: AdminTypography.body))
                           : _languageId == null
                               ? Center(child: Text('Сначала создайте язык курса в конструкторе.', style: AdminTypography.body))
-                              : _rules.isEmpty
-                                  ? Center(child: Text('Правил пока нет. Добавьте вручную или через «Импорт JSON».', style: AdminTypography.body))
+                              : _topics.isEmpty
+                                  ? Center(child: Text('Тем пока нет. Добавьте вручную или через «Импорт JSON».', style: AdminTypography.body))
                                   : ListView.builder(
                                       padding: EdgeInsets.fromLTRB(16, 4, 16, AdminMetrics.cardGap + bottomBarClearance(context)),
-                                      itemCount: _rules.length + 1,
+                                      itemCount: _topics.length + 1,
                                       itemBuilder: (context, index) {
-                                        if (index == _rules.length) {
-                                          if (_rules.length >= _total) return const SizedBox.shrink();
+                                        if (index == _topics.length) {
+                                          if (_topics.length >= _total) return const SizedBox.shrink();
                                           return Padding(
                                             padding: const EdgeInsets.symmetric(vertical: 12),
                                             child: Center(
@@ -234,14 +235,22 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
                                             ),
                                           );
                                         }
-                                        final r = _rules[index];
+                                        final r = _topics[index];
                                         return Padding(
                                           padding: const EdgeInsets.only(bottom: 8),
                                           child: AdminCard(
                                             padding: const EdgeInsets.all(12),
                                             child: Row(
                                               children: [
-                                                Expanded(child: Text(r.text, style: AdminTypography.body)),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(r.name, style: AdminTypography.body),
+                                                      Text(r.usage > 0 ? 'используется: ${r.usage}' : 'пока не используется', style: AdminTypography.caption),
+                                                    ],
+                                                  ),
+                                                ),
                                                 IconButton(tooltip: 'Редактировать', icon: const Icon(Icons.edit_outlined, size: 18), onPressed: () => _openEditor(r)),
                                                 AdminDeleteLink(onPressed: () => _delete(r)),
                                               ],
@@ -260,18 +269,18 @@ class _AdminRulesScreenState extends ConsumerState<AdminRulesScreen> {
   }
 }
 
-class _RuleDialog extends ConsumerStatefulWidget {
-  const _RuleDialog({required this.languages, required this.languageId, this.rule});
+class _TopicDialog extends ConsumerStatefulWidget {
+  const _TopicDialog({required this.languages, required this.languageId, this.topic});
   final List<AdminLanguage> languages;
   final String languageId;
-  final AdminRule? rule;
+  final AdminTopicEntry? topic;
 
   @override
-  ConsumerState<_RuleDialog> createState() => _RuleDialogState();
+  ConsumerState<_TopicDialog> createState() => _TopicDialogState();
 }
 
-class _RuleDialogState extends ConsumerState<_RuleDialog> {
-  late final _text = TextEditingController(text: widget.rule?.text ?? '');
+class _TopicDialogState extends ConsumerState<_TopicDialog> {
+  late final _text = TextEditingController(text: widget.topic?.name ?? '');
   late String _languageId = widget.languageId;
   bool _busy = false;
 
@@ -286,16 +295,16 @@ class _RuleDialogState extends ConsumerState<_RuleDialog> {
     if (text.isEmpty) return;
     setState(() => _busy = true);
     try {
-      final repo = ref.read(rulesRepositoryProvider);
-      final rule = widget.rule;
-      if (rule == null) {
-        await repo.createRule(languageId: _languageId, text: text);
+      final repo = ref.read(topicsRepositoryProvider);
+      final topic = widget.topic;
+      if (topic == null) {
+        await repo.createTopic(languageId: _languageId, name: text);
       } else {
-        await repo.updateRule(rule.id, text);
+        await repo.renameTopic(topic.id, text);
       }
-      if (mounted) Navigator.of(context).pop(rule?.languageId ?? _languageId);
+      if (mounted) Navigator.of(context).pop(topic?.languageId ?? _languageId);
     } catch (e) {
-      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить правило');
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить тему');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -304,13 +313,13 @@ class _RuleDialogState extends ConsumerState<_RuleDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.rule == null ? 'Новое правило' : 'Правило'),
+      title: Text(widget.topic == null ? 'Новая тема' : 'Тема'),
       content: SizedBox(
         width: 480,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (widget.rule == null && widget.languages.length > 1) ...[
+            if (widget.topic == null && widget.languages.length > 1) ...[
               DropdownButtonFormField<String>(
                 initialValue: _languageId,
                 decoration: adminInputDecoration(label: 'Изучаемый язык'),
@@ -322,10 +331,9 @@ class _RuleDialogState extends ConsumerState<_RuleDialog> {
             TextField(
               controller: _text,
               autofocus: true,
-              minLines: 2,
-              maxLines: 5,
+              maxLines: 1,
               onChanged: (_) => setState(() {}),
-              decoration: adminInputDecoration(label: 'Правило (одной фразой)'),
+              decoration: adminInputDecoration(label: 'Название темы (например, Präteritum, Артикли)'),
             ),
           ],
         ),
@@ -342,33 +350,33 @@ class _RuleDialogState extends ConsumerState<_RuleDialog> {
   }
 }
 
-/// Accepts a JSON list of strings or of {"text": ...} objects.
-({List<String> rules, String? error}) parseRulesImport(String source) {
-  if (source.trim().isEmpty) return (rules: const [], error: 'Вставьте JSON или загрузите файл .json');
+/// Accepts a JSON list of strings or of {"name": ...} objects.
+({List<String> names, String? error}) parseTopicsImport(String source) {
+  if (source.trim().isEmpty) return (names: const [], error: 'Вставьте JSON или загрузите файл .json');
   dynamic decoded;
   try {
     decoded = jsonDecode(source);
   } catch (_) {
-    return (rules: const [], error: 'Некорректный JSON: не удалось разобрать текст. Проверьте синтаксис.');
+    return (names: const [], error: 'Некорректный JSON: не удалось разобрать текст. Проверьте синтаксис.');
   }
-  if (decoded is! List) return (rules: const [], error: 'Корневой элемент должен быть списком: [ ... ]');
-  if (decoded.isEmpty) return (rules: const [], error: 'Список пуст — добавьте хотя бы одно правило.');
-  final rules = <String>[];
+  if (decoded is! List) return (names: const [], error: 'Корневой элемент должен быть списком: [ ... ]');
+  if (decoded.isEmpty) return (names: const [], error: 'Список пуст — добавьте хотя бы одну тему.');
+  final names = <String>[];
   final problems = <String>[];
   for (var i = 0; i < decoded.length; i++) {
     final item = decoded[i];
-    final text = (item is Map ? item['text'] : item is String ? item : null)?.toString().trim() ?? '';
+    final text = (item is Map ? (item['name'] ?? item['text']) : item is String ? item : null)?.toString().trim() ?? '';
     if (text.isEmpty) {
-      problems.add('Правило №${i + 1}: пустое или без поля "text"');
+      problems.add('Тема №${i + 1}: пустая или без поля "name"');
     } else {
-      rules.add(text);
+      names.add(text);
     }
   }
   if (problems.isNotEmpty) {
     final rest = problems.length - 5;
-    return (rules: const [], error: problems.take(5).join('\n') + (rest > 0 ? '\n…и ещё $rest' : ''));
+    return (names: const [], error: problems.take(5).join('\n') + (rest > 0 ? '\n…и ещё $rest' : ''));
   }
-  return (rules: rules, error: null);
+  return (names: names, error: null);
 }
 
 class _ImportDialog extends ConsumerStatefulWidget {
@@ -386,7 +394,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
   String? _error;
   bool _busy = false;
 
-  static const _example = '[\n  {"text": "Существительные в немецком пишутся с большой буквы."},\n  {"text": "Глагол в утвердительном предложении стоит на втором месте."}\n]';
+  static const _example = '[\n  {"name": "Präteritum"},\n  {"name": "Артикли"},\n  "Числа"\n]';
 
   @override
   void dispose() {
@@ -395,7 +403,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
   }
 
   Future<void> _import() async {
-    final parse = parseRulesImport(_json.text);
+    final parse = parseTopicsImport(_json.text);
     if (parse.error != null) {
       setState(() => _error = parse.error);
       return;
@@ -405,7 +413,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
       _error = null;
     });
     try {
-      final result = await ref.read(rulesRepositoryProvider).importRules(_languageId, parse.rules);
+      final result = await ref.read(topicsRepositoryProvider).importTopics(_languageId, parse.names);
       if (!mounted) return;
       showSuccessSnack(context, 'Добавлено: ${result.added}, пропущено (уже есть): ${result.skipped}');
       Navigator.of(context).pop(_languageId);
@@ -419,7 +427,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Импорт правил'),
+      title: const Text('Импорт тем'),
       content: SizedBox(
         width: 560,
         child: SingleChildScrollView(
@@ -437,7 +445,7 @@ class _ImportDialogState extends ConsumerState<_ImportDialog> {
                 const SizedBox(height: 8),
               ],
               Text(
-                'Список правил в JSON: объекты с полем "text" или просто строки. Правила, которые уже есть, будут пропущены.',
+                'Список тем в JSON: объекты с полем "name" или просто строки. Темы, которые уже есть в этом языке, будут пропущены.',
                 style: AdminTypography.caption,
               ),
               const SizedBox(height: 8),

@@ -146,7 +146,7 @@ class _LanguageCardState extends ConsumerState<_LanguageCard> {
     final ok = await confirmDialog(
       context,
       title: 'Удалить язык «${widget.language.name}»?',
-      message: 'Удалить можно только пустой язык — без курсов, слов, фраз и правил.',
+      message: 'Удалить можно только пустой язык — без курсов, слов, фраз и тем.',
       confirmLabel: 'Удалить',
     );
     if (!ok) return;
@@ -183,7 +183,7 @@ class _LanguageCardState extends ConsumerState<_LanguageCard> {
           ])),
           const SizedBox(height: 6),
           Text(
-            '${l.wordCount} слов · ${l.phraseCount} фраз · ${l.ruleCount} правил · ${l.courseCount} курсов',
+            '${l.wordCount} слов · ${l.phraseCount} фраз · ${l.topicCount} тем · ${l.courseCount} курсов',
             style: TextStyle(color: c.textMuted, fontSize: 13),
           ),
           const SizedBox(height: 16),

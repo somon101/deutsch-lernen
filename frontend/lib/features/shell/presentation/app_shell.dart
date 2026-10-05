@@ -90,7 +90,7 @@ bool _visibleFor(_NavItem item, AppUser? user) {
   // offer this to exactly whoever the API already lets call it.
   if (item.path == '/admin/vocabulary') return user?.isStaff ?? false;
   if (item.path == '/admin/phrases') return user?.isStaff ?? false;
-  if (item.path == '/admin/rules') return user?.isStaff ?? false;
+  if (item.path == '/admin/topics') return user?.isStaff ?? false;
   if (item.path == '/admin/ai-settings') return user?.isAdmin ?? false;
   if (item.path == '/admin') return user?.isAdmin ?? false;
   return true;
@@ -101,7 +101,7 @@ bool _visibleFor(_NavItem item, AppUser? user) {
 /// /admin/builder and /admin/lessons but are part of "Конструктор курсов"
 /// (§ builder full-width layout, 2026-09-02).
 const _sectionAliases = <String, List<String>>{
-  '/admin/courses': ['/admin/builder', '/admin/lessons', '/admin/languages', '/admin/vocabulary', '/admin/phrases', '/admin/rules'],
+  '/admin/courses': ['/admin/builder', '/admin/lessons', '/admin/languages', '/admin/vocabulary', '/admin/phrases', '/admin/topics'],
 };
 
 bool _isActive(_NavItem item, String currentPath) {
@@ -305,7 +305,7 @@ class _BottomBar extends StatelessWidget {
     final c = context.profileColors;
     // The phone bar has room for ~7 icons; the two admin-only tool screens
     // (§ AI lesson generator, 2026-10-03) stay on the wide rail only.
-    const railOnly = {'/admin/phrases', '/admin/rules', '/admin/ai-settings'};
+    const railOnly = {'/admin/phrases', '/admin/topics', '/admin/ai-settings'};
     final items = _navItems.where((item) => _visibleFor(item, user) && !railOnly.contains(item.path)).toList();
 
     return DecoratedBox(

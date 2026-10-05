@@ -30,7 +30,6 @@ from app.models.material_block_translation import MaterialBlockTranslation
 from app.models.material_translation import MaterialTranslation
 from app.models.notification import Notification
 from app.models.phrase import Phrase, PhraseTranslation
-from app.models.rule import Rule
 from app.models.api_key import ApiKey
 from app.models.video_lesson import VideoLesson
 from app.models.notification_settings import NotificationSettings
@@ -82,7 +81,6 @@ __all__ = [
     "NotificationSettings",
     "Phrase",
     "PhraseTranslation",
-    "Rule",
     "ApiKey",
     "VideoLesson",
     "PushToken",

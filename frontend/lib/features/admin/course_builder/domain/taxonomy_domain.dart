@@ -14,7 +14,7 @@ class AdminLanguage {
     this.courseCount = 0,
     this.wordCount = 0,
     this.phraseCount = 0,
-    this.ruleCount = 0,
+    this.topicCount = 0,
   });
   factory AdminLanguage.fromJson(Map<String, dynamic> json) => AdminLanguage(
         id: json['id'] as String,
@@ -24,7 +24,7 @@ class AdminLanguage {
         courseCount: (json['courseCount'] as num?)?.toInt() ?? 0,
         wordCount: (json['wordCount'] as num?)?.toInt() ?? 0,
         phraseCount: (json['phraseCount'] as num?)?.toInt() ?? 0,
-        ruleCount: (json['ruleCount'] as num?)?.toInt() ?? 0,
+        topicCount: (json['topicCount'] as num?)?.toInt() ?? 0,
       );
   final String id;
   final String name;
@@ -34,7 +34,7 @@ class AdminLanguage {
   final int courseCount;
   final int wordCount;
   final int phraseCount;
-  final int ruleCount;
+  final int topicCount;
 
   bool get isPublished => status == 'PUBLISHED';
 }

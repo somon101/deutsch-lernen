@@ -39,7 +39,7 @@ import 'features/social/presentation/user_profile_screen.dart';
 import 'features/vocabulary/presentation/my_words_screen.dart';
 import 'features/admin/ai/presentation/admin_ai_settings_screen.dart';
 import 'features/admin/phrases/presentation/admin_phrases_screen.dart';
-import 'features/admin/rules/presentation/admin_rules_screen.dart';
+import 'features/admin/topics/presentation/admin_topics_screen.dart';
 import 'features/admin/languages/presentation/admin_languages_screen.dart';
 import 'features/video_lessons/presentation/video_lesson_editor_screen.dart';
 import 'features/video_lessons/presentation/video_lessons_list_screen.dart';
@@ -115,7 +115,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/admin/vocabulary', builder: (context, state) => const AdminVocabularyScreen()),
           GoRoute(path: '/admin/phrases', builder: (context, state) => const AdminPhrasesScreen()),
-          GoRoute(path: '/admin/rules', builder: (context, state) => const AdminRulesScreen()),
+          GoRoute(path: '/admin/topics', builder: (context, state) => const AdminTopicsScreen()),
           GoRoute(path: '/admin/ai-settings', builder: (context, state) => const AdminAiSettingsScreen()),
           GoRoute(path: '/admin/courses/legacy', builder: (context, state) => const AdminLegacyLessonsScreen()),
           GoRoute(
