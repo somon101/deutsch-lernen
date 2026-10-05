@@ -614,3 +614,36 @@ async def ensure_api_key_table(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_api_key_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+_VIDEO_LESSON_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "VideoLesson" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "courseId" TEXT NOT NULL,
+        "title" TEXT NOT NULL DEFAULT 'Видеоурок',
+        "characterId" TEXT NOT NULL DEFAULT 'cloud',
+        "sourceType" TEXT NOT NULL DEFAULT 'audio',
+        "text" TEXT,
+        "voice" TEXT,
+        "audioUrl" TEXT,
+        "timeline" JSONB,
+        "durationMs" INTEGER,
+        "status" TEXT NOT NULL DEFAULT 'empty',
+        "error" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    'CREATE INDEX IF NOT EXISTS "VideoLesson_courseId_idx" ON "VideoLesson"("courseId")',
+)
+
+
+async def ensure_video_lesson_table(db: AsyncSession) -> None:
+    for statement in _VIDEO_LESSON_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_video_lesson_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

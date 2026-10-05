@@ -41,6 +41,8 @@ import 'features/admin/ai/presentation/admin_ai_settings_screen.dart';
 import 'features/admin/phrases/presentation/admin_phrases_screen.dart';
 import 'features/admin/rules/presentation/admin_rules_screen.dart';
 import 'features/admin/languages/presentation/admin_languages_screen.dart';
+import 'features/video_lessons/presentation/video_lesson_editor_screen.dart';
+import 'features/video_lessons/presentation/video_lessons_list_screen.dart';
 import 'features/admin/languages/presentation/admin_language_workspace_screen.dart';
 
 /// Route access levels, mirroring the adminOnly/staffOnly props ProtectedRoute
@@ -119,6 +121,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/admin/lessons/:lessonId',
             builder: (context, state) => AdminLessonEditScreen(lessonId: state.pathParameters['lessonId']!),
+          ),
+          GoRoute(
+            path: '/admin/builder/:courseId/videos',
+            builder: (context, state) => VideoLessonsListScreen(courseId: state.pathParameters['courseId']!),
+          ),
+          GoRoute(
+            path: '/admin/builder/:courseId/videos/:videoId',
+            builder: (context, state) => VideoLessonEditorScreen(courseId: state.pathParameters['courseId']!, videoId: state.pathParameters['videoId']!),
           ),
           GoRoute(
             path: '/admin/builder/:courseId',

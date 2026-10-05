@@ -126,6 +126,12 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                               icon: const Icon(Icons.auto_awesome, size: 16),
                               label: const Text('Создать уроки с ИИ'),
                             ),
+                            TextButton.icon(
+                              onPressed: () => context.go('/admin/builder/${Uri.encodeComponent(courseId)}/videos'),
+                              style: AdminButtonStyles.text(),
+                              icon: const Icon(Icons.smart_display_outlined, size: 16),
+                              label: const Text('Видеоуроки'),
+                            ),
                             if (c.lessons.isNotEmpty)
                               TextButton.icon(
                                 onPressed: () => showCourseConnectionsMap(context, courseId: courseId, courseTitle: c.title),

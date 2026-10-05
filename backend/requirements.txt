@@ -25,3 +25,4 @@ pillow==11.1.0
 # lesson reminder fix, 2026-09-07 — services/reminders.py needs correct,
 # DST-aware local time per user via ZoneInfo).
 tzdata==2025.2
+edge-tts==7.2.8

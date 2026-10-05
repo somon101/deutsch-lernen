@@ -32,6 +32,7 @@ from app.models.notification import Notification
 from app.models.phrase import Phrase, PhraseTranslation
 from app.models.rule import Rule
 from app.models.api_key import ApiKey
+from app.models.video_lesson import VideoLesson
 from app.models.notification_settings import NotificationSettings
 from app.models.push_token import PushToken
 from app.models.question import Question
@@ -83,6 +84,7 @@ __all__ = [
     "PhraseTranslation",
     "Rule",
     "ApiKey",
+    "VideoLesson",
     "PushToken",
     "Question",
     "QuestionPlacement",

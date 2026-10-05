@@ -9,12 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.db import async_session
 from app.errors import ApiError
-from app.routers import admin, ai, auth, auto_blank, auto_match, auto_translate, builder, content, cron, daily_goal, leaderboard, learner_courses, lesson_graph, me, notifications, phrases, preferences, public_api, rules, social, taxonomy, words
+from app.routers import admin, ai, auth, auto_blank, auto_match, auto_translate, builder, content, cron, daily_goal, leaderboard, learner_courses, lesson_graph, me, notifications, phrases, preferences, public_api, rules, social, taxonomy, video_lessons, words
 from app.services.bootstrap import ensure_admin_exists
 from app.services.schema_bootstrap import (
     backfill_word_language,
     ensure_ai_tables,
     ensure_api_key_table,
+    ensure_video_lesson_table,
     ensure_content_locale_tables,
     ensure_daily_goal_tables,
     ensure_language_status_columns,
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
         await ensure_rule_table(session)
         await ensure_language_status_columns(session)
         await ensure_api_key_table(session)
+        await ensure_video_lesson_table(session)
         await backfill_word_language(session)
         await ensure_admin_exists(session)
     yield
@@ -128,3 +130,4 @@ app.include_router(ai.router)
 app.include_router(phrases.router)
 app.include_router(rules.router)
 app.include_router(public_api.router)
+app.include_router(video_lessons.router)
