@@ -24,6 +24,19 @@ class LessonNodeLabel extends StatelessWidget {
       crossAxisAlignment: side == LabelSide.right ? CrossAxisAlignment.start : CrossAxisAlignment.end,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (data.moduleTitle != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: scheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
+            child: Text(
+              data.moduleTitle!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: scheme.onPrimaryContainer),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
         Text(
           data.title,
           maxLines: 2,

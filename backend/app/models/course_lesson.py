@@ -22,5 +22,11 @@ class CourseLesson(Base):
     videoUrl: Mapped[str | None] = mapped_column(String, nullable=True)
     audioUrl: Mapped[str | None] = mapped_column(String, nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
+    # § course modules, 2026-10-05: the module this lesson belongs to (a
+    # loose CourseModule.id; null = no module), and the lesson plan — in
+    # English for the AI that fills the lesson, in Russian for the teacher.
+    moduleId: Mapped[str | None] = mapped_column(String, nullable=True)
+    planEn: Mapped[str | None] = mapped_column(String, nullable=True)
+    planRu: Mapped[str | None] = mapped_column(String, nullable=True)
 
     course: Mapped["Course"] = relationship(back_populates="lessons")

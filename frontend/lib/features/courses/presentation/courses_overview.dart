@@ -24,6 +24,7 @@ class LessonCard {
     required this.progress,
     this.courseId,
     this.imageUrls = const [],
+    this.moduleTitle,
   });
 
   final String lessonId;
@@ -37,6 +38,10 @@ class LessonCard {
   /// 2026-09-02). They come from the already-cached course content — the
   /// list costs no extra request.
   final List<String> imageUrls;
+
+  /// Set only on the first lesson of a course module (§ course modules,
+  /// 2026-10-05) — the path shows the module name above it.
+  final String? moduleTitle;
 
   double get ratio => courseProgressRatio(progress?.completedStages);
   // `completedStages.contains(Stage.complete)` alone misses a graph-
@@ -70,8 +75,15 @@ List<LessonCard> _cardsFromHomeContentRaw(Map<String, dynamic> raw, Map<String, 
   }
   for (final course in (raw['courseDetails'] as List<dynamic>).cast<Map<String, dynamic>>()) {
     final courseId = course['id'] as String;
+    final moduleTitles = {
+      for (final m in (course['modules'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>()) m['id'] as String: m['title'] as String,
+    };
+    String? previousModule;
     for (final l in (course['lessons'] as List<dynamic>).cast<Map<String, dynamic>>()) {
       final vocabulary = (l['vocabulary'] as List<dynamic>? ?? const []).cast<Map<String, dynamic>>();
+      final moduleId = l['moduleId'] as String?;
+      final startsModule = moduleId != null && moduleTitles.containsKey(moduleId) && moduleId != previousModule;
+      previousModule = moduleId;
       cards.add(LessonCard(
         lessonId: l['id'] as String,
         courseId: courseId,
@@ -82,6 +94,7 @@ List<LessonCard> _cardsFromHomeContentRaw(Map<String, dynamic> raw, Map<String, 
           for (final w in vocabulary)
             if ((w['imageUrl'] as String?)?.isNotEmpty ?? false) w['imageUrl'] as String,
         ],
+        moduleTitle: startsModule ? moduleTitles[moduleId] : null,
       ));
     }
   }

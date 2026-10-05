@@ -114,6 +114,9 @@ class AdminGraphNode {
     required this.posY,
     this.transcript,
     this.transcriptTranslations = const {},
+    this.phrases = const [],
+    this.aiTask,
+    this.aiPending = false,
   });
 
   factory AdminGraphNode.fromJson(Map<String, dynamic> json) => AdminGraphNode(
@@ -126,6 +129,9 @@ class AdminGraphNode {
     posY: (json['posY'] as num).toDouble(),
     transcript: json['transcript'] as String?,
     transcriptTranslations: ((json['transcriptTranslations'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, v as String)),
+    phrases: [for (final p in (json['phrases'] as List?) ?? const []) AdminNodePhrase.fromJson(p as Map<String, dynamic>)],
+    aiTask: json['aiTask'] as String?,
+    aiPending: json['aiPending'] as bool? ?? false,
   );
 
   final String id;
@@ -139,6 +145,13 @@ class AdminGraphNode {
   /// text and its translations by content locale.
   final String? transcript;
   final Map<String, String> transcriptTranslations;
+  /// "phrases" nodes only (§ course modules, 2026-10-05): the phrases from
+  /// the language's phrase base, in display order.
+  final List<AdminNodePhrase> phrases;
+  /// An empty step waiting for the AI: what belongs here, and whether it is
+  /// still hidden from learners (§ course modules, 2026-10-05).
+  final String? aiTask;
+  final bool aiPending;
 
   AdminGraphNode copyWith({double? posX, double? posY, String? title, String? mediaUrl}) => AdminGraphNode(
     id: id,
@@ -150,7 +163,36 @@ class AdminGraphNode {
     posY: posY ?? this.posY,
     transcript: transcript,
     transcriptTranslations: transcriptTranslations,
+    phrases: phrases,
+    aiTask: aiTask,
+    aiPending: aiPending,
   );
+}
+
+class AdminNodePhrase {
+  const AdminNodePhrase({required this.id, required this.text, required this.translation});
+  factory AdminNodePhrase.fromJson(Map<String, dynamic> json) =>
+      AdminNodePhrase(id: json['id'] as String, text: json['text'] as String, translation: json['translation'] as String? ?? '');
+  final String id;
+  final String text;
+  final String translation;
+}
+
+/// A named group of lessons inside a course (§ course modules, 2026-10-05).
+class AdminModule {
+  const AdminModule({required this.id, required this.title, this.titleTg, this.description = '', required this.position});
+  factory AdminModule.fromJson(Map<String, dynamic> json) => AdminModule(
+        id: json['id'] as String,
+        title: json['title'] as String,
+        titleTg: json['titleTg'] as String?,
+        description: json['description'] as String? ?? '',
+        position: json['position'] as int? ?? 0,
+      );
+  final String id;
+  final String title;
+  final String? titleTg;
+  final String description;
+  final int position;
 }
 
 /// A flow connection between two nodes — the only thing that decides the
@@ -210,6 +252,9 @@ class AdminLesson {
     required this.blocks,
     this.graph,
     this.translations = const {},
+    this.moduleId,
+    this.planEn,
+    this.planRu,
   });
 
   factory AdminLesson.fromJson(Map<String, dynamic> json) => AdminLesson(
@@ -237,6 +282,9 @@ class AdminLesson {
           (locale, v) => MapEntry(locale, AdminLessonTranslation.fromJson(v as Map<String, dynamic>)),
         ) ??
         const {},
+    moduleId: json['moduleId'] as String?,
+    planEn: json['planEn'] as String?,
+    planRu: json['planRu'] as String?,
   );
 
   /// GET/PUT /api/admin/content/:lessonId's shape — keyed by `lessonId`
@@ -274,6 +322,14 @@ class AdminLesson {
   final List<AdminBlock> blocks;
   final AdminLessonGraph? graph;
   final Map<String, AdminLessonTranslation> translations;
+  // § course modules, 2026-10-05: the lesson's module (null = none) and its
+  // plan — English for the AI that fills it, Russian for the teacher.
+  final String? moduleId;
+  final String? planEn;
+  final String? planRu;
+
+  /// Steps of this lesson still waiting for the AI.
+  int get pendingSteps => graph?.nodes.where((n) => n.aiPending).length ?? 0;
 
   List<AdminBlock> blocksFor(String stage) =>
       blocks.where((b) => b.stage == stage).toList()
@@ -301,6 +357,7 @@ class AdminCourse {
     required this.levelId,
     required this.lessons,
     this.translations = const {},
+    this.modules = const [],
   });
 
   factory AdminCourse.fromJson(Map<String, dynamic> json) => AdminCourse(
@@ -321,6 +378,7 @@ class AdminCourse {
           (locale, v) => MapEntry(locale, AdminCourseTranslation.fromJson(v as Map<String, dynamic>)),
         ) ??
         const {},
+    modules: [for (final m in (json['modules'] as List?) ?? const []) AdminModule.fromJson(m as Map<String, dynamic>)],
   );
 
   final String id;
@@ -332,6 +390,7 @@ class AdminCourse {
   final String? levelId;
   final List<AdminLesson> lessons;
   final Map<String, AdminCourseTranslation> translations;
+  final List<AdminModule> modules;
 }
 
 class AdminCourseSummary {

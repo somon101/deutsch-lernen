@@ -6,6 +6,7 @@ from app.models.course import Course
 from app.models.course_lesson import CourseLesson
 from app.models.course_lesson_media import CourseLessonMedia
 from app.models.course_lesson_translation import CourseLessonTranslation
+from app.models.course_module import CourseModule
 from app.models.course_translation import CourseTranslation
 from app.models.daily_activity import DailyActivity
 from app.models.daily_goal import DailyGoalAward, UserPreference
@@ -55,6 +56,7 @@ __all__ = [
     "CourseLesson",
     "CourseLessonMedia",
     "CourseLessonTranslation",
+    "CourseModule",
     "CourseTranslation",
     "DailyActivity",
     "DailyGoalAward",

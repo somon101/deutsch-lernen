@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-NodeType = Literal["vocabulary", "material", "video", "audio", "minitest", "practice", "review"]
+NodeType = Literal["vocabulary", "phrases", "material", "video", "audio", "minitest", "practice", "review"]
 
 
 class CreateNodeInput(BaseModel):
@@ -10,6 +10,10 @@ class CreateNodeInput(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     posX: float = 0
     posY: float = 0
+    # § course modules, 2026-10-05.
+    aiTask: str | None = Field(default=None, max_length=4000)
+    aiPending: bool = False
+    phraseIds: list[str] | None = Field(default=None, max_length=100)
 
     @field_validator("title")
     @classmethod
@@ -27,6 +31,10 @@ class UpdateNodeInput(BaseModel):
     # Audio nodes only (§ AI lesson generator, 2026-10-03).
     transcript: str | None = Field(default=None, max_length=20000)
     transcriptTranslations: dict[str, str] | None = None
+    # § course modules, 2026-10-05.
+    phraseIds: list[str] | None = Field(default=None, max_length=100)
+    aiTask: str | None = Field(default=None, max_length=4000)
+    aiPending: bool | None = None
 
     @field_validator("title")
     @classmethod
@@ -35,6 +43,12 @@ class UpdateNodeInput(BaseModel):
             return v
         v = v.strip()
         return v or None
+
+
+class RouteInput(BaseModel):
+    """The whole learner route at once: step ids in walking order."""
+
+    nodeIds: list[str] = Field(max_length=100)
 
 
 class CreateEdgeInput(BaseModel):

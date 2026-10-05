@@ -648,3 +648,45 @@ async def ensure_video_lesson_table(db: AsyncSession) -> None:
         except Exception as exc:  # noqa: BLE001 — startup must survive anything here
             await db.rollback()
             print(f"ensure_video_lesson_table: не удалось выполнить DDL ({type(exc).__name__}: {exc})")
+
+
+_COURSE_STRUCTURE_STATEMENTS = (
+    """
+    CREATE TABLE IF NOT EXISTS "CourseModule" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "courseId" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "titleTg" TEXT,
+        "description" TEXT NOT NULL DEFAULT '',
+        "position" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    'CREATE INDEX IF NOT EXISTS "CourseModule_courseId_idx" ON "CourseModule"("courseId")',
+    """
+    DO $$ BEGIN
+        ALTER TABLE "CourseModule" ADD CONSTRAINT "CourseModule_courseId_fkey"
+            FOREIGN KEY ("courseId") REFERENCES "Course"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$
+    """,
+    'ALTER TABLE "CourseLesson" ADD COLUMN IF NOT EXISTS "moduleId" TEXT',
+    'ALTER TABLE "CourseLesson" ADD COLUMN IF NOT EXISTS "planEn" TEXT',
+    'ALTER TABLE "CourseLesson" ADD COLUMN IF NOT EXISTS "planRu" TEXT',
+    'ALTER TABLE "LessonNode" ADD COLUMN IF NOT EXISTS "phraseIds" JSONB',
+    'ALTER TABLE "LessonNode" ADD COLUMN IF NOT EXISTS "aiTask" TEXT',
+    'ALTER TABLE "LessonNode" ADD COLUMN IF NOT EXISTS "aiPending" BOOLEAN NOT NULL DEFAULT false',
+    'ALTER TABLE "ApiKey" ADD COLUMN IF NOT EXISTS "permissions" JSONB',
+    'ALTER TABLE "ApiKey" ADD COLUMN IF NOT EXISTS "expiresAt" TIMESTAMP(3)',
+)
+
+
+async def ensure_course_structure_columns(db: AsyncSession) -> None:
+    """§ course modules, 2026-10-05: modules, lesson plans, the «Фразы»
+    step, AI placeholders and API-key permissions. Additive only."""
+    for statement in _COURSE_STRUCTURE_STATEMENTS:
+        try:
+            await db.execute(text(statement))
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 — startup must survive anything here
+            await db.rollback()
+            print(f"ensure_course_structure_columns: не удалось выполнить DDL ({type(exc).__name__}: {exc})")

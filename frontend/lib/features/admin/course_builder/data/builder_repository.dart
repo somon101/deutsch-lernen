@@ -116,10 +116,11 @@ class BuilderRepository {
     String courseId, {
     required String title,
     String? description,
+    String? moduleId,
   }) async {
     final res = await _api.post(
       '$_base/${Uri.encodeComponent(courseId)}/lessons',
-      body: {'title': title, 'description': ?description},
+      body: {'title': title, 'description': ?description, 'moduleId': ?moduleId},
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
@@ -130,6 +131,8 @@ class BuilderRepository {
     String? title,
     String? description,
     String? materialText,
+    String? planEn,
+    String? planRu,
   }) async {
     final res = await _api.patch(
       '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}',
@@ -137,9 +140,58 @@ class BuilderRepository {
         'title': ?title,
         'description': ?description,
         'materialText': ?materialText,
+        'planEn': ?planEn,
+        'planRu': ?planRu,
       },
     );
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
+  // § course modules, 2026-10-05 ------------------------------------------
+
+  Future<AdminCourse> createModule(String courseId, {required String title, String? titleTg}) async {
+    final res = await _api.post('$_base/${Uri.encodeComponent(courseId)}/modules', body: {'title': title, 'titleTg': ?titleTg});
+    return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
+  Future<AdminCourse> updateModule(String courseId, String moduleId, {String? title, String? titleTg}) async {
+    final res = await _api.patch(
+      '$_base/${Uri.encodeComponent(courseId)}/modules/${Uri.encodeComponent(moduleId)}',
+      body: {'title': ?title, 'titleTg': ?titleTg},
+    );
+    return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteModule(String courseId, String moduleId) =>
+      _api.delete('$_base/${Uri.encodeComponent(courseId)}/modules/${Uri.encodeComponent(moduleId)}');
+
+  Future<AdminCourse> reorderModules(String courseId, List<String> ids) async {
+    final res = await _api.post('$_base/${Uri.encodeComponent(courseId)}/modules/reorder', body: {'ids': ids});
+    return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
+  /// `moduleId` null moves the lesson out of every module.
+  Future<AdminCourse> setLessonModule(String courseId, String lessonId, String? moduleId) async {
+    final res = await _api.put(
+      '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/module',
+      body: {'moduleId': moduleId},
+    );
+    return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
+  }
+
+  /// Fills the lesson's steps marked "ждёт ИИ" by its plan; returns how many
+  /// were filled, how many still wait, and warnings.
+  Future<({int filled, int waiting, List<String> warnings})> aiFillLesson(String courseId, String lessonId, {String? instructions}) async {
+    final res = await _api.postSlow(
+      '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/ai/fill',
+      body: {if (instructions != null && instructions.trim().isNotEmpty) 'instructions': instructions.trim()},
+      timeout: const Duration(minutes: 9),
+    );
+    return (
+      filled: (res['filled'] as num).toInt(),
+      waiting: (res['waiting'] as num).toInt(),
+      warnings: [for (final w in (res['warnings'] as List?) ?? const []) w as String],
+    );
   }
 
   Future<AdminCourse> removeLesson(String courseId, String lessonId) async {
@@ -870,10 +922,12 @@ class BuilderRepository {
     String? title,
     required double posX,
     required double posY,
+    bool aiPending = false,
+    String? aiTask,
   }) async {
     final res = await _api.post(
       '${_graphBase(courseId, lessonId)}/nodes',
-      body: {'type': type, 'title': ?title, 'posX': posX, 'posY': posY},
+      body: {'type': type, 'title': ?title, 'posX': posX, 'posY': posY, if (aiPending) 'aiPending': true, 'aiTask': ?aiTask},
     );
     return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
   }
@@ -887,10 +941,22 @@ class BuilderRepository {
     String? title,
     String? transcript,
     Map<String, String>? transcriptTranslations,
+    List<String>? phraseIds,
+    String? aiTask,
+    bool? aiPending,
   }) async {
     final res = await _api.patch(
       '${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}',
-      body: {'posX': ?posX, 'posY': ?posY, 'title': ?title, 'transcript': ?transcript, 'transcriptTranslations': ?transcriptTranslations},
+      body: {
+        'posX': ?posX,
+        'posY': ?posY,
+        'title': ?title,
+        'transcript': ?transcript,
+        'transcriptTranslations': ?transcriptTranslations,
+        'phraseIds': ?phraseIds,
+        'aiTask': ?aiTask,
+        'aiPending': ?aiPending,
+      },
     );
     return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
   }

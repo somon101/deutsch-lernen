@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, String
+from sqlalchemy import Boolean, DateTime, Float, Index, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,7 +26,7 @@ class LessonNode(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     courseId: Mapped[str] = mapped_column(String, nullable=False)
     lessonId: Mapped[str] = mapped_column(String, nullable=False)
-    # "vocabulary" | "material" | "video" | "audio" | "minitest" | "practice" | "review"
+    # "vocabulary" | "phrases" | "material" | "video" | "audio" | "minitest" | "practice" | "review"
     type: Mapped[str] = mapped_column(String, nullable=False)
     refId: Mapped[str | None] = mapped_column(String, nullable=True)
     mediaUrl: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -37,6 +37,14 @@ class LessonNode(Base):
     # file exists; the admin records and uploads the audio from it.
     transcript: Mapped[str | None] = mapped_column(String, nullable=True)
     transcriptTranslations: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # "phrases" nodes only (§ course modules, 2026-10-05): ids of Phrase
+    # rows from the language's phrase base, in display order.
+    phraseIds: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # An empty step waiting for the AI (§ course modules, 2026-10-05):
+    # `aiTask` says what belongs here, `aiPending` hides the step from
+    # learners until the AI (or the teacher) has filled it.
+    aiTask: Mapped[str | None] = mapped_column(String, nullable=True)
+    aiPending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     posX: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     posY: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     createdAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, server_default="now()")

@@ -19,6 +19,7 @@ class GraphNode {
     required this.title,
     this.transcript,
     this.transcriptTranslations = const {},
+    this.phrases = const [],
   });
 
   factory GraphNode.fromJson(Map<String, dynamic> json) => GraphNode(
@@ -29,6 +30,7 @@ class GraphNode {
         title: json['title'] as String,
         transcript: json['transcript'] as String?,
         transcriptTranslations: ((json['transcriptTranslations'] as Map?) ?? const {}).map((k, v) => MapEntry(k as String, v as String)),
+        phrases: [for (final p in (json['phrases'] as List?) ?? const []) GraphPhrase.fromJson(p as Map<String, dynamic>)],
       );
 
   final String id;
@@ -40,6 +42,18 @@ class GraphNode {
   // Audio nodes only (§ AI lesson generator, 2026-10-03).
   final String? transcript;
   final Map<String, String> transcriptTranslations;
+  // "phrases" nodes only (§ course modules, 2026-10-05), translation already
+  // in the learner's content language.
+  final List<GraphPhrase> phrases;
+}
+
+class GraphPhrase {
+  const GraphPhrase({required this.id, required this.text, required this.translation});
+  factory GraphPhrase.fromJson(Map<String, dynamic> json) =>
+      GraphPhrase(id: json['id'] as String, text: json['text'] as String, translation: json['translation'] as String? ?? '');
+  final String id;
+  final String text;
+  final String translation;
 }
 
 class GraphEdge {

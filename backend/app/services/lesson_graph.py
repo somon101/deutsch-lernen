@@ -30,18 +30,22 @@ from app.models.lesson_node import LessonNode
 from app.models.lesson_node_media import LessonNodeMedia
 from app.models.lesson_question import LessonQuestion
 from app.models.material import Material
+from app.models.course import Course
+from app.models.level import Level
 from app.models.material_block import MaterialBlock
+from app.models.phrase import Phrase, PhraseTranslation
 from app.models.vocabulary_item import VocabularyItem
 from app.services.content import LEGACY_COURSE_ID
 from app.services.vocabulary import get_linked_items_by_lesson
 
-NODE_TYPES = ("vocabulary", "material", "video", "audio", "minitest", "practice", "review")
+NODE_TYPES = ("vocabulary", "phrases", "material", "video", "audio", "minitest", "practice", "review")
 # Node types backed by their own content row (as opposed to vocabulary/video/
 # audio, which reference no row — see LessonNode's docstring).
 _BLOCK_STAGES = ("minitest", "practice", "review")
 
 DEFAULT_TITLES = {
     "vocabulary": "Слова",
+    "phrases": "Фразы",
     "material": "Материал",
     "video": "Видео",
     "audio": "Аудио",
@@ -61,11 +65,12 @@ async def _owned_lesson(db: AsyncSession, course_id: str, lesson_id: str) -> Cou
     return lesson
 
 
-def node_dto(node: LessonNode, media_override: str | None = None) -> dict:
+def node_dto(node: LessonNode, media_override: str | None = None, phrases: list[dict] | None = None) -> dict:
     """`media_override` (§ course content language, 2026-09-04) is the
     resolved LessonNodeMedia row's URL for the caller's requested locale,
     when one exists — omitted (every admin-builder caller), this returns
-    node.mediaUrl exactly as before."""
+    node.mediaUrl exactly as before. `phrases` is a "phrases" node's phrase
+    list already resolved to text (see _phrases_by_node)."""
     return {
         "id": node.id,
         "type": node.type,
@@ -78,7 +83,67 @@ def node_dto(node: LessonNode, media_override: str | None = None) -> dict:
         # recording's text and its per-locale translations.
         "transcript": node.transcript,
         "transcriptTranslations": node.transcriptTranslations or {},
+        # § course modules, 2026-10-05.
+        "phraseIds": list(node.phraseIds or []),
+        "phrases": phrases if phrases is not None else [],
+        "aiTask": node.aiTask,
+        "aiPending": bool(node.aiPending),
     }
+
+
+async def _phrases_by_node(db: AsyncSession, nodes: list[LessonNode], locale: str | None = None) -> dict[str, list[dict]]:
+    """Every "phrases" node's phrases as {id, text, translation, translations},
+    in the node's own order. `translation` is the requested locale's text
+    when one exists (base column = Russian), like words. A phrase deleted
+    from the base simply drops out."""
+    wanted = {pid for n in nodes if n.type == "phrases" for pid in (n.phraseIds or [])}
+    if not wanted:
+        return {}
+    rows = {p.id: p for p in (await db.execute(select(Phrase).where(Phrase.id.in_(wanted)))).scalars().all()}
+    translations: dict[str, dict[str, str]] = {}
+    for t in (await db.execute(select(PhraseTranslation).where(PhraseTranslation.phraseId.in_(wanted)))).scalars().all():
+        translations.setdefault(t.phraseId, {})[t.locale] = t.translation
+    out: dict[str, list[dict]] = {}
+    for n in nodes:
+        if n.type != "phrases":
+            continue
+        items = []
+        for pid in n.phraseIds or []:
+            p = rows.get(pid)
+            if not p:
+                continue
+            t = translations.get(pid, {})
+            items.append(
+                {
+                    "id": p.id,
+                    "text": p.text,
+                    "translation": t.get(locale) if locale and t.get(locale) else p.translation,
+                    "translations": {"ru": p.translation, **t},
+                }
+            )
+        out[n.id] = items
+    return out
+
+
+def _without_pending(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Drops steps still waiting for the AI and joins the route around them
+    (A -> pending -> B becomes A -> B), so a learner walks only real steps."""
+    pending = {n["id"] for n in nodes if n.get("aiPending")}
+    if not pending:
+        return nodes, edges
+    nxt = {e["fromNodeId"]: e for e in edges}
+    kept_edges: list[dict] = []
+    for n in nodes:
+        if n["id"] in pending:
+            continue
+        edge = nxt.get(n["id"])
+        seen: set[str] = set()
+        while edge is not None and edge["toNodeId"] in pending and edge["toNodeId"] not in seen:
+            seen.add(edge["toNodeId"])
+            edge = nxt.get(edge["toNodeId"])
+        if edge is not None and edge["toNodeId"] not in pending:
+            kept_edges.append(edge if edge["fromNodeId"] == n["id"] else {**edge, "fromNodeId": n["id"]})
+    return [n for n in nodes if n["id"] not in pending], kept_edges
 
 
 def edge_dto(edge: LessonEdge) -> dict:
@@ -103,7 +168,7 @@ async def _real_edges(db: AsyncSession, lesson_id: str) -> list[LessonEdge]:
     ).scalars().all()
 
 
-async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str], locale: str | None = None) -> dict[str, dict]:
+async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str], locale: str | None = None, *, hide_pending: bool = False) -> dict[str, dict]:
     """For services/courses.py's get_course(): every REAL (already
     converted) graph among the given lessons, keyed by lessonId — a lesson
     absent from the result has no graph (still legacy). Never synthesizes a
@@ -131,11 +196,17 @@ async def bulk_graphs_for_lessons(db: AsyncSession, lesson_ids: list[str], local
             await db.execute(select(LessonNodeMedia).where(LessonNodeMedia.lessonNodeId.in_(node_ids), LessonNodeMedia.locale == locale))
         ).scalars().all()
         media_by_node = {m.lessonNodeId: m.mediaUrl for m in media_rows}
+    phrases_by_node = await _phrases_by_node(db, list(nodes), locale)
     by_lesson: dict[str, dict] = {}
     for n in nodes:
-        by_lesson.setdefault(n.lessonId, {"nodes": [], "edges": []})["nodes"].append(node_dto(n, media_by_node.get(n.id)))
+        by_lesson.setdefault(n.lessonId, {"nodes": [], "edges": []})["nodes"].append(node_dto(n, media_by_node.get(n.id), phrases_by_node.get(n.id)))
     for e in edges:
         by_lesson.setdefault(e.lessonId, {"nodes": [], "edges": []})["edges"].append(edge_dto(e))
+    if hide_pending:
+        # § course modules, 2026-10-05 — a learner never meets an empty
+        # step that is still waiting for the AI.
+        for graph in by_lesson.values():
+            graph["nodes"], graph["edges"] = _without_pending(graph["nodes"], graph["edges"])
     return by_lesson
 
 
@@ -205,7 +276,8 @@ async def get_lesson_graph(db: AsyncSession, course_id: str, lesson_id: str) -> 
     real_nodes = await _real_nodes(db, lesson_id)
     if real_nodes:
         edges = await _real_edges(db, lesson_id)
-        return {"isLegacy": False, "nodes": [node_dto(n) for n in real_nodes], "edges": [edge_dto(e) for e in edges]}
+        phrases = await _phrases_by_node(db, real_nodes)
+        return {"isLegacy": False, "nodes": [node_dto(n, None, phrases.get(n.id)) for n in real_nodes], "edges": [edge_dto(e) for e in edges]}
 
     chain = await _synthesize_legacy_chain(db, course_id, lesson)
     preview_nodes = [
@@ -271,10 +343,25 @@ async def materialize_lesson_graph(db: AsyncSession, course_id: str, lesson_id: 
 # ---------------------------------------------------------------------------
 
 
-async def create_node(db: AsyncSession, course_id: str, lesson_id: str, node_type: str, title: str | None, pos_x: float, pos_y: float) -> dict:
+async def create_node(
+    db: AsyncSession,
+    course_id: str,
+    lesson_id: str,
+    node_type: str,
+    title: str | None,
+    pos_x: float,
+    pos_y: float,
+    *,
+    ai_task: str | None = None,
+    ai_pending: bool = False,
+    phrase_ids: list[str] | None = None,
+) -> dict:
     if node_type not in NODE_TYPES:
         raise ApiError(400, "Неизвестный тип блока")
     lesson = await _owned_lesson(db, course_id, lesson_id)
+    if phrase_ids and node_type != "phrases":
+        raise ApiError(400, "Фразы можно добавить только в блок «Фразы»")
+    clean_phrase_ids = await _checked_phrase_ids(db, course_id, phrase_ids) if phrase_ids else None
 
     ref_id: str | None = None
     if node_type == "material":
@@ -299,11 +386,44 @@ async def create_node(db: AsyncSession, course_id: str, lesson_id: str, node_typ
         await db.flush()
         ref_id = block.id
 
-    node = LessonNode(courseId=course_id, lessonId=lesson.id, type=node_type, refId=ref_id, title=title, posX=pos_x, posY=pos_y)
+    node = LessonNode(
+        courseId=course_id,
+        lessonId=lesson.id,
+        type=node_type,
+        refId=ref_id,
+        title=title,
+        posX=pos_x,
+        posY=pos_y,
+        phraseIds=clean_phrase_ids,
+        aiTask=(ai_task or "").strip()[:4000] or None,
+        aiPending=bool(ai_pending),
+    )
     db.add(node)
     await db.commit()
     await db.refresh(node)
-    return node_dto(node)
+    return node_dto(node, None, (await _phrases_by_node(db, [node])).get(node.id))
+
+
+async def _course_language_id(db: AsyncSession, course_id: str) -> str | None:
+    course = await db.get(Course, course_id)
+    level = await db.get(Level, course.levelId) if course and course.levelId else None
+    return level.languageId if level else None
+
+
+async def _checked_phrase_ids(db: AsyncSession, course_id: str, phrase_ids: list[str]) -> list[str]:
+    """Keeps order, drops duplicates; every id must be a phrase of the
+    course's own language."""
+    ids = list(dict.fromkeys(i for i in phrase_ids if isinstance(i, str) and i))
+    if not ids:
+        return []
+    language_id = await _course_language_id(db, course_id)
+    if not language_id:
+        raise ApiError(400, "Сначала выберите для курса язык и уровень")
+    found = set((await db.execute(select(Phrase.id).where(Phrase.id.in_(ids), Phrase.languageId == language_id))).scalars().all())
+    missing = [i for i in ids if i not in found]
+    if missing:
+        raise ApiError(400, f"Фразы не найдены в базе этого языка: {', '.join(missing[:5])}")
+    return ids
 
 
 async def _get_owned_node(db: AsyncSession, lesson_id: str, node_id: str) -> LessonNode:
@@ -324,6 +444,14 @@ async def update_node(db: AsyncSession, lesson_id: str, node_id: str, changes: d
     for field in ("posX", "posY", "title"):
         if field in changes:
             setattr(node, field, changes[field])
+    if "phraseIds" in changes:
+        if node.type != "phrases":
+            raise ApiError(400, "Фразы можно добавить только в блок «Фразы»")
+        node.phraseIds = await _checked_phrase_ids(db, node.courseId, changes["phraseIds"] or [])
+    if "aiTask" in changes:
+        node.aiTask = (changes["aiTask"] or "").strip()[:4000] or None
+    if "aiPending" in changes and changes["aiPending"] is not None:
+        node.aiPending = bool(changes["aiPending"])
     if "transcript" in changes or "transcriptTranslations" in changes:
         if node.type != "audio":
             raise ApiError(400, "Текст аудио есть только у блока «Аудио»")
@@ -334,7 +462,7 @@ async def update_node(db: AsyncSession, lesson_id: str, node_id: str, changes: d
             node.transcriptTranslations = cleaned or None
     await db.commit()
     await db.refresh(node)
-    return node_dto(node)
+    return node_dto(node, None, (await _phrases_by_node(db, [node])).get(node.id))
 
 
 async def set_node_media(db: AsyncSession, lesson_id: str, node_id: str, media_url: str | None) -> dict:
@@ -473,6 +601,30 @@ async def delete_edge(db: AsyncSession, lesson_id: str, edge_id: str) -> bool:
     await db.delete(edge)
     await db.commit()
     return True
+
+
+async def set_route(db: AsyncSession, course_id: str, lesson_id: str, node_ids: list[str]) -> dict:
+    """Replaces the whole route with one chain in the given order (§ course
+    modules, 2026-10-05) and lays the steps out left to right. Every id must
+    be a step of this lesson, each at most once; steps left out stay on the
+    canvas, unconnected."""
+    await _owned_lesson(db, course_id, lesson_id)
+    nodes = {n.id: n for n in await _real_nodes(db, lesson_id)}
+    if len(set(node_ids)) != len(node_ids):
+        raise ApiError(400, "Шаг указан в маршруте дважды")
+    unknown = [i for i in node_ids if i not in nodes]
+    if unknown:
+        raise ApiError(404, f"Шаг не найден в этом уроке: {unknown[0]}")
+    for e in await _real_edges(db, lesson_id):
+        await db.delete(e)
+    await db.flush()
+    for i, node_id in enumerate(node_ids):
+        nodes[node_id].posX = i * 260.0
+        nodes[node_id].posY = 0.0
+    for a, b in zip(node_ids, node_ids[1:]):
+        db.add(LessonEdge(lessonId=lesson_id, fromNodeId=a, toNodeId=b, position=0))
+    await db.commit()
+    return await get_lesson_graph(db, course_id, lesson_id)
 
 
 # ---------------------------------------------------------------------------

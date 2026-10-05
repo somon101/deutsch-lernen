@@ -12,11 +12,15 @@ from app.schemas.course import (
     CourseTranslationInput,
     CourseUpdateInput,
     LessonInput,
+    LessonModuleInput,
     LessonUpdateInput,
     MediaReuseInput,
+    ModuleInput,
+    ModuleUpdateInput,
     ReorderInput,
 )
 from app.schemas.vocabulary import DictionaryImportPayload, DictionaryWordInput, VocabularyImportPayload, VocabularyLinkInput, VocabularyTranslationInput, VocabularyWordInput, VocabularyWordUpdateInput
+from app.services import course_modules
 from app.services import courses as svc
 from app.services.lesson_graph import sync_graph_with_content
 from app.services.content import DuplicateWordError
@@ -115,10 +119,45 @@ async def delete_cover(course_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/courses/{course_id}/lessons", status_code=201)
 async def create_lesson(course_id: str, body: LessonInput, db: AsyncSession = Depends(get_db)):
-    course = await svc.create_lesson(db, course_id, body.title, body.description, body.materialText)
+    course = await svc.create_lesson(
+        db, course_id, body.title, body.description, body.materialText, module_id=body.moduleId, plan_en=body.planEn, plan_ru=body.planRu
+    )
     if not course:
         raise ApiError(404, "Курс не найден")
     return {"course": course}
+
+
+# § course modules, 2026-10-05 ------------------------------------------------
+
+
+@router.post("/courses/{course_id}/modules", status_code=201)
+async def create_module(course_id: str, body: ModuleInput, db: AsyncSession = Depends(get_db)):
+    await course_modules.create_module(db, course_id, body.title, body.titleTg, body.description)
+    return {"course": await svc.get_course(db, course_id)}
+
+
+@router.post("/courses/{course_id}/modules/reorder")
+async def reorder_modules(course_id: str, body: ReorderInput, db: AsyncSession = Depends(get_db)):
+    await course_modules.reorder_modules(db, course_id, body.ids)
+    return {"course": await svc.get_course(db, course_id)}
+
+
+@router.patch("/courses/{course_id}/modules/{module_id}")
+async def update_module(course_id: str, module_id: str, body: ModuleUpdateInput, db: AsyncSession = Depends(get_db)):
+    await course_modules.update_module(db, course_id, module_id, body.model_dump(exclude_unset=True))
+    return {"course": await svc.get_course(db, course_id)}
+
+
+@router.delete("/courses/{course_id}/modules/{module_id}")
+async def delete_module(course_id: str, module_id: str, db: AsyncSession = Depends(get_db)):
+    await course_modules.delete_module(db, course_id, module_id)
+    return {"course": await svc.get_course(db, course_id)}
+
+
+@router.put("/courses/{course_id}/lessons/{lesson_id}/module")
+async def set_lesson_module(course_id: str, lesson_id: str, body: LessonModuleInput, db: AsyncSession = Depends(get_db)):
+    await course_modules.set_lesson_module(db, course_id, lesson_id, body.moduleId)
+    return {"course": await svc.get_course(db, course_id)}
 
 
 @router.post("/courses/{course_id}/lessons/reorder")

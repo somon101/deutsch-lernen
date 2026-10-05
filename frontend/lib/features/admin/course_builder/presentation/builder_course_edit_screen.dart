@@ -139,24 +139,51 @@ class BuilderCourseEditScreen extends ConsumerWidget {
                                 icon: const Icon(Icons.hub_outlined, size: 16),
                                 label: const Text('Карта курса'),
                               ),
+                            TextButton.icon(
+                              onPressed: () => _editModule(context, ref, courseId, null),
+                              style: AdminButtonStyles.text(),
+                              icon: const Icon(Icons.create_new_folder_outlined, size: 16),
+                              label: const Text('+ Модуль'),
+                            ),
                           ],
                         ),
                       ],
                     ),
                     Text(
+                      '${c.modules.isNotEmpty ? '${c.modules.length} модулей · ' : ''}'
                       '${c.lessons.length} уроков · ${_wordCount(c)} слов · ${_questionCount(c)} вопросов',
                       style: AdminTypography.caption,
                     ),
                     const SizedBox(height: AdminMetrics.fieldGap),
-                    for (var i = 0; i < c.lessons.length; i++)
-                      _LessonTile(courseId: courseId, course: c, index: i),
+                    if (c.modules.isEmpty)
+                      for (var i = 0; i < c.lessons.length; i++) _LessonTile(courseId: courseId, course: c, index: i)
+                    else ...[
+                      for (var m = 0; m < c.modules.length; m++) ...[
+                        _ModuleHeader(courseId: courseId, course: c, index: m),
+                        for (var i = 0; i < c.lessons.length; i++)
+                          if (c.lessons[i].moduleId == c.modules[m].id) _LessonTile(courseId: courseId, course: c, index: i),
+                        if (!c.lessons.any((l) => l.moduleId == c.modules[m].id))
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                            child: Text('В модуле пока нет уроков.', style: AdminTypography.caption),
+                          ),
+                      ],
+                      if (c.lessons.any((l) => !c.modules.any((m) => m.id == l.moduleId))) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 12, 4, 8),
+                          child: Text('Без модуля', style: AdminTypography.fieldLabel),
+                        ),
+                        for (var i = 0; i < c.lessons.length; i++)
+                          if (!c.modules.any((m) => m.id == c.lessons[i].moduleId)) _LessonTile(courseId: courseId, course: c, index: i),
+                      ],
+                    ],
                     if (c.lessons.isEmpty)
                       Text(
                         'Уроков пока нет — добавьте первый ниже.',
                         style: AdminTypography.caption,
                       ),
                     const SizedBox(height: 8),
-                    _AddLessonRow(courseId: courseId),
+                    _AddLessonRow(courseId: courseId, modules: c.modules),
                   ],
                 ),
               ),
@@ -520,10 +547,21 @@ class _LessonTile extends ConsumerWidget {
 
   AdminLesson get _lesson => course.lessons[index];
 
+  bool _sameGroup(int j) => j >= 0 && j < course.lessons.length && course.lessons[j].moduleId == _lesson.moduleId;
+
+  Future<void> _moveToModule(WidgetRef ref, BuildContext context, String? moduleId) async {
+    try {
+      await ref.read(builderRepositoryProvider).setLessonModule(courseId, _lesson.id, moduleId);
+      ref.invalidate(builderCourseProvider(courseId));
+    } catch (e) {
+      if (context.mounted) showErrorSnack(context, e, 'Не удалось перенести урок');
+    }
+  }
+
   Future<void> _reorder(WidgetRef ref, BuildContext context, int delta) async {
     final ids = course.lessons.map((l) => l.id).toList();
     final j = index + delta;
-    if (j < 0 || j >= ids.length) return;
+    if (!_sameGroup(j)) return;
     final tmp = ids[index];
     ids[index] = ids[j];
     ids[j] = tmp;
@@ -584,9 +622,32 @@ class _LessonTile extends ConsumerWidget {
                     ),
                   ),
                 ),
+                if (lesson.pendingSteps > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Tooltip(
+                      message: 'Шагов ждут ИИ: ${lesson.pendingSteps}',
+                      child: Chip(
+                        visualDensity: VisualDensity.compact,
+                        avatar: const Icon(Icons.auto_awesome, size: 14),
+                        label: Text('ждёт ИИ: ${lesson.pendingSteps}', style: AdminTypography.caption),
+                      ),
+                    ),
+                  ),
+                if (course.modules.isNotEmpty)
+                  PopupMenuButton<String>(
+                    tooltip: 'Перенести в модуль',
+                    icon: const Icon(Icons.drive_file_move_outline, size: 20, color: AdminColors.textSecondary),
+                    onSelected: (v) => _moveToModule(ref, context, v.isEmpty ? null : v),
+                    itemBuilder: (_) => [
+                      for (final m in course.modules)
+                        CheckedPopupMenuItem(value: m.id, checked: lesson.moduleId == m.id, child: Text(m.title)),
+                      CheckedPopupMenuItem(value: '', checked: !course.modules.any((m) => m.id == lesson.moduleId), child: const Text('Без модуля')),
+                    ],
+                  ),
                 AdminReorderArrows(
-                  canMoveUp: index > 0,
-                  canMoveDown: index < course.lessons.length - 1,
+                  canMoveUp: _sameGroup(index - 1),
+                  canMoveDown: _sameGroup(index + 1),
                   onMove: (delta) => _reorder(ref, context, delta),
                 ),
                 const SizedBox(width: 4),
@@ -624,6 +685,8 @@ class _LessonStatusGrid extends StatelessWidget {
       ('Мини-тест', _blocksCounter(lesson.blocksFor('minitest'))),
       ('Практика', _blocksCounter(lesson.blocksFor('practice'))),
       ('Закрепление', _blocksCounter(lesson.blocksFor('review'))),
+      ('План', (lesson.planEn ?? '').trim().isNotEmpty || (lesson.planRu ?? '').trim().isNotEmpty ? 'есть' : 'нет'),
+      ('Фразы', '${lesson.graph?.nodes.where((n) => n.type == 'phrases').fold<int>(0, (s, n) => s + n.phrases.length) ?? 0}'),
     ];
     // Fixed row height rather than childAspectRatio (§ builder full-width
     // layout, 2026-09-02) — an aspect ratio derives height from width, so on
@@ -661,8 +724,9 @@ class _LessonStatusGrid extends StatelessWidget {
 }
 
 class _AddLessonRow extends ConsumerStatefulWidget {
-  const _AddLessonRow({required this.courseId});
+  const _AddLessonRow({required this.courseId, this.modules = const []});
   final String courseId;
+  final List<AdminModule> modules;
 
   @override
   ConsumerState<_AddLessonRow> createState() => _AddLessonRowState();
@@ -671,6 +735,8 @@ class _AddLessonRow extends ConsumerStatefulWidget {
 class _AddLessonRowState extends ConsumerState<_AddLessonRow> {
   final _title = TextEditingController();
   bool _busy = false;
+  // '' = no module; null = not chosen yet (defaults to the last module).
+  String? _moduleId;
 
   @override
   void dispose() {
@@ -678,13 +744,17 @@ class _AddLessonRowState extends ConsumerState<_AddLessonRow> {
     super.dispose();
   }
 
+  String get _effectiveModuleId {
+    if (_moduleId != null && (_moduleId!.isEmpty || widget.modules.any((m) => m.id == _moduleId))) return _moduleId!;
+    return widget.modules.isEmpty ? '' : widget.modules.last.id;
+  }
+
   Future<void> _submit() async {
     if (_title.text.trim().isEmpty) return;
     setState(() => _busy = true);
     try {
-      await ref
-          .read(builderRepositoryProvider)
-          .addLesson(widget.courseId, title: _title.text.trim());
+      final moduleId = _effectiveModuleId;
+      await ref.read(builderRepositoryProvider).addLesson(widget.courseId, title: _title.text.trim(), moduleId: moduleId.isEmpty ? null : moduleId);
       _title.clear();
       ref.invalidate(builderCourseProvider(widget.courseId));
     } catch (e) {
@@ -704,6 +774,22 @@ class _AddLessonRowState extends ConsumerState<_AddLessonRow> {
             decoration: adminInputDecoration(label: 'Название нового урока'),
           ),
         ),
+        if (widget.modules.isNotEmpty) ...[
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 200,
+            child: DropdownButtonFormField<String>(
+              initialValue: _effectiveModuleId,
+              isExpanded: true,
+              decoration: adminInputDecoration(label: 'Модуль'),
+              items: [
+                for (final m in widget.modules) DropdownMenuItem(value: m.id, child: Text(m.title, overflow: TextOverflow.ellipsis)),
+                const DropdownMenuItem(value: '', child: Text('Без модуля')),
+              ],
+              onChanged: (v) => setState(() => _moduleId = v ?? ''),
+            ),
+          ),
+        ],
         const SizedBox(width: 8),
         FilledButton(
           onPressed: _busy ? null : _submit,
@@ -711,6 +797,125 @@ class _AddLessonRowState extends ConsumerState<_AddLessonRow> {
           child: const Text('+ Добавить урок'),
         ),
       ],
+    );
+  }
+}
+
+
+/// Creates (module == null) or renames a module: Russian title plus an
+/// optional Tajik one (§ course modules, 2026-10-05).
+Future<void> _editModule(BuildContext context, WidgetRef ref, String courseId, AdminModule? module) async {
+  final title = TextEditingController(text: module?.title ?? '');
+  final titleTg = TextEditingController(text: module?.titleTg ?? '');
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(module == null ? 'Новый модуль' : 'Модуль'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: title, autofocus: true, decoration: adminInputDecoration(label: 'Название (например, «Знакомство»)')),
+            const SizedBox(height: 8),
+            TextField(controller: titleTg, decoration: adminInputDecoration(label: 'Название на таджикском (необязательно)')),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), style: AdminButtonStyles.primary(), child: Text(module == null ? 'Создать' : 'Сохранить')),
+      ],
+    ),
+  );
+  final name = title.text.trim();
+  final nameTg = titleTg.text.trim();
+  title.dispose();
+  titleTg.dispose();
+  if (ok != true || name.isEmpty) return;
+  try {
+    final repo = ref.read(builderRepositoryProvider);
+    if (module == null) {
+      await repo.createModule(courseId, title: name, titleTg: nameTg.isEmpty ? null : nameTg);
+    } else {
+      await repo.updateModule(courseId, module.id, title: name, titleTg: nameTg);
+    }
+    ref.invalidate(builderCourseProvider(courseId));
+  } catch (e) {
+    if (context.mounted) showErrorSnack(context, e, 'Не удалось сохранить модуль');
+  }
+}
+
+class _ModuleHeader extends ConsumerWidget {
+  const _ModuleHeader({required this.courseId, required this.course, required this.index});
+  final String courseId;
+  final AdminCourse course;
+  final int index;
+
+  AdminModule get _module => course.modules[index];
+
+  Future<void> _move(BuildContext context, WidgetRef ref, int delta) async {
+    final ids = course.modules.map((m) => m.id).toList();
+    final j = index + delta;
+    if (j < 0 || j >= ids.length) return;
+    final tmp = ids[index];
+    ids[index] = ids[j];
+    ids[j] = tmp;
+    try {
+      await ref.read(builderRepositoryProvider).reorderModules(courseId, ids);
+      ref.invalidate(builderCourseProvider(courseId));
+    } catch (e) {
+      if (context.mounted) showErrorSnack(context, e, 'Не удалось изменить порядок модулей');
+    }
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Удалить модуль «${_module.title}»?',
+      message: 'Уроки модуля не удалятся — они перейдут в «Без модуля».',
+    );
+    if (!ok) return;
+    try {
+      await ref.read(builderRepositoryProvider).deleteModule(courseId, _module.id);
+      ref.invalidate(builderCourseProvider(courseId));
+    } catch (e) {
+      if (context.mounted) showErrorSnack(context, e, 'Не удалось удалить модуль');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final m = _module;
+    final count = course.lessons.where((l) => l.moduleId == m.id).length;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(4, index == 0 ? 4 : 16, 4, 8),
+      child: Row(
+        children: [
+          const Icon(Icons.folder_outlined, size: 20, color: AdminColors.accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Модуль ${index + 1}. ${m.title}', style: AdminTypography.cardTitle),
+                Text(
+                  [if ((m.titleTg ?? '').isNotEmpty) m.titleTg!, '$count уроков'].join(' · '),
+                  style: AdminTypography.caption,
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Переименовать',
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            onPressed: () => _editModule(context, ref, courseId, m),
+          ),
+          AdminReorderArrows(canMoveUp: index > 0, canMoveDown: index < course.modules.length - 1, onMove: (d) => _move(context, ref, d)),
+          const SizedBox(width: 4),
+          AdminDeleteLink(onPressed: () => _delete(context, ref)),
+        ],
+      ),
     );
   }
 }

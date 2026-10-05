@@ -11,6 +11,7 @@ import '../../data/builder_repository.dart';
 import '../../domain/builder_domain.dart';
 import '../builder_lesson_edit_screen.dart' show LessonNameCard;
 import 'block_editor.dart';
+import 'lesson_plan_ai.dart';
 import 'material_block_editor.dart';
 import 'media_editor.dart';
 import 'vocabulary_editor.dart';
@@ -42,6 +43,7 @@ const _nodeHeight = 76.0;
 
 const Map<String, ({String label, IconData icon, Color color})> _nodeStyle = {
   'vocabulary': (label: 'Слова', icon: Icons.style_outlined, color: Color(0xFF2F6FED)),
+  'phrases': (label: 'Фразы', icon: Icons.chat_bubble_outline, color: Color(0xFFD14D8B)),
   'material': (label: 'Материал', icon: Icons.menu_book_outlined, color: Color(0xFF8A4FE0)),
   'video': (label: 'Видео', icon: Icons.movie_outlined, color: Color(0xFFE5484D)),
   'audio': (label: 'Аудио', icon: Icons.headphones_outlined, color: Color(0xFFE08A2F)),
@@ -117,11 +119,41 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
   }
 
   Future<void> _addNode(String type) async {
+    if (type == _kEmptyAiStep) return _addEmptyAiStep();
     final spot = _nextFreeSpot();
     await _run(() async {
       final node = await _repo.addGraphNode(widget.courseId, widget.lesson.id, type: type, posX: spot.dx, posY: spot.dy);
       setState(() => _selectedNodeId = node.id);
     });
+  }
+
+  /// «Пустой шаг для ИИ» (§ course modules, 2026-10-05): a step created
+  /// empty, hidden from learners until «Заполнить с ИИ» fills it.
+  Future<void> _addEmptyAiStep() async {
+    final choice = await askEmptyAiStep(context);
+    if (choice == null) return;
+    final spot = _nextFreeSpot();
+    await _run(() async {
+      final node = await _repo.addGraphNode(
+        widget.courseId,
+        widget.lesson.id,
+        type: choice.type,
+        title: choice.title,
+        posX: spot.dx,
+        posY: spot.dy,
+        aiPending: true,
+        aiTask: choice.task.isEmpty ? null : choice.task,
+      );
+      setState(() => _selectedNodeId = node.id);
+    });
+  }
+
+  Future<void> _openPlan() async {
+    if (await showLessonPlanDialog(context, ref, courseId: widget.courseId, lesson: widget.lesson)) widget.onReload();
+  }
+
+  Future<void> _fillWithAi() async {
+    if (await runAiFill(context, ref, courseId: widget.courseId, lesson: widget.lesson)) widget.onReload();
   }
 
   Future<void> _onNodeTap(AdminGraphNode node) async {
@@ -279,7 +311,10 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
       }
       try {
         ref.read(graphSidebarActionsProvider.notifier).state = GraphSidebarActions(
-          blockTypes: [for (final entry in _nodeStyle.entries) GraphSidebarBlockType(type: entry.key, label: entry.value.label, icon: entry.value.icon)],
+          blockTypes: [
+            for (final entry in _nodeStyle.entries) GraphSidebarBlockType(type: entry.key, label: entry.value.label, icon: entry.value.icon),
+            const GraphSidebarBlockType(type: _kEmptyAiStep, label: 'Пустой шаг для ИИ', icon: Icons.auto_awesome_outlined),
+          ],
           busy: _busy,
           connecting: _connectFromId != null,
           onAdd: _addNode,
@@ -325,6 +360,7 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
     );
 
     _syncSidebar(isWide);
+    final aiBar = _LessonAiBar(lesson: widget.lesson, busy: _busy, onPlan: _openPlan, onFill: _fillWithAi);
 
     if (!isWide) {
       final toolbar = _GraphToolbar(busy: _busy, connecting: _connectFromId != null, onAdd: _addNode, onToggleConnect: _toggleConnect, onExit: _exit);
@@ -332,6 +368,8 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           toolbar,
+          const SizedBox(height: 8),
+          aiBar,
           const SizedBox(height: AdminMetrics.cardGap),
           if (_connectFromId != null)
             Padding(
@@ -378,6 +416,8 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        aiBar,
+        const SizedBox(height: 8),
         if (_connectFromId != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -443,6 +483,12 @@ class _GraphToolbar extends StatelessWidget {
                   icon: Icon(_nodeStyle[type]!.icon, size: 16),
                   label: Text('+ ${_nodeStyle[type]!.label}'),
                 ),
+              OutlinedButton.icon(
+                onPressed: busy ? null : () => onAdd(_kEmptyAiStep),
+                style: AdminButtonStyles.secondary(),
+                icon: const Icon(Icons.auto_awesome_outlined, size: 16),
+                label: const Text('+ Пустой шаг для ИИ'),
+              ),
               const SizedBox(width: 4),
               OutlinedButton.icon(
                 onPressed: busy ? null : onToggleConnect,
@@ -695,6 +741,15 @@ class _NodeCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (node.aiPending)
+              const Positioned(
+                right: -8,
+                top: -8,
+                child: Tooltip(
+                  message: 'Ждёт ИИ — ученики пока не видят этот шаг',
+                  child: CircleAvatar(radius: 11, backgroundColor: Color(0xFFE0A526), child: Icon(Icons.auto_awesome, size: 13, color: Colors.white)),
+                ),
+              ),
             if (number != null)
               Positioned(
                 left: -8,
@@ -828,7 +883,24 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
           ],
         ),
         const SizedBox(height: AdminMetrics.cardGap),
-        Expanded(child: SingleChildScrollView(child: _content(node))),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _content(node),
+                const SizedBox(height: AdminMetrics.cardGap),
+                AiTaskEditor(
+                  key: ValueKey('ai-${node.id}-${node.aiPending}'),
+                  courseId: widget.courseId,
+                  lessonId: widget.lesson.id,
+                  node: node,
+                  onSaved: widget.onReload,
+                ),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: AdminMetrics.cardGap),
         TextButton(onPressed: widget.onDelete, style: AdminButtonStyles.dangerText(), child: const Text('Удалить блок')),
       ],
@@ -842,6 +914,15 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
           courseId: widget.courseId,
           lessonId: widget.lesson.id,
           words: widget.lesson.vocabulary,
+          onChanged: widget.onReload,
+        );
+      case 'phrases':
+        return PhrasesNodeEditor(
+          key: ValueKey('phrases-${node.id}'),
+          courseId: widget.courseId,
+          lessonId: widget.lesson.id,
+          node: node,
+          languageId: widget.languageId,
           onChanged: widget.onReload,
         );
       case 'material':
@@ -908,7 +989,45 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
   }
 }
 
-// ignore: unused_import
+const _kEmptyAiStep = 'ai-empty';
+
+/// «План урока» and «Заполнить с ИИ» above the canvas (§ course modules,
+/// 2026-10-05).
+class _LessonAiBar extends StatelessWidget {
+  const _LessonAiBar({required this.lesson, required this.busy, required this.onPlan, required this.onFill});
+  final AdminLesson lesson;
+  final bool busy;
+  final VoidCallback onPlan;
+  final VoidCallback onFill;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPlan = (lesson.planEn ?? '').trim().isNotEmpty || (lesson.planRu ?? '').trim().isNotEmpty;
+    final pending = lesson.pendingSteps;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        OutlinedButton.icon(
+          onPressed: busy ? null : onPlan,
+          style: AdminButtonStyles.secondary(),
+          icon: Icon(hasPlan ? Icons.assignment_turned_in_outlined : Icons.assignment_outlined, size: 16),
+          label: Text(hasPlan ? 'План урока' : 'План урока — не написан'),
+        ),
+        if (pending > 0)
+          FilledButton.icon(
+            onPressed: busy ? null : onFill,
+            style: AdminButtonStyles.primary(),
+            icon: const Icon(Icons.auto_awesome, size: 16),
+            label: Text('Заполнить с ИИ ($pending)'),
+          )
+        else
+          Text('Нет шагов, которые ждут ИИ', style: AdminTypography.caption),
+      ],
+    );
+  }
+}
 
 
 /// «Текст аудио» under an audio node's file (§ AI lesson generator,

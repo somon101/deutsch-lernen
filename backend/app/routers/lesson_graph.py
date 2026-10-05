@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.deps import require_staff
 from app.db import get_db
 from app.errors import ApiError
-from app.schemas.lesson_graph import CreateEdgeInput, CreateNodeInput, NodeMediaReuseInput, UpdateNodeInput
+from app.schemas.lesson_graph import CreateEdgeInput, CreateNodeInput, NodeMediaReuseInput, RouteInput, UpdateNodeInput
 from app.services import courses as courses_svc
 from app.services import lesson_graph as svc
 from app.services.content_locale import SUPPORTED_CONTENT_LOCALES
@@ -25,7 +25,16 @@ async def materialize_graph(course_id: str, lesson_id: str, db: AsyncSession = D
 
 @router.post("/courses/{course_id}/lessons/{lesson_id}/graph/nodes", status_code=201)
 async def create_node(course_id: str, lesson_id: str, body: CreateNodeInput, db: AsyncSession = Depends(get_db)):
-    return {"node": await svc.create_node(db, course_id, lesson_id, body.type, body.title, body.posX, body.posY)}
+    return {
+        "node": await svc.create_node(
+            db, course_id, lesson_id, body.type, body.title, body.posX, body.posY, ai_task=body.aiTask, ai_pending=body.aiPending, phrase_ids=body.phraseIds
+        )
+    }
+
+
+@router.put("/courses/{course_id}/lessons/{lesson_id}/graph/route")
+async def set_route(course_id: str, lesson_id: str, body: RouteInput, db: AsyncSession = Depends(get_db)):
+    return await svc.set_route(db, course_id, lesson_id, body.nodeIds)
 
 
 @router.patch("/courses/{course_id}/lessons/{lesson_id}/graph/nodes/{node_id}")

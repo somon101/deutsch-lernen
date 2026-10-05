@@ -5,8 +5,8 @@ from app.auth.deps import require_admin, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
-from app.schemas.ai import AiApplyInput, AiPreviewInput, AiSettingsUpdateInput
-from app.services import ai_client, ai_lessons, ai_settings
+from app.schemas.ai import AiApplyInput, AiFillInput, AiPreviewInput, AiSettingsUpdateInput
+from app.services import ai_client, ai_fill, ai_lessons, ai_settings
 
 # Admin-only: the key costs money and is the platform's, not a teacher's.
 settings_router = APIRouter(prefix="/api/admin/ai-settings", tags=["ai"])
@@ -42,3 +42,8 @@ async def preview_lesson(course_id: str, body: AiPreviewInput, db: AsyncSession 
 @router.post("/courses/{course_id}/ai/apply")
 async def apply_lessons(course_id: str, body: AiApplyInput, db: AsyncSession = Depends(get_db)):
     return await ai_lessons.apply_plans(db, course_id, body.lessons)
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/ai/fill")
+async def fill_lesson(course_id: str, lesson_id: str, body: AiFillInput, db: AsyncSession = Depends(get_db)):
+    return await ai_fill.fill_lesson(db, course_id, lesson_id, instructions=body.instructions)

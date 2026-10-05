@@ -14,6 +14,7 @@ import 'lesson_runner_controller.dart';
 import 'stages/audio_stage.dart';
 import 'stages/exercise_stage.dart';
 import 'stages/material_stage.dart';
+import 'stages/phrases_stage.dart';
 import 'stages/video_stage.dart';
 import 'stages/vocabulary_stage.dart';
 
@@ -209,6 +210,8 @@ class _GraphNodeBody extends ConsumerWidget {
           transcriptTranslations: node.transcriptTranslations,
           nextLabel: _nextLabel(l10n),
         );
+      case 'phrases':
+        return PhrasesStage(phrases: node.phrases, onComplete: onComplete, nextLabel: _nextLabel(l10n) ?? l10n.lessonFinish);
       case 'material':
         return FutureBuilder<List<MaterialBlock>>(
           future: ref.read(lessonRepositoryProvider).fetchMaterialBlocksForNode(node.refId!),

@@ -18,3 +18,7 @@ class AiPreviewInput(BaseModel):
 
 class AiApplyInput(BaseModel):
     lessons: list[dict] = Field(min_length=1, max_length=10)
+
+
+class AiFillInput(BaseModel):
+    instructions: str | None = Field(default=None, max_length=2000)

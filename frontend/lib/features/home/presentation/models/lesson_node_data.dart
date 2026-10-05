@@ -22,6 +22,7 @@ class LessonNodeData {
     required this.wordCount,
     required this.progress,
     required this.state,
+    this.moduleTitle,
   });
 
   final String lessonId;
@@ -32,6 +33,8 @@ class LessonNodeData {
   // lesson is visually full regardless, a locked one is never shown).
   final double progress;
   final LessonNodeState state;
+  // First lesson of a course module only (§ course modules, 2026-10-05).
+  final String? moduleTitle;
 }
 
 List<LessonNodeData> buildLessonNodes(List<LessonCard> lessons) {
@@ -47,6 +50,7 @@ List<LessonNodeData> buildLessonNodes(List<LessonCard> lessons) {
         state: firstIncomplete == -1 || i < firstIncomplete
             ? LessonNodeState.completed
             : (i == firstIncomplete ? LessonNodeState.current : LessonNodeState.locked),
+        moduleTitle: lessons[i].moduleTitle,
       ),
   ];
 }

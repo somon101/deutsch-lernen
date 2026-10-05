@@ -16,6 +16,7 @@ from app.errors import ApiError
 from app.models.course import Course
 from app.models.course_lesson_media import CourseLessonMedia
 from app.models.course_lesson_translation import CourseLessonTranslation
+from app.models.course_module import CourseModule
 from app.models.course_translation import CourseTranslation
 from app.models.enums import CourseStatus
 from app.models.course_lesson import CourseLesson
@@ -36,6 +37,7 @@ from app.models.question_placement import QuestionPlacement
 from app.models.question_translation import QuestionTranslation
 from app.models.vocabulary_item import VocabularyItem
 from app.models.vocabulary_translation import VocabularyTranslation
+from app.services import course_modules
 from app.services.content import LEGACY_COURSE_ID, DuplicateWordError, clean_quiz_text, lesson_label, normalize_word
 from app.services.content_locale import DEFAULT_CONTENT_LOCALE, SUPPORTED_CONTENT_LOCALES, translations_by_locale
 from app.services.lesson_graph import bulk_graphs_for_lessons, is_converted, set_first_node_media, set_first_node_media_translation
@@ -210,7 +212,9 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
 
     new_material_by_lesson = await get_new_material_blocks(db, course_id, lesson_ids, locale)
     pool_questions_by_lesson_block = await get_pool_questions_for_lesson_blocks(db, [b.id for b in blocks], locale)
-    graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids, locale)
+    # A learner (locale given) never sees steps still waiting for the AI.
+    graphs_by_lesson = await bulk_graphs_for_lessons(db, lesson_ids, locale, hide_pending=locale is not None)
+    modules = await course_modules.list_modules(db, course_id)
 
     def _first_graph_media(lesson_id: str, kind: str, fallback: str | None) -> str | None:
         """A converted lesson's video/audio IS its first such graph node
@@ -278,6 +282,10 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
             "videoUrl": _first_graph_media(lesson.id, "video", lesson_media_by_lesson_type.get((lesson.id, "video"), lesson.videoUrl)),
             "audioUrl": _first_graph_media(lesson.id, "audio", lesson_media_by_lesson_type.get((lesson.id, "audio"), lesson.audioUrl)),
             "position": lesson.position,
+            # § course modules, 2026-10-05. The plan is a teacher/AI note,
+            # so only the builder (no locale) gets it.
+            "moduleId": lesson.moduleId,
+            **({} if locale else {"planEn": lesson.planEn, "planRu": lesson.planRu}),
             # None means this lesson is still on the old fixed 8-stage chain
             # (never converted) — the client's existing Stage-enum runner and
             # rail builder read every other field above exactly as before and
@@ -326,6 +334,7 @@ async def get_course(db: AsyncSession, course_id: str, locale: str | None = None
         "position": course.position,
         "updatedAt": to_iso_z(course.updatedAt),
         "levelId": course.levelId,
+        "modules": [course_modules.module_dto(m, locale) for m in modules],
         "lessons": [lesson_dto(l) for l in lessons],
     }
 
@@ -428,10 +437,21 @@ async def get_course_version(db: AsyncSession, course_id: str) -> str | None:
         .where(CourseLesson.courseId == course_id)
     )
 
+    # § course modules, 2026-10-05 — moving a lesson between modules or
+    # renaming a module changes none of the counts above.
+    structure = (
+        await db.execute(select(CourseLesson.id, CourseLesson.moduleId, CourseLesson.position).where(CourseLesson.courseId == course_id).order_by(CourseLesson.position))
+    ).all()
+    module_rows = (
+        await db.execute(select(CourseModule.id, CourseModule.title, CourseModule.titleTg, CourseModule.position).where(CourseModule.courseId == course_id))
+    ).all()
+    structure_key = hashlib.sha256(repr((sorted(map(tuple, structure)), sorted(map(tuple, module_rows), key=repr))).encode()).hexdigest()
+
     fingerprint = "|".join(
         str(v)
         for v in (
             course.updatedAt,
+            structure_key,
             lesson_count,
             vocab_count,
             legacy_question_count,
@@ -555,7 +575,16 @@ async def reorder_courses(db: AsyncSession, ids: list[str]) -> None:
 
 
 async def create_lesson(
-    db: AsyncSession, course_id: str, title: str, description: str | None, material_text: str | None, *, notify: bool = True
+    db: AsyncSession,
+    course_id: str,
+    title: str,
+    description: str | None,
+    material_text: str | None,
+    *,
+    notify: bool = True,
+    module_id: str | None = None,
+    plan_en: str | None = None,
+    plan_ru: str | None = None,
 ) -> dict | None:
     course = await db.get(Course, course_id)
     if not course:
@@ -567,8 +596,14 @@ async def create_lesson(
         description=description or "",
         materialText=material_text or "",
         position=(last if last is not None else -1) + 1,
+        planEn=course_modules.clean_plan(plan_en),
+        planRu=course_modules.clean_plan(plan_ru),
     )
     db.add(lesson)
+    await db.flush()
+    if module_id:
+        # Validates the module and puts the lesson at the end of it.
+        await course_modules.set_lesson_module(db, course_id, lesson.id, module_id)
     await db.commit()
 
     # Push notifications, event "lesson_created" (§ generic mechanism,
@@ -599,6 +634,8 @@ async def update_lesson(db: AsyncSession, course_id: str, lesson_id: str, change
     if not lesson:
         return None
     for field, value in changes.items():
+        if field in ("planEn", "planRu"):
+            value = course_modules.clean_plan(value)
         setattr(lesson, field, value)
     await db.commit()
     return await get_course(db, course_id)
@@ -652,6 +689,8 @@ async def reorder_lessons(db: AsyncSession, course_id: str, ids: list[str]) -> d
         lesson = await db.get(CourseLesson, lesson_id)
         if lesson:
             lesson.position = index
+    await db.flush()
+    await course_modules.renumber_lessons(db, course_id)
     await db.commit()
     return await get_course(db, course_id)
 

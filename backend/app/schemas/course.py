@@ -49,6 +49,10 @@ class LessonInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     materialText: str | None = None
+    # § course modules, 2026-10-05.
+    moduleId: str | None = None
+    planEn: str | None = Field(default=None, max_length=20000)
+    planRu: str | None = Field(default=None, max_length=20000)
 
     @field_validator("title")
     @classmethod
@@ -63,6 +67,8 @@ class LessonUpdateInput(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=4000)
     materialText: str | None = None
+    planEn: str | None = Field(default=None, max_length=20000)
+    planRu: str | None = Field(default=None, max_length=20000)
 
     @field_validator("title")
     @classmethod
@@ -73,6 +79,22 @@ class LessonUpdateInput(BaseModel):
         if not v:
             raise ValueError("Название урока не может быть пустым")
         return v
+
+
+class ModuleInput(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    titleTg: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class ModuleUpdateInput(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    titleTg: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class LessonModuleInput(BaseModel):
+    moduleId: str | None = None
 
 
 class ReorderInput(BaseModel):

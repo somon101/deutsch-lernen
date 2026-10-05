@@ -122,6 +122,16 @@ async def update_language(language_id: str, body: LanguageUpdateInput, admin: Us
 
 class ApiKeyCreateInput(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    # None = read-only default (services/api_keys.py DEFAULT_PERMISSIONS).
+    permissions: list[str] | None = Field(default=None, max_length=20)
+    expiresInDays: int | None = Field(default=None, ge=0, le=3650)
+
+
+class ApiKeyUpdateInput(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    permissions: list[str] | None = Field(default=None, max_length=20)
+    # A number counts from now; 0 removes the expiry.
+    expiresInDays: int | None = Field(default=None, ge=0, le=3650)
 
 
 @router.get("/languages/{language_id}/api-keys")
@@ -132,7 +142,12 @@ async def list_api_keys(language_id: str, admin: User = Depends(require_staff), 
 @router.post("/languages/{language_id}/api-keys", status_code=201)
 async def create_api_key(language_id: str, body: ApiKeyCreateInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
     """The full key is in this response only — it is never shown again."""
-    return {"key": await api_keys_svc.create_key(db, language_id, body.name)}
+    return {"key": await api_keys_svc.create_key(db, language_id, body.name, body.permissions, body.expiresInDays)}
+
+
+@router.patch("/languages/{language_id}/api-keys/{key_id}")
+async def update_api_key(language_id: str, key_id: str, body: ApiKeyUpdateInput, admin: User = Depends(require_staff), db: AsyncSession = Depends(get_db)):
+    return {"key": await api_keys_svc.update_key(db, language_id, key_id, body.model_dump(exclude_unset=True))}
 
 
 @router.delete("/languages/{language_id}/api-keys/{key_id}")

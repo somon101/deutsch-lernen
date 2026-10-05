@@ -19,7 +19,7 @@ from app.schemas.vocabulary import VocabularyImportWordInput
 from app.services import courses as courses_svc
 from app.services import phrases as phrases_svc
 from app.services import topics_admin as topics_svc
-from app.services.api_keys import require_api_key
+from app.services.api_keys import effective_permissions, need, require_api_key
 from app.services.content import DuplicateWordError
 from app.services.vocabulary import delete_word_globally, list_dictionary_words
 
@@ -88,7 +88,12 @@ async def whoami(key: ApiKey = Depends(require_api_key), db: AsyncSession = Depe
     from app.models.language import Language
 
     language = await db.get(Language, key.languageId)
-    return {"language": {"id": key.languageId, "name": language.name if language else None}, "key": key.name}
+    return {
+        "language": {"id": key.languageId, "name": language.name if language else None},
+        "key": key.name,
+        "permissions": effective_permissions(key),
+        "expiresAt": key.expiresAt.isoformat() if key.expiresAt else None,
+    }
 
 
 # ------------------------------------------------------------------- words
@@ -126,18 +131,18 @@ async def _word_dto(db: AsyncSession, word: VocabularyItem) -> dict:
 
 
 @router.get("/words")
-async def list_words(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def list_words(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("words:read")), db: AsyncSession = Depends(get_db)):
     page = await list_dictionary_words(db, query=q, language_id=key.languageId, limit=_limit(limit), offset=offset)
     return {"words": [_word_out(w) for w in page["words"]], "total": page["total"]}
 
 
 @router.get("/words/{word_id}")
-async def get_word(word_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def get_word(word_id: str, key: ApiKey = Depends(need("words:read")), db: AsyncSession = Depends(get_db)):
     return {"word": await _word_dto(db, await _own_word(db, key, word_id))}
 
 
 @router.post("/words", status_code=201)
-async def create_word(body: WordCreate, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def create_word(body: WordCreate, key: ApiKey = Depends(need("words:write")), db: AsyncSession = Depends(get_db)):
     try:
         created = await courses_svc.add_dictionary_word(
             db,
@@ -154,7 +159,7 @@ async def create_word(body: WordCreate, key: ApiKey = Depends(require_api_key), 
 
 
 @router.patch("/words/{word_id}")
-async def update_word(word_id: str, body: WordUpdate, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def update_word(word_id: str, body: WordUpdate, key: ApiKey = Depends(need("words:write")), db: AsyncSession = Depends(get_db)):
     word = await _own_word(db, key, word_id)
     changes = {
         "german": body.word,
@@ -173,7 +178,7 @@ async def update_word(word_id: str, body: WordUpdate, key: ApiKey = Depends(requ
 
 
 @router.delete("/words/{word_id}")
-async def delete_word(word_id: str, force: bool = False, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def delete_word(word_id: str, force: bool = False, key: ApiKey = Depends(need("words:delete")), db: AsyncSession = Depends(get_db)):
     await _own_word(db, key, word_id)
     result = await delete_word_globally(db, word_id, force=force)
     if not result["ok"]:
@@ -189,7 +194,7 @@ async def delete_word(word_id: str, force: bool = False, key: ApiKey = Depends(r
 
 
 @router.post("/words/import")
-async def import_words(body: WordsImport, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def import_words(body: WordsImport, key: ApiKey = Depends(need("words:write")), db: AsyncSession = Depends(get_db)):
     try:
         return await courses_svc.import_dictionary_words(db, key.languageId, [w.model_dump() for w in body.words])
     except DuplicateWordError as e:
@@ -217,19 +222,19 @@ async def _own_phrase(db: AsyncSession, key: ApiKey, phrase_id: str) -> Phrase:
 
 
 @router.get("/phrases")
-async def list_phrases(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def list_phrases(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("phrases:read")), db: AsyncSession = Depends(get_db)):
     page = await phrases_svc.list_phrases(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset)
     return {"phrases": [_phrase_out(p) for p in page["phrases"]], "total": page["total"]}
 
 
 @router.get("/phrases/{phrase_id}")
-async def get_phrase(phrase_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def get_phrase(phrase_id: str, key: ApiKey = Depends(need("phrases:read")), db: AsyncSession = Depends(get_db)):
     phrase = await _own_phrase(db, key, phrase_id)
     return {"phrase": _phrase_out((await phrases_svc._dtos(db, [phrase]))[0])}
 
 
 @router.post("/phrases", status_code=201)
-async def create_phrase(body: PhraseCreate, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def create_phrase(body: PhraseCreate, key: ApiKey = Depends(need("phrases:write")), db: AsyncSession = Depends(get_db)):
     topic_id = await phrases_svc.topic_id_for_name(db, key.languageId, body.topic)
     dto = await phrases_svc.create_phrase(
         db, language_id=key.languageId, text=body.text, translation=body.translation, translations={"tg": body.translation_tg}, topic_id=topic_id
@@ -238,7 +243,7 @@ async def create_phrase(body: PhraseCreate, key: ApiKey = Depends(require_api_ke
 
 
 @router.patch("/phrases/{phrase_id}")
-async def update_phrase(phrase_id: str, body: PhraseUpdate, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def update_phrase(phrase_id: str, body: PhraseUpdate, key: ApiKey = Depends(need("phrases:write")), db: AsyncSession = Depends(get_db)):
     await _own_phrase(db, key, phrase_id)
     changes: dict = {}
     if body.text is not None:
@@ -254,14 +259,14 @@ async def update_phrase(phrase_id: str, body: PhraseUpdate, key: ApiKey = Depend
 
 
 @router.delete("/phrases/{phrase_id}")
-async def delete_phrase(phrase_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def delete_phrase(phrase_id: str, key: ApiKey = Depends(need("phrases:delete")), db: AsyncSession = Depends(get_db)):
     await _own_phrase(db, key, phrase_id)
     await phrases_svc.delete_phrase(db, phrase_id)
     return {"ok": True}
 
 
 @router.post("/phrases/import")
-async def import_phrases(body: PhrasesImport, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def import_phrases(body: PhrasesImport, key: ApiKey = Depends(need("phrases:write")), db: AsyncSession = Depends(get_db)):
     return await phrases_svc.import_phrases(db, key.languageId, [p.model_dump() for p in body.phrases])
 
 
@@ -280,34 +285,34 @@ def _topic_out(t: dict) -> dict:
 
 
 @router.get("/topics")
-async def list_topics(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def list_topics(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("topics:read")), db: AsyncSession = Depends(get_db)):
     page = await topics_svc.list_topics_page(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset)
     return {"topics": [_topic_out(t) for t in page["topics"]], "total": page["total"]}
 
 
 @router.get("/topics/{topic_id}")
-async def get_topic(topic_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def get_topic(topic_id: str, key: ApiKey = Depends(need("topics:read")), db: AsyncSession = Depends(get_db)):
     return {"topic": _topic_out(topics_svc.topic_dto(await _own_topic(db, key, topic_id)))}
 
 
 @router.post("/topics", status_code=201)
-async def create_topic(body: TopicBody, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def create_topic(body: TopicBody, key: ApiKey = Depends(need("topics:write")), db: AsyncSession = Depends(get_db)):
     return {"topic": _topic_out(await topics_svc.create_topic(db, key.languageId, body.name))}
 
 
 @router.patch("/topics/{topic_id}")
-async def rename_topic(topic_id: str, body: TopicBody, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def rename_topic(topic_id: str, body: TopicBody, key: ApiKey = Depends(need("topics:write")), db: AsyncSession = Depends(get_db)):
     await _own_topic(db, key, topic_id)
     return {"topic": _topic_out(await topics_svc.rename_topic(db, topic_id, body.name))}
 
 
 @router.delete("/topics/{topic_id}")
-async def delete_topic(topic_id: str, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def delete_topic(topic_id: str, key: ApiKey = Depends(need("topics:delete")), db: AsyncSession = Depends(get_db)):
     await _own_topic(db, key, topic_id)
     await topics_svc.delete_topic(db, topic_id)
     return {"ok": True}
 
 
 @router.post("/topics/import")
-async def import_topics(body: TopicsImport, key: ApiKey = Depends(require_api_key), db: AsyncSession = Depends(get_db)):
+async def import_topics(body: TopicsImport, key: ApiKey = Depends(need("topics:write")), db: AsyncSession = Depends(get_db)):
     return await topics_svc.import_topics(db, key.languageId, [t.name for t in body.topics])
