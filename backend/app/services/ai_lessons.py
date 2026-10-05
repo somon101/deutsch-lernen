@@ -331,8 +331,12 @@ async def preview_lesson(db: AsyncSession, course_id: str, *, instructions: str 
 # ---------------------------------------------------------------------------
 
 
-async def _create_question(db: AsyncSession, cleaned: dict, *, topic_id: str | None, material_block_id: str | None = None, lesson_block_id: str | None = None) -> None:
-    body = QuestionCreateInput(question=cleaned["question"], topicId=topic_id, materialBlockId=material_block_id, lessonBlockId=lesson_block_id, force=True)
+async def _create_question(
+    db: AsyncSession, cleaned: dict, *, topic_id: str | None, material_block_id: str | None = None, lesson_block_id: str | None = None, media_node_id: str | None = None
+) -> None:
+    body = QuestionCreateInput(
+        question=cleaned["question"], topicId=topic_id, materialBlockId=material_block_id, lessonBlockId=lesson_block_id, mediaNodeId=media_node_id, force=True
+    )
     question, _ = await taxonomy_svc.create_question(db, body)
     if cleaned.get("prompt_tg"):
         await taxonomy_svc.set_question_translation(db, question.id, "tg", cleaned["prompt_tg"], None, None, None)

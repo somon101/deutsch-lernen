@@ -93,15 +93,23 @@ class StepCreate(_Body):
     type: StepType
     title: str | None = Field(default=None, max_length=200)
     aiTask: str | None = Field(default=None, max_length=4000)
+    aiTaskRu: str | None = Field(default=None, max_length=4000)
     aiPending: bool = False
     phraseIds: list[str] | None = Field(default=None, max_length=100)
+    # A question step testing an audio/video step of the same lesson.
+    forStepId: str | None = None
+    # Material steps: name of an existing topic from «Темы».
+    topic: str | None = Field(default=None, max_length=300)
 
 
 class StepUpdate(_Body):
     title: str | None = Field(default=None, max_length=200)
     aiTask: str | None = Field(default=None, max_length=4000)
+    aiTaskRu: str | None = Field(default=None, max_length=4000)
     aiPending: bool | None = None
     phraseIds: list[str] | None = Field(default=None, max_length=100)
+    forStepId: str | None = None
+    topic: str | None = Field(default=None, max_length=300)
 
 
 class RouteBody(BaseModel):
@@ -154,7 +162,9 @@ def _step_out(n: dict) -> dict:
         "type": n["type"],
         "title": n["title"],
         "aiTask": n.get("aiTask"),
+        "aiTaskRu": n.get("aiTaskRu"),
         "aiPending": n.get("aiPending", False),
+        "forStepId": n.get("forNodeId"),
         "phrases": [{"id": p["id"], "text": p["text"], "translation": p["translation"]} for p in n.get("phrases") or []],
     }
 
@@ -395,7 +405,8 @@ async def create_step(lesson_id: str, body: StepCreate, key: ApiKey = Depends(ne
     lesson = await _own_lesson(db, key, lesson_id)
     count = len((await db.execute(select(LessonNode.id).where(LessonNode.lessonId == lesson.id))).scalars().all())
     node = await lesson_graph.create_node(
-        db, lesson.courseId, lesson.id, body.type, body.title, count * 260.0, 160.0, ai_task=body.aiTask, ai_pending=body.aiPending, phrase_ids=body.phraseIds
+        db, lesson.courseId, lesson.id, body.type, body.title, count * 260.0, 160.0, ai_task=body.aiTask, ai_pending=body.aiPending, phrase_ids=body.phraseIds,
+        ai_task_ru=body.aiTaskRu, for_node_id=body.forStepId, topic=body.topic,
     )
     return {"step": _step_out(node)}
 
@@ -406,6 +417,8 @@ async def update_step(step_id: str, body: StepUpdate, key: ApiKey = Depends(need
     changes = body.model_dump(exclude_unset=True)
     if "title" in changes:
         changes["title"] = (changes["title"] or "").strip() or None
+    if "forStepId" in changes:
+        changes["forNodeId"] = changes.pop("forStepId")
     return {"step": _step_out(await lesson_graph.update_node(db, lesson.id, node.id, changes))}
 
 

@@ -179,6 +179,16 @@ class BuilderRepository {
     return AdminCourse.fromJson(res['course'] as Map<String, dynamic>);
   }
 
+  /// «Сбросить заполнение ИИ»: one step (nodeId) or every step of the
+  /// lesson that has an AI task goes back to empty and «ждёт ИИ».
+  Future<int> aiResetLesson(String courseId, String lessonId, {String? nodeId}) async {
+    final res = await _api.post(
+      '$_base/${Uri.encodeComponent(courseId)}/lessons/${Uri.encodeComponent(lessonId)}/ai/reset',
+      body: {'nodeId': ?nodeId},
+    );
+    return (res['reset'] as num).toInt();
+  }
+
   /// Fills the lesson's steps marked "ждёт ИИ" by its plan; returns how many
   /// were filled, how many still wait, and warnings.
   Future<({int filled, int waiting, List<String> warnings})> aiFillLesson(String courseId, String lessonId, {String? instructions}) async {
@@ -924,10 +934,12 @@ class BuilderRepository {
     required double posY,
     bool aiPending = false,
     String? aiTask,
+    String? aiTaskRu,
+    String? forNodeId,
   }) async {
     final res = await _api.post(
       '${_graphBase(courseId, lessonId)}/nodes',
-      body: {'type': type, 'title': ?title, 'posX': posX, 'posY': posY, if (aiPending) 'aiPending': true, 'aiTask': ?aiTask},
+      body: {'type': type, 'title': ?title, 'posX': posX, 'posY': posY, if (aiPending) 'aiPending': true, 'aiTask': ?aiTask, 'aiTaskRu': ?aiTaskRu, 'forNodeId': ?forNodeId},
     );
     return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);
   }
@@ -944,6 +956,7 @@ class BuilderRepository {
     List<String>? phraseIds,
     String? aiTask,
     bool? aiPending,
+    String? aiTaskRu,
   }) async {
     final res = await _api.patch(
       '${_graphBase(courseId, lessonId)}/nodes/${Uri.encodeComponent(nodeId)}',
@@ -956,6 +969,7 @@ class BuilderRepository {
         'phraseIds': ?phraseIds,
         'aiTask': ?aiTask,
         'aiPending': ?aiPending,
+        'aiTaskRu': ?aiTaskRu,
       },
     );
     return AdminGraphNode.fromJson(res['node'] as Map<String, dynamic>);

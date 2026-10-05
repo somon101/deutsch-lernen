@@ -144,6 +144,8 @@ class QuestionCreateInput(BaseModel):
     lessonBlockId: str | None = None
     legacyLessonId: str | None = None
     legacySetName: str | None = None
+    # The audio/video step this question checks (§ media tests, 2026-10-05).
+    mediaNodeId: str | None = None
     # If true, skip the similarity check even if a strong match exists
     # (the teacher already saw the warning and chose "create anyway").
     force: bool = False

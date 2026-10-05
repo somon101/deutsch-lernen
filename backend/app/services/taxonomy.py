@@ -354,6 +354,7 @@ async def create_question(db: AsyncSession, body) -> tuple[Question, list[dict]]
             lessonBlockId=body.lessonBlockId,
             legacyLessonId=body.legacyLessonId,
             legacySetName=body.legacySetName,
+            mediaNodeId=getattr(body, "mediaNodeId", None),
             position=len(existing_count),
         )
     )

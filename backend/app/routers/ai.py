@@ -5,7 +5,7 @@ from app.auth.deps import require_admin, require_staff
 from app.db import get_db
 from app.errors import ApiError
 from app.models.user import User
-from app.schemas.ai import AiApplyInput, AiFillInput, AiPreviewInput, AiSettingsUpdateInput
+from app.schemas.ai import AiApplyInput, AiFillInput, AiPreviewInput, AiResetInput, AiSettingsUpdateInput
 from app.services import ai_client, ai_fill, ai_lessons, ai_settings
 
 # Admin-only: the key costs money and is the platform's, not a teacher's.
@@ -47,3 +47,11 @@ async def apply_lessons(course_id: str, body: AiApplyInput, db: AsyncSession = D
 @router.post("/courses/{course_id}/lessons/{lesson_id}/ai/fill")
 async def fill_lesson(course_id: str, lesson_id: str, body: AiFillInput, db: AsyncSession = Depends(get_db)):
     return await ai_fill.fill_lesson(db, course_id, lesson_id, instructions=body.instructions)
+
+
+@router.post("/courses/{course_id}/lessons/{lesson_id}/ai/reset")
+async def reset_lesson(course_id: str, lesson_id: str, body: AiResetInput, db: AsyncSession = Depends(get_db)):
+    """«Сбросить заполнение ИИ»: steps go back to empty and «ждёт ИИ»."""
+    from app.services import lesson_graph
+
+    return await lesson_graph.reset_ai_steps(db, course_id, lesson_id, body.nodeId)

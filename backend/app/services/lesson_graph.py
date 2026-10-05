@@ -87,7 +87,9 @@ def node_dto(node: LessonNode, media_override: str | None = None, phrases: list[
         "phraseIds": list(node.phraseIds or []),
         "phrases": phrases if phrases is not None else [],
         "aiTask": node.aiTask,
+        "aiTaskRu": node.aiTaskRu,
         "aiPending": bool(node.aiPending),
+        "forNodeId": node.forNodeId,
     }
 
 
@@ -128,7 +130,8 @@ async def _phrases_by_node(db: AsyncSession, nodes: list[LessonNode], locale: st
 def _without_pending(nodes: list[dict], edges: list[dict]) -> tuple[list[dict], list[dict]]:
     """Drops steps still waiting for the AI and joins the route around them
     (A -> pending -> B becomes A -> B), so a learner walks only real steps."""
-    pending = {n["id"] for n in nodes if n.get("aiPending")}
+    # A video step with only its script (no file yet) is not watchable either.
+    pending = {n["id"] for n in nodes if n.get("aiPending") or (n.get("type") == "video" and not n.get("mediaUrl"))}
     if not pending:
         return nodes, edges
     nxt = {e["fromNodeId"]: e for e in edges}
@@ -355,6 +358,9 @@ async def create_node(
     ai_task: str | None = None,
     ai_pending: bool = False,
     phrase_ids: list[str] | None = None,
+    ai_task_ru: str | None = None,
+    for_node_id: str | None = None,
+    topic: str | None = None,
 ) -> dict:
     if node_type not in NODE_TYPES:
         raise ApiError(400, "Неизвестный тип блока")
@@ -362,11 +368,16 @@ async def create_node(
     if phrase_ids and node_type != "phrases":
         raise ApiError(400, "Фразы можно добавить только в блок «Фразы»")
     clean_phrase_ids = await _checked_phrase_ids(db, course_id, phrase_ids) if phrase_ids else None
+    if for_node_id:
+        await _check_for_node(db, lesson_id, node_type, for_node_id)
+    topic_id = await _topic_id(db, course_id, topic) if topic else None
+    if topic and node_type != "material":
+        raise ApiError(400, "Тему можно указать только у шага «Материал»")
 
     ref_id: str | None = None
     if node_type == "material":
         existing = (await db.execute(select(Material).where(Material.lessonId == lesson.id))).scalars().all()
-        material = Material(courseId=course_id, lessonId=lesson.id, materialType="text", title=title or lesson.title, position=len(existing))
+        material = Material(courseId=course_id, lessonId=lesson.id, materialType="text", title=title or lesson.title, position=len(existing), topicId=topic_id)
         db.add(material)
         await db.flush()
         ref_id = material.id
@@ -396,12 +407,39 @@ async def create_node(
         posY=pos_y,
         phraseIds=clean_phrase_ids,
         aiTask=(ai_task or "").strip()[:4000] or None,
+        aiTaskRu=(ai_task_ru or "").strip()[:4000] or None,
         aiPending=bool(ai_pending),
+        forNodeId=for_node_id or None,
     )
     db.add(node)
     await db.commit()
     await db.refresh(node)
     return node_dto(node, None, (await _phrases_by_node(db, [node])).get(node.id))
+
+
+TEST_STEP_TYPES = ("practice", "minitest", "review")
+
+
+async def _check_for_node(db: AsyncSession, lesson_id: str, node_type: str, for_node_id: str) -> None:
+    if node_type not in TEST_STEP_TYPES:
+        raise ApiError(400, "Тест по аудио/видео может быть только шагом с вопросами")
+    target = await db.get(LessonNode, for_node_id)
+    if not target or target.lessonId != lesson_id or target.type not in ("audio", "video"):
+        raise ApiError(400, "Тест можно привязать только к шагу «Аудио» или «Видео» этого урока")
+
+
+async def _topic_id(db: AsyncSession, course_id: str, name: str) -> str:
+    """An EXISTING topic of the course's language, by exact name (case-
+    insensitive) — never creates one."""
+    from app.models.topic import Topic
+
+    language_id = await _course_language_id(db, course_id)
+    rows = (await db.execute(select(Topic).where(Topic.languageId == language_id))).scalars().all()
+    wanted = name.strip().lower()
+    match = next((t for t in rows if t.name.strip().lower() == wanted), None)
+    if not match:
+        raise ApiError(404, f"Темы «{name}» нет в «Темах» этого языка")
+    return match.id
 
 
 async def _course_language_id(db: AsyncSession, course_id: str) -> str | None:
@@ -452,9 +490,20 @@ async def update_node(db: AsyncSession, lesson_id: str, node_id: str, changes: d
         node.aiTask = (changes["aiTask"] or "").strip()[:4000] or None
     if "aiPending" in changes and changes["aiPending"] is not None:
         node.aiPending = bool(changes["aiPending"])
+    if "aiTaskRu" in changes:
+        node.aiTaskRu = (changes["aiTaskRu"] or "").strip()[:4000] or None
+    if "forNodeId" in changes:
+        if changes["forNodeId"]:
+            await _check_for_node(db, lesson_id, node.type, changes["forNodeId"])
+        node.forNodeId = changes["forNodeId"] or None
+    if "topic" in changes:
+        if node.type != "material" or not node.refId:
+            raise ApiError(400, "Тему можно указать только у шага «Материал»")
+        material = await db.get(Material, node.refId)
+        material.topicId = await _topic_id(db, node.courseId, changes["topic"]) if changes["topic"] else None
     if "transcript" in changes or "transcriptTranslations" in changes:
-        if node.type != "audio":
-            raise ApiError(400, "Текст аудио есть только у блока «Аудио»")
+        if node.type not in ("audio", "video"):
+            raise ApiError(400, "Текст есть только у блоков «Аудио» и «Видео»")
         if "transcript" in changes:
             node.transcript = (changes["transcript"] or "").strip() or None
         if "transcriptTranslations" in changes:
@@ -794,3 +843,83 @@ async def set_first_node_media_translation(db: AsyncSession, lesson: CourseLesso
         node = await _append_node(db, lesson.courseId, lesson.id, kind)
         await db.commit()
     await set_node_media_translation(db, lesson.id, node.id, locale, url)
+
+
+# ---------------------------------------------------------------------------
+# «Сбросить заполнение ИИ» (§ AI reset, 2026-10-05)
+# ---------------------------------------------------------------------------
+
+
+async def _delete_questions(db: AsyncSession, placements: list) -> None:
+    """Deletes these placements, and each question left with no placement."""
+    from app.models.question import Question
+    from app.models.question_placement import QuestionPlacement
+
+    question_ids = {p.questionId for p in placements}
+    for p in placements:
+        await db.delete(p)
+    await db.flush()
+    for qid in question_ids:
+        still = await db.scalar(select(QuestionPlacement.id).where(QuestionPlacement.questionId == qid).limit(1))
+        if still is None:
+            q = await db.get(Question, qid)
+            if q:
+                await db.delete(q)
+    await db.flush()
+
+
+async def reset_ai_steps(db: AsyncSession, course_id: str, lesson_id: str, node_id: str | None = None) -> dict:
+    """Empties steps back to «ждёт ИИ»: one step, or every step of the lesson
+    that has an AI task. Material blocks and their questions, the questions of
+    question steps and the text of audio/video steps are deleted; the lesson's
+    structure, words, phrases, uploaded files and plan stay. Questions in
+    other steps that only *checked* a deleted material block keep their place
+    and lose just that tag."""
+    from app.models.question_placement import QuestionPlacement
+
+    await _owned_lesson(db, course_id, lesson_id)
+    nodes = await _real_nodes(db, lesson_id)
+    if node_id:
+        targets = [n for n in nodes if n.id == node_id]
+        if not targets:
+            raise ApiError(404, "Блок не найден")
+    else:
+        targets = [n for n in nodes if n.aiTask]
+    if not targets:
+        raise ApiError(400, "В уроке нет шагов с заданием для ИИ")
+    reset = 0
+    for node in targets:
+        if node.type in ("vocabulary", "phrases"):
+            continue
+        if node.type == "material" and node.refId:
+            block_ids = list((await db.execute(select(MaterialBlock.id).where(MaterialBlock.materialId == node.refId))).scalars().all())
+            if block_ids:
+                own = (
+                    await db.execute(
+                        select(QuestionPlacement).where(QuestionPlacement.materialBlockId.in_(block_ids), QuestionPlacement.lessonBlockId.is_(None))
+                    )
+                ).scalars().all()
+                await _delete_questions(db, list(own))
+                tagged = (
+                    await db.execute(
+                        select(QuestionPlacement).where(QuestionPlacement.materialBlockId.in_(block_ids), QuestionPlacement.lessonBlockId.isnot(None))
+                    )
+                ).scalars().all()
+                for p in tagged:
+                    p.materialBlockId = None
+                await db.flush()
+                for bid in block_ids:
+                    block = await db.get(MaterialBlock, bid)
+                    if block:
+                        await db.delete(block)
+        elif node.type in _BLOCK_STAGES and node.refId:
+            placements = (await db.execute(select(QuestionPlacement).where(QuestionPlacement.lessonBlockId == node.refId))).scalars().all()
+            await _delete_questions(db, list(placements))
+            await db.execute(LessonQuestion.__table__.delete().where(LessonQuestion.blockId == node.refId))
+        elif node.type in ("audio", "video"):
+            node.transcript = None
+            node.transcriptTranslations = None
+        node.aiPending = True
+        reset += 1
+    await db.commit()
+    return {"reset": reset}

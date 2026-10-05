@@ -130,7 +130,7 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
   /// «Пустой шаг для ИИ» (§ course modules, 2026-10-05): a step created
   /// empty, hidden from learners until «Заполнить с ИИ» fills it.
   Future<void> _addEmptyAiStep() async {
-    final choice = await askEmptyAiStep(context);
+    final choice = await askEmptyAiStep(context, mediaSteps: [for (final n in _graph.nodes) if (n.type == 'audio' || n.type == 'video') n]);
     if (choice == null) return;
     final spot = _nextFreeSpot();
     await _run(() async {
@@ -143,6 +143,8 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
         posY: spot.dy,
         aiPending: true,
         aiTask: choice.task.isEmpty ? null : choice.task,
+        aiTaskRu: choice.taskRu.isEmpty ? null : choice.taskRu,
+        forNodeId: choice.forNodeId,
       );
       setState(() => _selectedNodeId = node.id);
     });
@@ -154,6 +156,10 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
 
   Future<void> _fillWithAi() async {
     if (await runAiFill(context, ref, courseId: widget.courseId, lesson: widget.lesson)) widget.onReload();
+  }
+
+  Future<void> _resetAi() async {
+    if (await runAiReset(context, ref, courseId: widget.courseId, lessonId: widget.lesson.id)) widget.onReload();
   }
 
   Future<void> _onNodeTap(AdminGraphNode node) async {
@@ -360,7 +366,7 @@ class _LessonGraphEditorState extends ConsumerState<LessonGraphEditor> {
     );
 
     _syncSidebar(isWide);
-    final aiBar = _LessonAiBar(lesson: widget.lesson, busy: _busy, onPlan: _openPlan, onFill: _fillWithAi);
+    final aiBar = _LessonAiBar(lesson: widget.lesson, busy: _busy, onPlan: _openPlan, onFill: _fillWithAi, onReset: _resetAi);
 
     if (!isWide) {
       final toolbar = _GraphToolbar(busy: _busy, connecting: _connectFromId != null, onAdd: _addNode, onToggleConnect: _toggleConnect, onExit: _exit);
@@ -896,6 +902,9 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
                   lessonId: widget.lesson.id,
                   node: node,
                   onSaved: widget.onReload,
+                  testOfTitle: node.forNodeId == null
+                      ? null
+                      : widget.lesson.graph?.nodes.where((n) => n.id == node.forNodeId).map((n) => n.title).firstOrNull ?? 'удалённый шаг',
                 ),
               ],
             ),
@@ -943,7 +952,6 @@ class _NodeInspectorState extends ConsumerState<_NodeInspector> {
           onRemove: _removeMedia,
           onReuse: _reuseMedia,
         );
-        if (node.type == 'video') return media;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -994,11 +1002,12 @@ const _kEmptyAiStep = 'ai-empty';
 /// «План урока» and «Заполнить с ИИ» above the canvas (§ course modules,
 /// 2026-10-05).
 class _LessonAiBar extends StatelessWidget {
-  const _LessonAiBar({required this.lesson, required this.busy, required this.onPlan, required this.onFill});
+  const _LessonAiBar({required this.lesson, required this.busy, required this.onPlan, required this.onFill, required this.onReset});
   final AdminLesson lesson;
   final bool busy;
   final VoidCallback onPlan;
   final VoidCallback onFill;
+  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -1024,6 +1033,15 @@ class _LessonAiBar extends StatelessWidget {
           )
         else
           Text('Нет шагов, которые ждут ИИ', style: AdminTypography.caption),
+        // Something the AI may have written: a step with a task that no
+        // longer waits.
+        if (lesson.graph?.nodes.any((n) => (n.aiTask ?? '').isNotEmpty && !n.aiPending) ?? false)
+          TextButton.icon(
+            onPressed: busy ? null : onReset,
+            style: AdminButtonStyles.dangerText(),
+            icon: const Icon(Icons.restart_alt, size: 16),
+            label: const Text('Сбросить заполнение ИИ'),
+          ),
       ],
     );
   }
@@ -1073,7 +1091,7 @@ class _TranscriptEditorState extends ConsumerState<_TranscriptEditor> {
       widget.onSaved();
       if (mounted) showSuccessSnack(context);
     } catch (e) {
-      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить текст аудио');
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить текст');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1084,9 +1102,9 @@ class _TranscriptEditorState extends ConsumerState<_TranscriptEditor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Текст аудио', style: AdminTypography.fieldLabel),
+        Text(widget.node.type == 'video' ? 'Текст видео (что говорит персонаж)' : 'Текст аудио', style: AdminTypography.fieldLabel),
         const SizedBox(height: 6),
-        TextField(controller: _text, minLines: 3, maxLines: 10, decoration: adminInputDecoration(hint: 'Текст записи на изучаемом языке')),
+        TextField(controller: _text, minLines: 3, maxLines: 10, decoration: adminInputDecoration(hint: widget.node.type == 'video' ? 'Сценарий на изучаемом языке' : 'Текст записи на изучаемом языке')),
         const SizedBox(height: 8),
         TextField(controller: _ru, minLines: 2, maxLines: 8, decoration: adminInputDecoration(label: 'Перевод (русский)')),
         const SizedBox(height: 8),

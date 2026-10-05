@@ -19,6 +19,7 @@ from app.models.course_lesson import CourseLesson
 from app.models.course_module import CourseModule
 from app.models.lesson_node import LessonNode
 from app.models.material import Material
+from app.models.material_block import MaterialBlock
 from app.models.phrase import Phrase
 from app.models.vocabulary_item import VocabularyItem
 from app.services import ai_settings, lesson_graph
@@ -27,7 +28,7 @@ from app.services import taxonomy as taxonomy_svc
 from app.services.ai_lessons import AUTO_MATCH_COUNTS, _clean_question, _course_context, _create_question, _str
 from app.services.vocabulary import get_linked_items_by_lesson
 
-FILLABLE = ("material", "audio", "minitest", "practice", "review")
+FILLABLE = ("material", "audio", "video", "minitest", "practice", "review")
 MAX_EARLIER_WORDS = 200
 
 FILL_PROMPT = """You are a methodologist filling ONE lesson of a language-learning course. The learners speak Russian and Tajik.
@@ -49,8 +50,12 @@ RULES
 WHAT EACH STEP TYPE NEEDS (key = the step alias, s1, s2, ...)
 - material: {"blocks":[{"title","title_tg","content","content_tg","questions":[1-3 questions checking this block]}]} — 2 to 5 short blocks, one small idea each, with examples.
 - audio:    {"transcript": 40-120 words in the studied language using the lesson words, "translation_ru":..,"translation_tg":..}
+- video:    {"transcript": the script the on-screen teacher character says, 40-120 words in the studied language, short sentences, presenting the lesson topic with examples from the lesson words, "translation_ru":..,"translation_tg":..}
 - minitest / review: {"questions":[...]} — 5 to 10 questions.
 - practice: {"questions":[... 3 to 8 ...], "auto":{"translateCount": 0-10, "matchPairs": 0|2|4|6|8, "blankPhraseIds":["ph1",..]}} — "auto" makes automatic exercises from the lesson words/phrases.
+- a question step marked "TEST OF <step>": 4 to 5 comprehension questions ONLY about the given audio/video text (what was said, who, where, true/false).
+
+LINKING QUESTIONS (when MATERIAL BLOCKS are listed): every question of practice/minitest/review gets "verifiesBlock": the alias (b1, b2, ...) of the ONE material block whose idea it checks, or null if it checks only vocabulary.
 
 OUTPUT FORMAT
 {"steps": {"s1": {...}, "s2": {...}}}"""
@@ -113,9 +118,84 @@ async def fill_lesson(db: AsyncSession, course_id: str, lesson_id: str, *, instr
     phrase_alias = {f"ph{i + 1}": pid for i, pid in enumerate(dict.fromkeys(phrase_ids)) if pid in phrases}
 
     module = await db.get(CourseModule, lesson.moduleId) if lesson.moduleId else None
-    step_alias = {f"s{i + 1}": n.id for i, n in enumerate(fillable)}
     title_of = {n.id: n.title or lesson_graph.DEFAULT_TITLES.get(n.type, n.type) for n in nodes.values()}
+    lesson_topic_id = await _lesson_topic_id(db, lesson_id)
 
+    content_steps = [n for n in fillable if n.type in CONTENT_TYPES]
+    question_steps = [n for n in fillable if n.type not in CONTENT_TYPES]
+    filled: list[str] = []
+    ctx = dict(api_key=api_key, model=model, course=course, level=level, language=language, module=module, lesson=lesson, plan=plan,
+               instructions=instructions, route=route, nodes=nodes, title_of=title_of, words=words, phrases=phrases,
+               phrase_alias=phrase_alias, known=known, lesson_topic_id=lesson_topic_id, course_id=course_id)
+    # Phase 1: explanations and audio/video texts. Phase 2: questions, which
+    # can then point at the blocks and texts that now exist.
+    if content_steps:
+        filled += await _run_phase(db, ctx, content_steps, [], {}, warnings)
+    if question_steps:
+        block_alias, block_lines = await _blocks_for_questions(db, lesson, nodes)
+        extra = []
+        if block_lines:
+            extra += ["", "MATERIAL BLOCKS (alias: title — text):", *block_lines]
+        filled += await _run_phase(db, ctx, question_steps, extra, block_alias, warnings)
+    return {"filled": len(filled), "waiting": len(pending) - len(filled), "warnings": warnings}
+
+
+CONTENT_TYPES = ("material", "audio", "video")
+
+
+async def _lesson_topic_id(db: AsyncSession, lesson_id: str) -> str | None:
+    return await db.scalar(
+        select(Material.topicId).where(Material.lessonId == lesson_id, Material.topicId.isnot(None)).order_by(Material.position).limit(1)
+    )
+
+
+async def _blocks_for_questions(db: AsyncSession, lesson: CourseLesson, nodes: dict) -> tuple[dict, list[str]]:
+    """Material blocks a question may be tagged with: this lesson's, or —
+    for a lesson without its own explanation — those of the earlier lessons
+    of the same module."""
+    lesson_ids = [lesson.id]
+    own = await db.scalar(
+        select(MaterialBlock.id).join(Material, Material.id == MaterialBlock.materialId).where(Material.lessonId == lesson.id).limit(1)
+    )
+    if own is None and lesson.moduleId:
+        lesson_ids = list(
+            (await db.execute(
+                select(CourseLesson.id).where(CourseLesson.moduleId == lesson.moduleId, CourseLesson.position < lesson.position).order_by(CourseLesson.position)
+            )).scalars().all()
+        )
+    if not lesson_ids:
+        return {}, []
+    rows = (
+        await db.execute(
+            select(MaterialBlock, Material.topicId)
+            .join(Material, Material.id == MaterialBlock.materialId)
+            .where(Material.lessonId.in_(lesson_ids))
+            .order_by(Material.lessonId, Material.position, MaterialBlock.position)
+        )
+    ).all()
+    rows = rows[:40]
+    alias = {f"b{i + 1}": (b.id, topic_id) for i, (b, topic_id) in enumerate(rows)}
+    lines = [f"b{i + 1}: {b.title} — {' '.join((b.content or '').split())[:220]}" for i, (b, _) in enumerate(rows)]
+    return alias, lines
+
+
+async def _run_phase(db, ctx, steps_nodes, extra_lines, block_alias, warnings) -> list[str]:
+    nodes, title_of, route = ctx["nodes"], ctx["title_of"], ctx["route"]
+    lesson, module, instructions = ctx["lesson"], ctx["module"], ctx["instructions"]
+    words, phrases, phrase_alias, known = ctx["words"], ctx["phrases"], ctx["phrase_alias"], ctx["known"]
+    step_alias = {f"s{i + 1}": n.id for i, n in enumerate(steps_nodes)}
+    step_lines = []
+    media_lines = []
+    for a, nid in step_alias.items():
+        n = nodes[nid]
+        line = f"{a}: type={n.type}; title={title_of[nid]}; TASK: {n.aiTask or '(follow the plan)'}"
+        target = nodes.get(n.forNodeId) if n.forNodeId else None
+        if target is not None:
+            line += f"; TEST OF the {target.type} step «{title_of[target.id]}»"
+            if target.transcript:
+                media_lines += ["", f"TEXT OF {target.type.upper()} «{title_of[target.id]}» (for {a}):", target.transcript]
+        step_lines.append(line)
+    course, level, language = ctx["course"], ctx["level"], ctx["language"]
     user_prompt = "\n".join(
         line
         for line in [
@@ -126,13 +206,15 @@ async def fill_lesson(db: AsyncSession, course_id: str, lesson_id: str, *, instr
             f"Lesson: {lesson.title}",
             "",
             "LESSON PLAN:",
-            plan,
+            ctx["plan"],
             f"\nExtra wishes from the teacher: {instructions.strip()}" if instructions and instructions.strip() else "",
             "",
             "LESSON ROUTE (all steps, in order): " + " -> ".join(f"{title_of[i]} ({nodes[i].type})" for i in route if i in nodes),
             "",
             "STEPS TO FILL:",
-            *[f"{a}: type={nodes[nid].type}; title={title_of[nid]}; TASK: {nodes[nid].aiTask or '(follow the plan)'}" for a, nid in step_alias.items()],
+            *step_lines,
+            *media_lines,
+            *extra_lines,
             "",
             "WORDS OF THIS LESSON (word — Russian):",
             *([f"{w.german} — {w.translation}" for w in words] or ["(none)"]),
@@ -145,7 +227,7 @@ async def fill_lesson(db: AsyncSession, course_id: str, lesson_id: str, *, instr
         ]
         if line is not None
     )
-    raw = await ai_client.chat_json(api_key, model, FILL_PROMPT, user_prompt, max_tokens=8000)
+    raw = await ai_client.chat_json(ctx["api_key"], ctx["model"], FILL_PROMPT, user_prompt, max_tokens=8000)
     steps = raw.get("steps") if isinstance(raw.get("steps"), dict) else {}
 
     filled: list[str] = []
@@ -157,7 +239,11 @@ async def fill_lesson(db: AsyncSession, course_id: str, lesson_id: str, *, instr
             warnings.append(f"{label}: ИИ не вернул содержимое — шаг остался пустым")
             continue
         try:
-            ok = await _fill_node(db, course_id, lesson, node, data, phrase_alias, phrases, len(words), label, warnings)
+            if node.forNodeId and not (nodes.get(node.forNodeId) and nodes[node.forNodeId].transcript):
+                warnings.append(f"{label}: у аудио/видео ещё нет текста — тест не составлен")
+                continue
+            ok = await _fill_node(db, ctx["course_id"], lesson, node, data, phrase_alias, phrases, len(words), label, warnings,
+                                  block_alias=block_alias, lesson_topic_id=ctx["lesson_topic_id"])
         except ApiError as e:
             await db.rollback()
             warnings.append(f"{label}: {e.message}")
@@ -166,7 +252,7 @@ async def fill_lesson(db: AsyncSession, course_id: str, lesson_id: str, *, instr
             node.aiPending = False
             await db.commit()
             filled.append(node_id)
-    return {"filled": len(filled), "waiting": len(pending) - len(filled), "warnings": warnings}
+    return filled
 
 
 def _route_order(graph: dict) -> list[str]:
@@ -185,11 +271,12 @@ def _route_order(graph: dict) -> list[str]:
     return order
 
 
-async def _fill_node(db, course_id, lesson, node, data, phrase_alias, phrases, word_count, label, warnings) -> bool:
-    if node.type == "audio":
+async def _fill_node(db, course_id, lesson, node, data, phrase_alias, phrases, word_count, label, warnings, *, block_alias=None, lesson_topic_id=None) -> bool:
+    block_alias = block_alias or {}
+    if node.type in ("audio", "video"):
         transcript = _str(data.get("transcript"))
         if not transcript:
-            warnings.append(f"{label}: нет текста аудио")
+            warnings.append(f"{label}: нет текста")
             return False
         translations = {k: v for k, v in (("ru", _str(data.get("translation_ru"))), ("tg", _str(data.get("translation_tg")))) if v}
         await lesson_graph.update_node(db, lesson.id, node.id, {"transcript": transcript, "transcriptTranslations": translations})
@@ -214,7 +301,7 @@ async def _fill_node(db, course_id, lesson, node, data, phrase_alias, phrases, w
             for qi, rq in enumerate((block.get("questions") or [])[:3]):
                 cleaned = _clean_question(rq, f"{label}, блок {bi + 1}, вопрос {qi + 1}", warnings)
                 if cleaned:
-                    await _create_question(db, cleaned, topic_id=material.topicId, material_block_id=row.id)
+                    await _create_question(db, cleaned, topic_id=material.topicId or lesson_topic_id, material_block_id=row.id)
         if not created:
             warnings.append(f"{label}: ИИ не вернул ни одного блока")
         return created > 0
@@ -226,9 +313,16 @@ async def _fill_node(db, course_id, lesson, node, data, phrase_alias, phrases, w
     added = 0
     for qi, rq in enumerate((data.get("questions") or [])[:12]):
         cleaned = _clean_question(rq, f"{label}, вопрос {qi + 1}", warnings)
-        if cleaned:
-            await _create_question(db, cleaned, topic_id=None, lesson_block_id=node.refId)
-            added += 1
+        if not cleaned:
+            continue
+        verifies = rq.get("verifiesBlock") if isinstance(rq, dict) else None
+        block_id, block_topic = block_alias.get(verifies, (None, None)) if isinstance(verifies, str) else (None, None)
+        if verifies and block_id is None and block_alias:
+            warnings.append(f"{label}, вопрос {qi + 1}: блок «{verifies}» не найден — вопрос без привязки к блоку")
+        await _create_question(
+            db, cleaned, topic_id=block_topic or lesson_topic_id, lesson_block_id=node.refId, material_block_id=block_id, media_node_id=node.forNodeId
+        )
+        added += 1
     auto = data.get("auto") if node.type == "practice" and isinstance(data.get("auto"), dict) else {}
     try:
         translate_count = max(0, min(int(auto.get("translateCount") or 0), 20)) if word_count else 0

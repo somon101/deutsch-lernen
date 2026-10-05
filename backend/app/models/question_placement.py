@@ -37,6 +37,10 @@ class QuestionPlacement(Base):
     lessonBlockId: Mapped[str | None] = mapped_column(String, nullable=True)
     legacyLessonId: Mapped[str | None] = mapped_column(String, nullable=True)
     legacySetName: Mapped[str | None] = mapped_column(String, nullable=True)
+    # The audio/video LessonNode this question checks comprehension of (§
+    # media tests, 2026-10-05) — a "what it checks" tag like materialBlockId
+    # on a lessonBlockId placement, never where the question is shown.
+    mediaNodeId: Mapped[str | None] = mapped_column(String, nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
 
     question: Mapped["Question"] = relationship(back_populates="placements")

@@ -117,6 +117,8 @@ class AdminGraphNode {
     this.phrases = const [],
     this.aiTask,
     this.aiPending = false,
+    this.aiTaskRu,
+    this.forNodeId,
   });
 
   factory AdminGraphNode.fromJson(Map<String, dynamic> json) => AdminGraphNode(
@@ -132,6 +134,8 @@ class AdminGraphNode {
     phrases: [for (final p in (json['phrases'] as List?) ?? const []) AdminNodePhrase.fromJson(p as Map<String, dynamic>)],
     aiTask: json['aiTask'] as String?,
     aiPending: json['aiPending'] as bool? ?? false,
+    aiTaskRu: json['aiTaskRu'] as String?,
+    forNodeId: json['forNodeId'] as String?,
   );
 
   final String id;
@@ -152,6 +156,10 @@ class AdminGraphNode {
   /// still hidden from learners (§ course modules, 2026-10-05).
   final String? aiTask;
   final bool aiPending;
+  /// The same AI task in Russian, for the teacher (§ 2026-10-05).
+  final String? aiTaskRu;
+  /// «Тест по аудио/видео»: the audio/video step this question step tests.
+  final String? forNodeId;
 
   AdminGraphNode copyWith({double? posX, double? posY, String? title, String? mediaUrl}) => AdminGraphNode(
     id: id,
@@ -166,6 +174,8 @@ class AdminGraphNode {
     phrases: phrases,
     aiTask: aiTask,
     aiPending: aiPending,
+    aiTaskRu: aiTaskRu,
+    forNodeId: forNodeId,
   );
 }
 

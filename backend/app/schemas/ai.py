@@ -22,3 +22,8 @@ class AiApplyInput(BaseModel):
 
 class AiFillInput(BaseModel):
     instructions: str | None = Field(default=None, max_length=2000)
+
+
+class AiResetInput(BaseModel):
+    # One step; omitted = every step of the lesson that has an AI task.
+    nodeId: str | None = None

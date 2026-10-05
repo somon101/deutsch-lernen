@@ -172,6 +172,30 @@ Future<bool> runAiFill(BuildContext context, WidgetRef ref, {required String cou
   }
 }
 
+/// «Сбросить заполнение ИИ» for a whole lesson (nodeId null) or one step.
+/// Asks first — whatever was written in those steps, by the AI or by hand,
+/// is deleted. Returns true when something was reset.
+Future<bool> runAiReset(BuildContext context, WidgetRef ref, {required String courseId, required String lessonId, String? nodeId, String? stepTitle}) async {
+  final ok = await confirmDialog(
+    context,
+    title: nodeId == null ? 'Сбросить заполнение ИИ во всём уроке?' : 'Сбросить шаг «${stepTitle ?? ''}»?',
+    message: nodeId == null
+        ? 'Все шаги с заданием для ИИ станут пустыми и снова будут ждать ИИ: объяснения, вопросы, тексты аудио и видео удалятся — '
+            'в том числе ваши правки в этих шагах. Слова, фразы, маршрут, план и загруженные файлы останутся.'
+        : 'Содержимое шага удалится — в том числе ваши правки, — и шаг снова будет ждать ИИ.',
+    confirmLabel: 'Сбросить',
+  );
+  if (!ok) return false;
+  try {
+    final n = await ref.read(builderRepositoryProvider).aiResetLesson(courseId, lessonId, nodeId: nodeId);
+    if (context.mounted) showSuccessSnack(context, 'Сброшено шагов: $n — можно заполнить заново');
+    return n > 0;
+  } catch (e) {
+    if (context.mounted) showErrorSnack(context, e, 'Не удалось сбросить');
+    return false;
+  }
+}
+
 /// Steps the AI can fill, for the «Пустой шаг для ИИ» dialog.
 const aiFillableTypes = {
   'material': 'Материал (объяснение)',
@@ -179,13 +203,20 @@ const aiFillableTypes = {
   'minitest': 'Мини-тест',
   'review': 'Закрепление',
   'audio': 'Аудио (текст записи)',
+  'video': 'Видео (текст для персонажа)',
+  'mediatest': 'Тест по аудио / видео',
 };
 
 /// Asks for the type, title and task of a new empty step for the AI.
-Future<({String type, String? title, String task})?> askEmptyAiStep(BuildContext context) async {
+Future<({String type, String? title, String task, String taskRu, String? forNodeId})?> askEmptyAiStep(
+  BuildContext context, {
+  List<AdminGraphNode> mediaSteps = const [],
+}) async {
   var type = 'practice';
+  String? forNodeId = mediaSteps.isEmpty ? null : mediaSteps.first.id;
   final title = TextEditingController();
   final task = TextEditingController();
+  final taskRu = TextEditingController();
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => StatefulBuilder(
@@ -200,9 +231,21 @@ Future<({String type, String? title, String task})?> askEmptyAiStep(BuildContext
               DropdownButtonFormField<String>(
                 initialValue: type,
                 decoration: adminInputDecoration(label: 'Что это за шаг'),
-                items: [for (final e in aiFillableTypes.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                items: [
+                  for (final e in aiFillableTypes.entries)
+                    if (e.key != 'mediatest' || mediaSteps.isNotEmpty) DropdownMenuItem(value: e.key, child: Text(e.value)),
+                ],
                 onChanged: (v) => setLocal(() => type = v ?? type),
               ),
+              if (type == 'mediatest') ...[
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: forNodeId,
+                  decoration: adminInputDecoration(label: 'По какому аудио / видео'),
+                  items: [for (final m in mediaSteps) DropdownMenuItem(value: m.id, child: Text('${m.type == 'video' ? 'Видео' : 'Аудио'}: ${m.title}'))],
+                  onChanged: (v) => setLocal(() => forNodeId = v),
+                ),
+              ],
               const SizedBox(height: 8),
               TextField(controller: title, decoration: adminInputDecoration(label: 'Название шага (необязательно)')),
               const SizedBox(height: 8),
@@ -211,6 +254,13 @@ Future<({String type, String? title, String task})?> askEmptyAiStep(BuildContext
                 minLines: 3,
                 maxLines: 8,
                 decoration: adminInputDecoration(label: 'Задание для ИИ', hint: 'Например: 6 questions on am/is/are, choice + cloze, use lesson words'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: taskRu,
+                minLines: 2,
+                maxLines: 6,
+                decoration: adminInputDecoration(label: 'Задание по-русски (для проверки)', hint: 'Например: 6 вопросов на am/is/are'),
               ),
               const SizedBox(height: 6),
               Text('Ученики не увидят этот шаг, пока его не заполнят.', style: AdminTypography.caption),
@@ -224,19 +274,31 @@ Future<({String type, String? title, String task})?> askEmptyAiStep(BuildContext
       ),
     ),
   );
-  final result = ok == true ? (type: type, title: title.text.trim().isEmpty ? null : title.text.trim(), task: task.text.trim()) : null;
+  final isTest = type == 'mediatest';
+  final result = ok == true
+      ? (
+          type: isTest ? 'practice' : type,
+          title: title.text.trim().isEmpty ? (isTest ? 'Тест по ${mediaSteps.firstWhere((m) => m.id == forNodeId, orElse: () => mediaSteps.first).type == 'video' ? 'видео' : 'аудио'}' : null) : title.text.trim(),
+          task: task.text.trim().isEmpty && isTest ? '4-5 comprehension questions about this text' : task.text.trim(),
+          taskRu: taskRu.text.trim(),
+          forNodeId: isTest ? forNodeId : null,
+        )
+      : null;
   title.dispose();
   task.dispose();
+  taskRu.dispose();
   return result;
 }
 
 /// «Ждёт ИИ» switch and the AI task of any step.
 class AiTaskEditor extends ConsumerStatefulWidget {
-  const AiTaskEditor({super.key, required this.courseId, required this.lessonId, required this.node, required this.onSaved});
+  const AiTaskEditor({super.key, required this.courseId, required this.lessonId, required this.node, required this.onSaved, this.testOfTitle});
   final String courseId;
   final String lessonId;
   final AdminGraphNode node;
   final VoidCallback onSaved;
+  /// «Тест по аудио/видео»: the title of the step it tests.
+  final String? testOfTitle;
 
   @override
   ConsumerState<AiTaskEditor> createState() => _AiTaskEditorState();
@@ -244,13 +306,22 @@ class AiTaskEditor extends ConsumerStatefulWidget {
 
 class _AiTaskEditorState extends ConsumerState<AiTaskEditor> {
   late final _task = TextEditingController(text: widget.node.aiTask ?? '');
+  late final _taskRu = TextEditingController(text: widget.node.aiTaskRu ?? '');
   late bool _pending = widget.node.aiPending;
   bool _busy = false;
 
   @override
   void dispose() {
     _task.dispose();
+    _taskRu.dispose();
     super.dispose();
+  }
+
+  Future<void> _reset() async {
+    setState(() => _busy = true);
+    final done = await runAiReset(context, ref, courseId: widget.courseId, lessonId: widget.lessonId, nodeId: widget.node.id, stepTitle: widget.node.title);
+    if (mounted) setState(() => _busy = false);
+    if (done) widget.onSaved();
   }
 
   Future<void> _save() async {
@@ -258,7 +329,7 @@ class _AiTaskEditorState extends ConsumerState<AiTaskEditor> {
     try {
       await ref
           .read(builderRepositoryProvider)
-          .updateGraphNode(widget.courseId, widget.lessonId, widget.node.id, aiTask: _task.text, aiPending: _pending);
+          .updateGraphNode(widget.courseId, widget.lessonId, widget.node.id, aiTask: _task.text, aiTaskRu: _taskRu.text, aiPending: _pending);
       widget.onSaved();
       if (mounted) showSuccessSnack(context);
     } catch (e) {
@@ -293,6 +364,11 @@ class _AiTaskEditorState extends ConsumerState<AiTaskEditor> {
               style: AdminTypography.caption,
             ),
           ),
+          if (widget.testOfTitle != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Тест по шагу «${widget.testOfTitle}»: вопросы составляются по его тексту и привязываются к нему.', style: AdminTypography.caption),
+            ),
           TextField(
             controller: _task,
             minLines: 2,
@@ -300,9 +376,25 @@ class _AiTaskEditorState extends ConsumerState<AiTaskEditor> {
             decoration: adminInputDecoration(label: 'Задание для ИИ', hint: 'What exactly belongs in this step'),
           ),
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(onPressed: _busy ? null : _save, style: AdminButtonStyles.text(), child: const Text('Сохранить')),
+          TextField(
+            controller: _taskRu,
+            minLines: 2,
+            maxLines: 6,
+            decoration: adminInputDecoration(label: 'Задание по-русски (для проверки)'),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if ((widget.node.aiTask ?? '').isNotEmpty && !widget.node.aiPending)
+                TextButton.icon(
+                  onPressed: _busy ? null : _reset,
+                  style: AdminButtonStyles.dangerText(),
+                  icon: const Icon(Icons.restart_alt, size: 16),
+                  label: const Text('Сбросить шаг'),
+                ),
+              const Spacer(),
+              TextButton(onPressed: _busy ? null : _save, style: AdminButtonStyles.text(), child: const Text('Сохранить')),
+            ],
           ),
         ],
       ),

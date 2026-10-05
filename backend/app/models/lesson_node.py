@@ -45,6 +45,12 @@ class LessonNode(Base):
     # learners until the AI (or the teacher) has filled it.
     aiTask: Mapped[str | None] = mapped_column(String, nullable=True)
     aiPending: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # The same task in Russian, for the teacher checking the step.
+    aiTaskRu: Mapped[str | None] = mapped_column(String, nullable=True)
+    # A question step that tests one audio/video step of the same lesson
+    # («Тест по аудио/видео»): its questions are generated from that step's
+    # text and tagged with it (QuestionPlacement.mediaNodeId).
+    forNodeId: Mapped[str | None] = mapped_column(String, nullable=True)
     posX: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     posY: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     createdAt: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=utcnow, server_default="now()")

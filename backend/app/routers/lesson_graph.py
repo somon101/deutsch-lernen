@@ -27,7 +27,8 @@ async def materialize_graph(course_id: str, lesson_id: str, db: AsyncSession = D
 async def create_node(course_id: str, lesson_id: str, body: CreateNodeInput, db: AsyncSession = Depends(get_db)):
     return {
         "node": await svc.create_node(
-            db, course_id, lesson_id, body.type, body.title, body.posX, body.posY, ai_task=body.aiTask, ai_pending=body.aiPending, phrase_ids=body.phraseIds
+            db, course_id, lesson_id, body.type, body.title, body.posX, body.posY, ai_task=body.aiTask, ai_pending=body.aiPending, phrase_ids=body.phraseIds,
+            ai_task_ru=body.aiTaskRu, for_node_id=body.forNodeId, topic=body.topic,
         )
     }
 

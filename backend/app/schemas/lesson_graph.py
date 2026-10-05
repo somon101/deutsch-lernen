@@ -14,6 +14,9 @@ class CreateNodeInput(BaseModel):
     aiTask: str | None = Field(default=None, max_length=4000)
     aiPending: bool = False
     phraseIds: list[str] | None = Field(default=None, max_length=100)
+    aiTaskRu: str | None = Field(default=None, max_length=4000)
+    forNodeId: str | None = None
+    topic: str | None = Field(default=None, max_length=300)
 
     @field_validator("title")
     @classmethod
@@ -35,6 +38,10 @@ class UpdateNodeInput(BaseModel):
     phraseIds: list[str] | None = Field(default=None, max_length=100)
     aiTask: str | None = Field(default=None, max_length=4000)
     aiPending: bool | None = None
+    aiTaskRu: str | None = Field(default=None, max_length=4000)
+    forNodeId: str | None = None
+    # Material steps: an existing topic's name ("" clears it).
+    topic: str | None = Field(default=None, max_length=300)
 
     @field_validator("title")
     @classmethod
