@@ -285,9 +285,11 @@ def _topic_out(t: dict) -> dict:
 
 
 @router.get("/topics")
-async def list_topics(q: str | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("topics:read")), db: AsyncSession = Depends(get_db)):
-    page = await topics_svc.list_topics_page(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset)
-    return {"topics": [_topic_out(t) for t in page["topics"]], "total": page["total"]}
+async def list_topics(
+    q: str | None = None, used: bool | None = None, limit: int = 100, offset: int = Query(0, ge=0), key: ApiKey = Depends(need("topics:read")), db: AsyncSession = Depends(get_db)
+):
+    page = await topics_svc.list_topics_page(db, language_id=key.languageId, query=q, limit=_limit(limit), offset=offset, used=used)
+    return {"topics": [_topic_out(t) for t in page["topics"]], "total": page["total"], "usedCount": page["usedCount"], "unusedCount": page["unusedCount"]}
 
 
 @router.get("/topics/{topic_id}")

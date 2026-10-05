@@ -3,7 +3,7 @@ API. Works on the very same Topic rows the lesson's material picker uses
 (services/taxonomy.py create_topic/delete_topic), so a topic created here
 is immediately selectable when building a lesson, and vice versa."""
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import ApiError
@@ -29,20 +29,44 @@ async def _usage(db: AsyncSession, topic_ids: list[str]) -> dict[str, int]:
     return out
 
 
-async def list_topics_page(db: AsyncSession, *, language_id: str | None, query: str | None, limit: int, offset: int) -> dict:
+def _is_used():
+    """A topic counts as used when any material, question or phrase is
+    tagged with it — the same three things `usage` counts."""
+    return or_(*(exists().where(model.topicId == Topic.id) for model in (Material, Question, Phrase)))
+
+
+async def list_topics_page(
+    db: AsyncSession, *, language_id: str | None, query: str | None, limit: int, offset: int, used: bool | None = None
+) -> dict:
+    """`used`: True = only topics in use, False = only unused, None = all.
+    `usedCount`/`unusedCount` are for the same language and search, whatever
+    `used` is, so the filter chips can show both numbers."""
     filters = []
     if language_id:
         filters.append(Topic.languageId == language_id)
     if query and query.strip():
         filters.append(Topic.name.ilike(f"%{query.strip()}%"))
-    count_q = select(func.count()).select_from(Topic)
+    base_count = select(func.count()).select_from(Topic)
+    for f in filters:
+        base_count = base_count.where(f)
+    used_count = await db.scalar(base_count.where(_is_used())) or 0
+    all_count = await db.scalar(base_count) or 0
+    if used is True:
+        filters.append(_is_used())
+    elif used is False:
+        filters.append(~_is_used())
     list_q = select(Topic).order_by(Topic.name)
     for f in filters:
-        count_q, list_q = count_q.where(f), list_q.where(f)
-    total = await db.scalar(count_q)
+        list_q = list_q.where(f)
+    total = used_count if used is True else (all_count - used_count if used is False else all_count)
     topics = (await db.execute(list_q.limit(limit).offset(offset))).scalars().all()
     usage = await _usage(db, [t.id for t in topics])
-    return {"topics": [topic_dto(t, usage.get(t.id, 0)) for t in topics], "total": total or 0}
+    return {
+        "topics": [topic_dto(t, usage.get(t.id, 0)) for t in topics],
+        "total": total,
+        "usedCount": used_count,
+        "unusedCount": all_count - used_count,
+    }
 
 
 async def _exists(db: AsyncSession, language_id: str, name: str, exclude_id: str | None = None) -> bool:

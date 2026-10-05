@@ -41,6 +41,10 @@ class _AdminTopicsScreenState extends ConsumerState<AdminTopicsScreen> {
   String? _languageId;
   List<AdminTopicEntry> _topics = const [];
   int _total = 0;
+  int _usedCount = 0;
+  int _unusedCount = 0;
+  // null = all, true = used, false = unused.
+  bool? _used;
   bool _loading = true;
   bool _loadingMore = false;
   String? _error;
@@ -88,6 +92,7 @@ class _AdminTopicsScreenState extends ConsumerState<AdminTopicsScreen> {
       final page = await ref.read(topicsRepositoryProvider).listTopics(
             languageId: _languageId,
             query: _searchController.text,
+            used: _used,
             limit: _pageSize,
             offset: reset ? 0 : _topics.length,
           );
@@ -95,6 +100,8 @@ class _AdminTopicsScreenState extends ConsumerState<AdminTopicsScreen> {
       setState(() {
         _topics = reset ? page.topics : [..._topics, ...page.topics];
         _total = page.total;
+        _usedCount = page.usedCount;
+        _unusedCount = page.unusedCount;
         _error = null;
       });
     } catch (e) {
@@ -206,10 +213,36 @@ class _AdminTopicsScreenState extends ConsumerState<AdminTopicsScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        for (final (value, label) in [
+                          (null, 'Все · ${_usedCount + _unusedCount}'),
+                          (true, 'Используются · $_usedCount'),
+                          (false, 'Не используются · $_unusedCount'),
+                        ])
+                          ChoiceChip(
+                            label: Text(label),
+                            selected: _used == value,
+                            onSelected: (_) {
+                              if (_used == value) return;
+                              setState(() => _used = value);
+                              _load(reset: true);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
                 if (!_loading && _error == null)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Align(alignment: Alignment.centerLeft, child: Text('Всего тем: $_total', style: AdminTypography.caption)),
+                    child: Align(alignment: Alignment.centerLeft, child: Text('Показано тем: $_total', style: AdminTypography.caption)),
                   ),
                 Expanded(
                   child: _loading

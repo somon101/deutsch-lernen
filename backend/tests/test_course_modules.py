@@ -122,6 +122,7 @@ async def main():
         db.add(PhraseTranslation(phraseId="p1", locale="tg", translation="Аз шиносоӣ хурсандам"))
         from app.models.topic import Topic
         db.add(Topic(id="t1", languageId="en", name="Приветствия", createdAt=utcnow()))
+        db.add(Topic(id="t2", languageId="en", name="Числа", createdAt=utcnow()))
         await db.commit()
 
     app.dependency_overrides[get_db] = override_db
@@ -333,6 +334,17 @@ async def main():
         check("material block question has topic", len(in_block) == 1 and in_block[0].topicId == "t1", [q.topicId for q in in_block])
         r = await c.post(f"/api/builder/courses/{cid}/lessons/{la['id']}/ai/fill", json={})
         check("second fill: nothing waits -> 400", r.status_code == 400, r.text)
+
+        # ---------------- topics filter: used / unused
+        r_all = (await c.get("/api/builder/topics", params={"languageId": "en"})).json()
+        r_used = (await c.get("/api/builder/topics", params={"languageId": "en", "used": "true"})).json()
+        r_unused = (await c.get("/api/builder/topics", params={"languageId": "en", "used": "false"})).json()
+        check("topics filter: used / unused / counts",
+              [t["id"] for t in r_used["topics"]] == ["t1"] and [t["id"] for t in r_unused["topics"]] == ["t2"]
+              and r_all["total"] == 2 and r_all["usedCount"] == 1 and r_all["unusedCount"] == 1 and r_used["total"] == 1,
+              (r_all, r_used, r_unused))
+        r = (await c.get("/api/v1/topics", headers=H, params={"used": "false"})).json()
+        check("public API topics filter", [t["id"] for t in r.get("topics", [])] == ["t2"], r)
 
         # ---------------- «Сбросить заполнение ИИ»
         r = await c.post(f"/api/builder/courses/{cid}/lessons/{la['id']}/ai/reset", json={"nodeId": pra.id})
