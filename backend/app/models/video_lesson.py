@@ -28,6 +28,9 @@ class VideoLesson(Base):
     voice: Mapped[str | None] = mapped_column(String, nullable=True)
     audioUrl: Mapped[str | None] = mapped_column(String, nullable=True)
     timeline: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Character performance knobs (gestures, head motion, expressiveness,
+    # blink rate) — see the Flutter performance model for their meaning.
+    animationSettings: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     durationMs: Mapped[int | None] = mapped_column(Integer, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="empty")  # empty | ready | error
     error: Mapped[str | None] = mapped_column(String, nullable=True)

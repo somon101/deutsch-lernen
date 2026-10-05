@@ -8,7 +8,13 @@ extensible:
      "envelope": [0..100 per frame, 0 outside speech],
      "segments": [{"start": ms, "end": ms}, ...],
      "words": [{"text", "start", "end"}, ...] | [],
-     "visemes": null}            # reserved for phoneme lip-sync later
+     "visemes": [{"start", "end", "shape"}, ...],   # mouth shapes A-H, X
+     "visemeSource": "rhubarb" | "envelope"}
+
+Visemes come from Rhubarb Lip Sync (phonetic recognizer, language
+independent) when its binary is available (RHUBARB_PATH or `rhubarb` on
+PATH); otherwise they are derived from loudness, so the preview still
+works, just with fewer distinct mouth shapes.
 
 Decoding: WAV through the standard `wave` module; anything else (mp3, m4a,
 ogg, webm) through ffmpeg to 16 kHz mono PCM. Pure Python RMS — no numpy.
@@ -18,10 +24,13 @@ from __future__ import annotations
 
 import array
 import io
+import json
 import math
+import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import wave
 
 FRAME_MS = 20
@@ -170,19 +179,102 @@ def analyze_samples(samples: list[float], rate: int, words: list[dict] | None = 
 
 def _timeline(duration_ms: int, envelope: list[int], segments: list[dict], words: list[dict] | None) -> dict:
     return {
-        "version": 1,
+        "version": 2,
         "frameMs": FRAME_MS,
         "durationMs": duration_ms,
         "envelope": envelope,
         "segments": segments,
         "words": words or [],
-        "visemes": None,
+        "visemes": _visemes_from_envelope(envelope, segments),
+        "visemeSource": "envelope",
     }
+
+
+def _visemes_from_envelope(envelope: list[int], segments: list[dict]) -> list[dict]:
+    """Loudness-only fallback: louder -> more open shape (B < C < D), with
+    a short closed shape between syllables. X (rest) outside speech."""
+    out: list[dict] = []
+
+    def push(start: int, end: int, shape: str) -> None:
+        if end <= start:
+            return
+        if out and out[-1]["shape"] == shape and out[-1]["end"] == start:
+            out[-1]["end"] = end
+        else:
+            out.append({"start": start, "end": end, "shape": shape})
+
+    cursor = 0
+    for seg in segments:
+        push(cursor, seg["start"], "X")
+        for i in range(seg["start"] // FRAME_MS, max(seg["start"] // FRAME_MS, seg["end"] // FRAME_MS)):
+            level = envelope[i] if i < len(envelope) else 0
+            shape = "A" if level < 12 else "B" if level < 40 else "C" if level < 70 else "D"
+            push(i * FRAME_MS, (i + 1) * FRAME_MS, shape)
+        cursor = seg["end"]
+    total = len(envelope) * FRAME_MS
+    push(cursor, total, "X")
+    return out
+
+
+def rhubarb_path() -> str | None:
+    configured = os.environ.get("RHUBARB_PATH")
+    if configured and os.path.exists(configured):
+        return configured
+    return shutil.which("rhubarb")
+
+
+def _wav_bytes(samples: list[float], rate: int) -> bytes:
+    a = array.array("h", (int(max(-1.0, min(1.0, v)) * 32767) for v in samples))
+    if sys.byteorder == "big":
+        a.byteswap()
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(a.tobytes())
+    return buf.getvalue()
+
+
+def rhubarb_visemes(samples: list[float], rate: int) -> list[dict] | None:
+    """Phoneme-based mouth cues from Rhubarb, or None if it isn't installed
+    or fails (the caller then keeps the loudness-based visemes)."""
+    exe = rhubarb_path()
+    if not exe:
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        wav_path = os.path.join(tmp, "speech.wav")
+        out_path = os.path.join(tmp, "cues.json")
+        with open(wav_path, "wb") as f:
+            f.write(_wav_bytes(samples, rate))
+        try:
+            proc = subprocess.run(
+                [exe, "-q", "-f", "json", "--recognizer", "phonetic", "-o", out_path, wav_path],
+                capture_output=True,
+                timeout=540,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+        if proc.returncode != 0 or not os.path.exists(out_path):
+            return None
+        try:
+            with open(out_path, encoding="utf-8") as f:
+                cues = json.load(f).get("mouthCues", [])
+        except (OSError, ValueError):
+            return None
+    return [{"start": int(round(c["start"] * 1000)), "end": int(round(c["end"] * 1000)), "shape": c["value"]} for c in cues]
 
 
 def analyze_audio(data: bytes, words: list[dict] | None = None) -> dict:
     samples, rate = decode_audio(data)
-    return analyze_samples(samples, rate, words)
+    timeline = analyze_samples(samples, rate, words)
+    if timeline["segments"]:
+        visemes = rhubarb_visemes(samples, rate)
+        if visemes:
+            timeline["visemes"] = visemes
+            timeline["visemeSource"] = "rhubarb"
+    return timeline
 
 
 def timeline_from_words(words: list[dict], duration_ms: int | None = None) -> dict:

@@ -636,6 +636,7 @@ _VIDEO_LESSON_STATEMENTS = (
     )
     """,
     'CREATE INDEX IF NOT EXISTS "VideoLesson_courseId_idx" ON "VideoLesson"("courseId")',
+    'ALTER TABLE "VideoLesson" ADD COLUMN IF NOT EXISTS "animationSettings" JSONB',
 )
 
 

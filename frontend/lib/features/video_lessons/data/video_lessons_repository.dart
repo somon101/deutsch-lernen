@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api/api_client.dart';
+import '../domain/performance.dart';
 import '../domain/speech_timeline.dart';
 
 class VideoLessonData {
@@ -17,6 +18,7 @@ class VideoLessonData {
     required this.status,
     this.error,
     this.timeline,
+    this.animationSettings = const AnimationSettings(),
   });
 
   factory VideoLessonData.fromJson(Map<String, dynamic> j) => VideoLessonData(
@@ -32,6 +34,7 @@ class VideoLessonData {
         status: j['status'] as String? ?? 'empty',
         error: j['error'] as String?,
         timeline: j['timeline'] is Map<String, dynamic> ? SpeechTimeline.fromJson(j['timeline'] as Map<String, dynamic>) : null,
+        animationSettings: AnimationSettings.fromJson(j['animationSettings'] as Map<String, dynamic>?),
       );
 
   final String id;
@@ -48,6 +51,7 @@ class VideoLessonData {
   final String status;
   final String? error;
   final SpeechTimeline? timeline;
+  final AnimationSettings animationSettings;
 }
 
 class TtsVoice {
@@ -85,6 +89,10 @@ class VideoLessonsRepository {
   /// Voices the text on the server (TTS) and analyses it.
   Future<VideoLessonData> synthesize(String courseId, String id, {required String text, required String voice}) async =>
       _one(await _api.postSlow('${_base(courseId)}/$id/tts', body: {'text': text, 'voice': voice}));
+
+  /// Rebuilds the speech timeline (incl. phoneme mouth shapes) from the
+  /// stored audio — for lessons analysed before lip-sync existed.
+  Future<VideoLessonData> reanalyze(String courseId, String id) async => _one(await _api.postSlow('${_base(courseId)}/$id/reanalyze'));
 
   Future<List<TtsVoice>> voices() async {
     final res = await _api.get('/api/builder/tts/voices');

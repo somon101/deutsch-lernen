@@ -1,6 +1,9 @@
 """Video-lesson constructor API (staff): per-course list, speech source
 (audio upload or TTS text), speech timeline."""
 
+import asyncio
+
+import httpx
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -12,7 +15,7 @@ from app.errors import ApiError
 from app.models.course import Course
 from app.models.video_lesson import VideoLesson
 from app.services import speech_timeline, tts
-from app.uploads.storage import COURSE_MEDIA_MAX_BYTES, store_course_media_bytes
+from app.uploads.storage import COURSE_MEDIA_DIR, COURSE_MEDIA_MAX_BYTES, store_course_media_bytes
 from app.utils import utcnow
 
 router = APIRouter(prefix="/api/builder", tags=["video-lessons"], dependencies=[Depends(require_staff)])
@@ -42,11 +45,29 @@ class VideoLessonUpdate(BaseModel):
     text: str | None = Field(default=None, max_length=tts.MAX_TEXT_CHARS)
     voice: str | None = None
     characterId: str | None = None
+    animationSettings: dict | None = None
 
 
 class TtsInput(BaseModel):
     text: str = Field(min_length=1, max_length=tts.MAX_TEXT_CHARS)
     voice: str
+
+
+ANIMATION_NUMBERS = {"gestureIntensity", "headMotion", "expressiveness", "blinkRate"}
+
+
+def _clean_settings(raw: dict | None) -> dict | None:
+    """Only known knobs, numbers clamped to 0..2, so a client can't store junk."""
+    if raw is None:
+        return None
+    out: dict = {}
+    for key in ANIMATION_NUMBERS:
+        value = raw.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            out[key] = max(0.0, min(2.0, float(value)))
+    if isinstance(raw.get("gestures"), bool):
+        out["gestures"] = raw["gestures"]
+    return out
 
 
 def _dto(v: VideoLesson, *, with_timeline: bool = True) -> dict:
@@ -64,6 +85,7 @@ def _dto(v: VideoLesson, *, with_timeline: bool = True) -> dict:
         "error": v.error,
         "updatedAt": v.updatedAt.isoformat() if v.updatedAt else None,
     }
+    out["animationSettings"] = v.animationSettings
     if with_timeline:
         out["timeline"] = v.timeline
     return out
@@ -123,6 +145,8 @@ async def update_video_lesson(course_id: str, video_id: str, body: VideoLessonUp
         raise ApiError(400, "Неизвестный персонаж")
     if "voice" in changes and changes["voice"] is not None and changes["voice"] not in tts.VOICE_IDS:
         raise ApiError(400, "Неизвестный голос")
+    if "animationSettings" in changes:
+        changes["animationSettings"] = _clean_settings(changes["animationSettings"])
     for key, value in changes.items():
         setattr(v, key, value.strip() if isinstance(value, str) and key == "title" else value)
     v.updatedAt = utcnow()
@@ -152,7 +176,7 @@ async def upload_audio(course_id: str, video_id: str, audio: UploadFile = File(.
     if len(content) > COURSE_MEDIA_MAX_BYTES:
         raise ApiError(400, "Файл слишком большой")
     try:
-        timeline = speech_timeline.analyze_audio(content)
+        timeline = await asyncio.to_thread(speech_timeline.analyze_audio, content)
     except speech_timeline.SpeechAnalysisError as e:
         v.status, v.error = "error", str(e)
         v.updatedAt = utcnow()
@@ -179,11 +203,46 @@ async def synthesize_text(course_id: str, video_id: str, body: TtsInput, db: Asy
     # Real envelope when the mp3 can be decoded (ffmpeg); otherwise the
     # exact word timings from TTS still give a correct speech/silence map.
     try:
-        timeline = speech_timeline.analyze_audio(audio_bytes, words)
+        timeline = await asyncio.to_thread(speech_timeline.analyze_audio, audio_bytes, words)
     except speech_timeline.SpeechAnalysisError:
         timeline = speech_timeline.timeline_from_words(words)
     v.audioUrl = await store_course_media_bytes(audio_bytes, ".mp3", "audio/mpeg")
     v.sourceType, v.text, v.voice = "text", body.text.strip(), body.voice
+    _apply_timeline(v, timeline)
+    v.updatedAt = utcnow()
+    await db.commit()
+    await db.refresh(v)
+    return {"videoLesson": _dto(v)}
+
+
+async def _read_stored_audio(url: str) -> bytes:
+    if url.startswith("/uploads/"):
+        path = COURSE_MEDIA_DIR / url.rsplit("/", 1)[-1]
+        if not path.exists():
+            raise ApiError(404, "Аудиофайл не найден")
+        return path.read_bytes()
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.get(url)
+    if response.status_code != 200:
+        raise ApiError(502, "Не удалось загрузить сохранённое аудио")
+    return response.content
+
+
+@router.post("/courses/{course_id}/video-lessons/{video_id}/reanalyze")
+async def reanalyze(course_id: str, video_id: str, db: AsyncSession = Depends(get_db)):
+    """Rebuilds the timeline (incl. visemes) from the already stored audio —
+    for lessons analysed before lip-sync existed, or after an upgrade."""
+    v = await _get(db, course_id, video_id)
+    if not v.audioUrl:
+        raise ApiError(400, "Сначала загрузите аудио или озвучьте текст")
+    data = await _read_stored_audio(v.audioUrl)
+    words = (v.timeline or {}).get("words") or None
+    try:
+        timeline = await asyncio.to_thread(speech_timeline.analyze_audio, data, words)
+    except speech_timeline.SpeechAnalysisError as e:
+        if not words:
+            raise ApiError(400, str(e))
+        timeline = speech_timeline.timeline_from_words(words)
     _apply_timeline(v, timeline)
     v.updatedAt = utcnow()
     await db.commit()

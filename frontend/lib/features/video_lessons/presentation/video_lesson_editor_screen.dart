@@ -14,8 +14,8 @@ import '../../admin/widgets/admin_feedback.dart';
 import '../../profile/presentation/profile_tokens.dart';
 import '../data/video_lessons_repository.dart';
 import '../domain/characters.dart';
+import '../domain/performance.dart';
 import '../domain/speech_timeline.dart';
-import 'character_rig.dart';
 
 /// Video constructor for one video lesson: speech source on the left
 /// (audio upload, or text voiced on the server), a live phone-shaped
@@ -48,7 +48,10 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
   Duration _lastPosition = Duration.zero;
   final _sinceLastPosition = Stopwatch();
   int _positionMs = 0;
-  double _mouth = 0;
+  CharacterPose _pose = CharacterPose.rest;
+  Performance? _performance;
+  AnimationSettings _settings = const AnimationSettings();
+  Timer? _settingsSave;
   String? _playerError;
   late final Ticker _ticker;
 
@@ -64,6 +67,7 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
   @override
   void dispose() {
     _ticker.dispose();
+    _settingsSave?.cancel();
     for (final s in _subs) {
       s.cancel();
     }
@@ -95,8 +99,17 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
       _text.text = lesson.text ?? '';
       _mode = lesson.sourceType;
       _voice = lesson.voice ?? (_voices.isNotEmpty ? _voices.first.id : null);
+      _settings = lesson.animationSettings;
     }
+    _rebuildPerformance();
     _openAudio(lesson.audioUrl);
+  }
+
+  /// One performance per (timeline, settings): rebuilt only when either
+  /// changes, then evaluated every frame at the audio position.
+  void _rebuildPerformance() {
+    _performance = Performance(_lesson?.timeline, _settings, seed: widget.videoId.hashCode);
+    _pose = _performance!.poseAt(_positionMs);
   }
 
   // ---------------------------------------------------------------- player
@@ -141,25 +154,21 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
   }
 
   /// Every frame: where in the audio are we (last reported position plus
-  /// the time since it was reported, so the mouth doesn't step at the
-  /// position stream's rate), and how open should the mouth be there.
-  /// Paused or stopped means no sound, so the mouth is closed.
+  /// the time since it was reported, so motion doesn't step at the
+  /// position stream's rate), and the character's pose at that moment.
+  /// The pose depends only on the position, so Pause freezes everything
+  /// and Replay starts the same performance from the beginning.
   void _onTick(Duration _) {
     final timeline = _lesson?.timeline;
     var ms = _lastPosition.inMilliseconds;
     if (_playing) ms += _sinceLastPosition.elapsedMilliseconds;
     final maxMs = _duration.inMilliseconds > 0 ? _duration.inMilliseconds : (timeline?.durationMs ?? 0);
     if (maxMs > 0) ms = ms.clamp(0, maxMs);
-    final target = (_playing && timeline != null) ? timeline.mouthOpenAt(ms) : 0.0;
-    final k = target > _mouth ? 0.55 : 0.35;
-    final next = _mouth + (target - _mouth) * k;
-    final mouth = next < 0.01 ? 0.0 : next;
-    if (mouth != _mouth || ms != _positionMs) {
-      setState(() {
-        _mouth = mouth;
-        _positionMs = ms;
-      });
-    }
+    if (ms == _positionMs && _performance != null) return;
+    setState(() {
+      _positionMs = ms;
+      _pose = _performance?.poseAt(ms) ?? CharacterPose.rest;
+    });
   }
 
   Future<void> _play() async {
@@ -178,6 +187,26 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
     await p.seek(Duration.zero);
     _markPosition(Duration.zero);
     await p.play();
+  }
+
+  void _changeSettings(AnimationSettings next) {
+    setState(() {
+      _settings = next;
+      _rebuildPerformance();
+    });
+    _settingsSave?.cancel();
+    _settingsSave = Timer(const Duration(milliseconds: 600), () async {
+      try {
+        await _repo.update(widget.courseId, widget.videoId, {'animationSettings': next.toJson()});
+      } catch (e) {
+        if (mounted) showErrorSnack(context, e, 'Не удалось сохранить настройки анимации');
+      }
+    });
+  }
+
+  Future<void> _reanalyze() async {
+    _openedUrl = null;
+    await _run(() => _repo.reanalyze(widget.courseId, widget.videoId), 'Не удалось пересчитать', success: 'Lip-sync пересчитан');
   }
 
   // --------------------------------------------------------------- actions
@@ -380,10 +409,24 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
                 ),
                 const SizedBox(height: 4),
                 Text('Синим — речь (рот двигается), серым — паузы (рот закрыт).', style: AdminTypography.caption),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        timeline.visemeSource == 'rhubarb' ? 'Формы рта: по звукам речи (Rhubarb)' : 'Формы рта: только по громкости',
+                        style: AdminTypography.caption,
+                      ),
+                    ),
+                    TextButton(onPressed: _busy || lesson.audioUrl == null ? null : _reanalyze, style: AdminButtonStyles.text(), child: const Text('Пересчитать')),
+                  ],
+                ),
               ],
             ],
           ),
         ),
+        const SizedBox(height: AdminMetrics.cardGap),
+        _AnimationSettingsCard(settings: _settings, onChanged: _changeSettings),
       ],
     );
   }
@@ -398,7 +441,7 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
 
   Widget _buildPreview({required double maxHeight}) {
     final lesson = _lesson!;
-    final character = ref.watch(characterProvider(lesson.characterId));
+    final character = characterFor(lesson.characterId);
     final word = lesson.timeline?.wordAt(_positionMs);
     final canPlay = lesson.audioUrl != null && _playerError == null;
     final phoneHeight = maxHeight.clamp(420.0, 760.0) - 72;
@@ -441,11 +484,7 @@ class _VideoLessonEditorScreenState extends ConsumerState<VideoLessonEditorScree
                     top: phoneHeight * 0.12,
                     bottom: phoneHeight * 0.16,
                     child: Center(
-                      child: character.when(
-                        loading: () => const CircularProgressIndicator(),
-                        error: (e, _) => Text('Персонаж не загрузился: $e', style: const TextStyle(color: Colors.white)),
-                        data: (c) => CharacterRig(character: c, mouthOpen: _mouth),
-                      ),
+                      child: character.builder(_pose),
                     ),
                   ),
                   Positioned(
@@ -526,4 +565,42 @@ class _TimelinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _TimelinePainter old) => old.positionMs != positionMs || old.timeline != timeline || old.totalMs != totalMs;
+}
+
+
+class _AnimationSettingsCard extends StatelessWidget {
+  const _AnimationSettingsCard({required this.settings, required this.onChanged});
+  final AnimationSettings settings;
+  final ValueChanged<AnimationSettings> onChanged;
+
+  Widget _slider(String label, double value, ValueChanged<double> set) => Row(
+        children: [
+          SizedBox(width: 150, child: Text(label, style: AdminTypography.body)),
+          Expanded(child: Slider(value: value.clamp(0.0, 2.0), max: 2, divisions: 20, label: value.toStringAsFixed(1), onChanged: set)),
+        ],
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Анимация персонажа', style: AdminTypography.cardTitle),
+          const SizedBox(height: 4),
+          Text('Сохраняется автоматически. 1.0 — естественно, 0 — выключено, 2.0 — максимум.', style: AdminTypography.caption),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text('Жесты руками', style: AdminTypography.body),
+            value: settings.gestures,
+            onChanged: (v) => onChanged(settings.copyWith(gestures: v)),
+          ),
+          if (settings.gestures) _slider('Сила жестов', settings.gestureIntensity, (v) => onChanged(settings.copyWith(gestureIntensity: v))),
+          _slider('Движения головы', settings.headMotion, (v) => onChanged(settings.copyWith(headMotion: v))),
+          _slider('Мимика', settings.expressiveness, (v) => onChanged(settings.copyWith(expressiveness: v))),
+          _slider('Частота моргания', settings.blinkRate, (v) => onChanged(settings.copyWith(blinkRate: v))),
+        ],
+      ),
+    );
+  }
 }
