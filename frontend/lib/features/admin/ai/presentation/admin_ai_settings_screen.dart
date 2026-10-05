@@ -117,6 +117,17 @@ class _AdminAiSettingsScreenState extends ConsumerState<AdminAiSettingsScreen> {
                         ),
                   orElse: () => const SizedBox.shrink(),
                 ),
+                settings.maybeWhen(
+                  data: (s) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: _PromptCard(
+                      key: ValueKey('${s.isCustomPrompt}:${s.systemPrompt.hashCode}'),
+                      settings: s,
+                      onSaved: () => ref.invalidate(_aiSettingsProvider),
+                    ),
+                  ),
+                  orElse: () => const SizedBox.shrink(),
+                ),
                 AdminCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -173,6 +184,118 @@ class _AdminAiSettingsScreenState extends ConsumerState<AdminAiSettingsScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+/// The admin's own rules for how the model writes a lesson. The fixed
+/// output-format tail (the JSON keys the server parses) is shown read-only
+/// and always appended, so editing the rules can't break parsing.
+class _PromptCard extends ConsumerStatefulWidget {
+  const _PromptCard({super.key, required this.settings, required this.onSaved});
+  final AiSettings settings;
+  final VoidCallback onSaved;
+
+  @override
+  ConsumerState<_PromptCard> createState() => _PromptCardState();
+}
+
+class _PromptCardState extends ConsumerState<_PromptCard> {
+  late final _text = TextEditingController(text: widget.settings.systemPrompt);
+  bool _busy = false;
+  bool _showFormat = false;
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  bool get _dirty => _text.text.trim() != widget.settings.systemPrompt.trim();
+
+  Future<void> _save(String value, String success) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(aiRepositoryProvider).savePrompt(value);
+      if (mounted) showSuccessSnack(context, success);
+      widget.onSaved();
+    } catch (e) {
+      if (mounted) showErrorSnack(context, e, 'Не удалось сохранить промт');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reset() async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Вернуть стандартный промт?',
+      message: 'Ваш текст промта будет заменён встроенным.',
+      confirmLabel: 'Вернуть',
+    );
+    if (ok) await _save('', 'Возвращён стандартный промт');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.settings;
+    return AdminCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: Text('Промт генерации уроков', style: AdminTypography.cardTitle)),
+              Text(s.isCustomPrompt ? 'свой' : 'стандартный', style: AdminTypography.caption),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Правила, по которым ИИ пишет урок: сколько блоков, какие вопросы, стиль объяснений и т.д. '
+            'Слова, фразы, курс и ваши пожелания сервер добавляет сам. Применяется к следующим генерациям.',
+            style: AdminTypography.caption,
+          ),
+          const SizedBox(height: AdminMetrics.fieldGap),
+          TextField(
+            controller: _text,
+            enabled: !_busy,
+            minLines: 10,
+            maxLines: 30,
+            style: AdminTypography.mono,
+            onChanged: (_) => setState(() {}),
+            decoration: adminInputDecoration(),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: _busy || !_dirty || _text.text.trim().isEmpty ? null : () => _save(_text.text, 'Промт сохранён'),
+                style: AdminButtonStyles.primary(),
+                child: const Text('Сохранить'),
+              ),
+              if (s.isCustomPrompt)
+                OutlinedButton(onPressed: _busy ? null : _reset, style: AdminButtonStyles.secondary(), child: const Text('Вернуть стандартный')),
+              TextButton(
+                onPressed: () => setState(() => _showFormat = !_showFormat),
+                style: AdminButtonStyles.text(),
+                child: Text(_showFormat ? 'Скрыть формат ответа' : 'Показать формат ответа (не редактируется)'),
+              ),
+            ],
+          ),
+          if (_showFormat) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Эта часть всегда добавляется после вашего текста: сервер разбирает ответ ИИ именно по этим ключам.',
+              style: AdminTypography.caption,
+            ),
+            const SizedBox(height: 6),
+            SelectableText(s.outputFormatPrompt, style: AdminTypography.mono),
+          ],
+        ],
       ),
     );
   }

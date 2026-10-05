@@ -448,6 +448,7 @@ async def ensure_streak_reminder_table(db: AsyncSession) -> None:
 # CREATE ... IF NOT EXISTS / ADD COLUMN IF NOT EXISTS shape as the blocks
 # above, safe to run on every boot.
 _AI_STATEMENTS = (
+    'ALTER TABLE "AiSettings" ADD COLUMN IF NOT EXISTS "systemPrompt" TEXT',
     """
     CREATE TABLE IF NOT EXISTS "AiSettings" (
         "id" TEXT NOT NULL PRIMARY KEY DEFAULT 'singleton',

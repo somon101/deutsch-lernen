@@ -17,6 +17,10 @@ class AiRepository {
   Future<AiSettings> saveKey(String apiKey) async =>
       AiSettings.fromJson((await _api.patch(_settings, body: {'apiKey': apiKey}))['settings'] as Map<String, dynamic>);
 
+  /// "" restores the built-in default prompt.
+  Future<AiSettings> savePrompt(String prompt) async =>
+      AiSettings.fromJson((await _api.patch(_settings, body: {'systemPrompt': prompt}))['settings'] as Map<String, dynamic>);
+
   Future<AiSettings> saveModel(String model) async =>
       AiSettings.fromJson((await _api.patch(_settings, body: {'model': model}))['settings'] as Map<String, dynamic>);
 
@@ -96,7 +100,16 @@ class AiModelOption {
 }
 
 class AiSettings {
-  const AiSettings({required this.model, required this.hasKey, required this.availableModels, this.keyHint});
+  const AiSettings({
+    required this.model,
+    required this.hasKey,
+    required this.availableModels,
+    this.keyHint,
+    this.systemPrompt = '',
+    this.defaultSystemPrompt = '',
+    this.isCustomPrompt = false,
+    this.outputFormatPrompt = '',
+  });
   factory AiSettings.fromJson(Map<String, dynamic> json) => AiSettings(
         model: json['model'] as String? ?? 'deepseek-chat',
         hasKey: json['hasKey'] as bool? ?? false,
@@ -105,8 +118,18 @@ class AiSettings {
           for (final m in (json['availableModels'] as List<dynamic>? ?? const []))
             AiModelOption.fromJson(m as Map<String, dynamic>),
         ],
+        systemPrompt: json['systemPrompt'] as String? ?? '',
+        defaultSystemPrompt: json['defaultSystemPrompt'] as String? ?? '',
+        isCustomPrompt: json['isCustomPrompt'] as bool? ?? false,
+        outputFormatPrompt: json['outputFormatPrompt'] as String? ?? '',
       );
   final String model;
+  /// The lesson-writing rules sent to the model (editable).
+  final String systemPrompt;
+  final String defaultSystemPrompt;
+  final bool isCustomPrompt;
+  /// Fixed tail always appended after the rules; shown read-only.
+  final String outputFormatPrompt;
   final bool hasKey;
   final String? keyHint;
   final List<AiModelOption> availableModels;

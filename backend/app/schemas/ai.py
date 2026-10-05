@@ -5,6 +5,8 @@ class AiSettingsUpdateInput(BaseModel):
     # "" removes the key; omitted leaves it unchanged.
     apiKey: str | None = Field(default=None, max_length=500)
     model: str | None = Field(default=None, max_length=100)
+    # "" restores the built-in default; omitted leaves it unchanged.
+    systemPrompt: str | None = Field(default=None, max_length=20000)
 
 
 class AiPreviewInput(BaseModel):

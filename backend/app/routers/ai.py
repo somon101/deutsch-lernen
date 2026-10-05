@@ -21,7 +21,7 @@ async def get_settings(admin: User = Depends(require_admin), db: AsyncSession = 
 
 @settings_router.patch("")
 async def update_settings(body: AiSettingsUpdateInput, admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    row = await ai_settings.update_ai_settings(db, api_key=body.apiKey, model=body.model)
+    row = await ai_settings.update_ai_settings(db, api_key=body.apiKey, model=body.model, system_prompt=body.systemPrompt)
     return {"settings": ai_settings.settings_dto(row)}
 
 

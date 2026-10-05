@@ -43,7 +43,9 @@ MAX_PHRASES_IN_CONTEXT = 300
 MANUAL_KINDS = ("choice", "truefalse", "cloze", "scramble", "match")
 AUTO_MATCH_COUNTS = (2, 4, 6, 8)
 
-SYSTEM_PROMPT = """You are a methodologist who writes lessons for a language-learning platform.
+# Editable by the admin in «ИИ» (AiSettings.systemPrompt); this is the
+# default and what «Вернуть стандартный» restores.
+DEFAULT_RULES_PROMPT = """You are a methodologist who writes lessons for a language-learning platform.
 The learners speak Russian and Tajik. You write ONE lesson of the given course and answer with ONE JSON object only.
 
 STRICT RULES
@@ -62,9 +64,11 @@ STRICT RULES
 - Options never repeat. correctAnswer must be exactly one of the options.
 - "audio": a short dialogue or monologue (60-120 words) in the studied language that uses the lesson's words, plus its Russian and Tajik translation. It will be recorded later.
 - "practice": how many automatic exercises to make from the lesson words: "translateCount" (5-10), "matchPairs" (one of 2, 4, 6, 8), and "blankPhraseIds" (2-5 phrase aliases for fill-the-gap, may be empty).
-- "minitest": 6 to 10 final questions; each has "verifiesBlock": the 0-based index of the block it checks.
+- "minitest": 6 to 10 final questions; each has "verifiesBlock": the 0-based index of the block it checks."""
 
-OUTPUT FORMAT (exactly these keys)
+# Always appended after the (possibly edited) rules: the parser below
+# depends on exactly these keys, so this part is not editable.
+OUTPUT_FORMAT_PROMPT = """OUTPUT FORMAT (exactly these keys)
 {"title":"..","title_tg":"..","topic":"short topic name in Russian",
  "wordIds":["w1",..],"phraseIds":["p1",..],
  "blocks":[{"title":"..","title_tg":"..","content":"..","content_tg":"..","questions":[...]}],
@@ -281,6 +285,7 @@ async def _attach_display(db: AsyncSession, lesson: dict) -> dict:
 
 async def preview_lesson(db: AsyncSession, course_id: str, *, instructions: str | None, previous: list[dict]) -> dict:
     api_key, model = await ai_settings.get_api_key(db)
+    rules_prompt = (await ai_settings.get_ai_settings(db)).systemPrompt or DEFAULT_RULES_PROMPT
     if not api_key:
         raise ApiError(400, "API-ключ ИИ не настроен — админ может добавить его в разделе «ИИ»")
     course, level, language = await _course_context(db, course_id)
@@ -316,7 +321,7 @@ async def preview_lesson(db: AsyncSession, course_id: str, *, instructions: str 
             *[f"{a}: {p.text} — {p.translation}" for a, p in zip(phrase_alias, phrases)],
         ]
     )
-    raw = await ai_client.chat_json(api_key, model, SYSTEM_PROMPT, user_prompt)
+    raw = await ai_client.chat_json(api_key, model, rules_prompt.rstrip() + "\n\n" + OUTPUT_FORMAT_PROMPT, user_prompt)
     lesson, warnings = normalize_lesson(raw, word_alias, phrase_alias, number)
     return {"lesson": await _attach_display(db, lesson), "warnings": warnings}
 

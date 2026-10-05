@@ -33,6 +33,18 @@ AVAILABLE_MODELS = [
 AVAILABLE_MODEL_IDS = {m["id"] for m in AVAILABLE_MODELS}
 
 
+def _default_rules_prompt() -> str:
+    from app.services.ai_lessons import DEFAULT_RULES_PROMPT
+
+    return DEFAULT_RULES_PROMPT
+
+
+def _output_format_prompt() -> str:
+    from app.services.ai_lessons import OUTPUT_FORMAT_PROMPT
+
+    return OUTPUT_FORMAT_PROMPT
+
+
 def _fernet() -> Fernet:
     key = base64.urlsafe_b64encode(hashlib.sha256(f"ai-settings:{settings.jwt_secret}".encode()).digest())
     return Fernet(key)
@@ -65,9 +77,14 @@ async def get_api_key(db: AsyncSession) -> tuple[str | None, str]:
     return decrypt_key(row), row.model
 
 
-async def update_ai_settings(db: AsyncSession, *, api_key: str | None = None, model: str | None = None) -> AiSettings:
-    """`api_key=""` removes the key; None leaves it unchanged."""
+async def update_ai_settings(
+    db: AsyncSession, *, api_key: str | None = None, model: str | None = None, system_prompt: str | None = None
+) -> AiSettings:
+    """`api_key=""` removes the key and `system_prompt=""` restores the
+    default prompt; None leaves either unchanged."""
     row = await get_ai_settings(db)
+    if system_prompt is not None:
+        row.systemPrompt = system_prompt.strip() or None
     if api_key is not None:
         api_key = api_key.strip()
         row.apiKeyEncrypted = _fernet().encrypt(api_key.encode()).decode() if api_key else None
@@ -87,6 +104,10 @@ def settings_dto(row: AiSettings) -> dict:
         "provider": row.provider,
         "model": row.model,
         "availableModels": AVAILABLE_MODELS,
+        "systemPrompt": row.systemPrompt or _default_rules_prompt(),
+        "defaultSystemPrompt": _default_rules_prompt(),
+        "isCustomPrompt": bool(row.systemPrompt),
+        "outputFormatPrompt": _output_format_prompt(),
         "hasKey": key is not None,
         "keyHint": key[-4:] if key and len(key) >= 8 else None,
     }
